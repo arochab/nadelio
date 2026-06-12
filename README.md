@@ -1,14 +1,62 @@
-# SERP Scraper
+# AI Visibility Checker
 
-> Turn any Google query into structured data (JSON / CSV), powered by the [Bright Data](https://brightdata.com) SERP API.
+> Measure how visible a brand is — versus its competitors — across the searches real buyers actually type. Powered by the [Bright Data](https://brightdata.com) SERP API.
 
-A lightweight command-line tool for **lead research**, **competitive monitoring**, and feeding data pipelines. For every search result: title, link, description, and rank — clean, ready to use, with no HTML to parse.
+When a customer searches "best tool for X", who shows up — you, or your competitors? This tool answers that question with data. It runs a set of buyer-intent queries, scans the results, and ranks every brand by **search visibility**: query coverage, average rank, and share of voice.
+
+This is the measurable side of **GEO / SEO** — one of the defining marketing problems of 2026. It is built on top of a reusable SERP scraper (`serp_scraper.py`), included in this repo.
+
+## Example
+
+```bash
+$ python ai_visibility.py \
+    --brands "Notion,Asana,Monday,ClickUp,Trello" \
+    --queries "best project management tool,asana alternative,team collaboration software"
+
+============================================================
+AI VISIBILITY REPORT
+============================================================
+Queries analyzed: 3
+
+#  Brand             Coverage  Avg rank  Share of voice
+-------------------------------------------------------
+1  Notion            3/3       1.3       24.0%
+2  Asana             3/3       1.7       28.0%
+3  ClickUp           3/3       2.4       22.0%
+4  Monday            2/3       2.8       18.0%
+5  Trello            0/3       —         0.0%
+
+Most visible: Notion (appears in 3/3 queries, 24.0% share of voice)
+```
+
+## Usage
+
+```bash
+export BRIGHTDATA_API_KEY="your_key"
+
+# Inline brands + queries
+python ai_visibility.py --brands "BrandA,BrandB" --queries "best X,X alternative"
+
+# Or from a config file
+python ai_visibility.py --config visibility_config.example.json
+```
+
+Metrics per brand: **query coverage** (how many queries surface it), **average rank** (position when it appears, lower is better), and **share of voice** (its slice of all tracked-brand appearances). Full results are saved to `visibility_report.json`.
+
+---
+
+## What else is in this repo
+
+`serp_scraper.py` — the foundation: turns any single Google query into structured JSON / CSV (title, link, description, rank). Useful on its own for lead research and data pipelines.
+
+```bash
+python serp_scraper.py "your keyword" --csv
+```
 
 ---
 
 ## Table of contents
 
-- [Demo](#demo)
 - [Features](#features)
 - [Installation](#installation)
 - [Configuration](#configuration)
