@@ -1,0 +1,21 @@
+# Never commit secrets
+.env
+*.key
+
+# Generated output files
+results.json
+results.csv
+resultats.json
+resultats.csv
+*.json
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
