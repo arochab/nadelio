@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Visibility Checker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{--ink:#15140f;--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--card:#fbfaf6;--line:#e8e6dd;--muted:#9a988e;--faint:#bdbbb0;}
+  html,body{height:100%;}
+  body{font-family:'Inter',-apple-system,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5;position:relative;overflow-x:hidden;}
+  /* AURORA background */
+  .aurora{position:fixed;inset:0;z-index:-2;background:var(--paper);overflow:hidden;}
+  .aurora::before,.aurora::after{content:"";position:absolute;width:60vw;height:60vw;border-radius:50%;filter:blur(80px);opacity:.5;}
+  .aurora::before{background:radial-gradient(circle,#cfe0d7,transparent 65%);top:-15vw;left:-10vw;animation:drift1 26s ease-in-out infinite;}
+  .aurora::after{background:radial-gradient(circle,#e7ddcb,transparent 65%);bottom:-20vw;right:-12vw;animation:drift2 32s ease-in-out infinite;}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(8vw,6vw) scale(1.15);}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(-7vw,-5vw) scale(1.1);}}
+  .grain{position:fixed;inset:0;z-index:-1;opacity:.035;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .wrap{max-width:700px;margin:0 auto;padding:72px 20px 90px;}
+  .eyebrow{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:20px;justify-content:center;}
+  .eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--sage);animation:breathe 2.4s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(91,140,126,.4);}50%{opacity:.4;box-shadow:0 0 0 6px rgba(91,140,126,0);}}
+  h1{font-size:40px;font-weight:600;letter-spacing:-1.4px;line-height:1.04;text-align:center;}
+  .lede{font-size:16px;color:var(--muted);margin:16px auto 0;max-width:440px;text-align:center;}
+  .bar-input{display:flex;gap:10px;margin:38px auto 0;max-width:520px;}
+  .bar-input input{flex:1;font-family:inherit;font-size:17px;color:var(--ink);background:rgba(255,255,255,.7);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px;padding:16px 18px;outline:none;transition:border-color .2s,box-shadow .2s,background .2s;}
+  .bar-input input:focus{border-color:var(--sage);box-shadow:0 0 0 4px rgba(91,140,126,.12);background:#fff;}
+  .bar-input button{font-family:inherit;font-size:16px;font-weight:500;cursor:pointer;border-radius:14px;padding:0 26px;border:none;background:var(--ink);color:#fff;white-space:nowrap;transition:transform .12s,opacity .2s;}
+  .bar-input button:hover{opacity:.9;}.bar-input button:active{transform:scale(.96);}
+  .bar-input button:disabled{opacity:.5;cursor:wait;}
+  .sub{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap;}
+  .chip{font-size:13px;color:var(--sage-d);background:rgba(91,140,126,.1);border:1px solid rgba(91,140,126,.2);padding:6px 13px;border-radius:9px;cursor:pointer;transition:background .15s,transform .1s;}
+  .chip:hover{background:rgba(91,140,126,.16);}.chip:active{transform:scale(.95);}
+  .how{display:flex;gap:16px;justify-content:center;margin-top:18px;font-size:12px;color:var(--faint);flex-wrap:wrap;}
+  .how span{display:flex;align-items:center;gap:6px;}
+  .how .s{width:18px;height:18px;border-radius:50%;background:rgba(91,140,126,.12);color:var(--sage);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;}
+  #out{margin-top:38px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:34px 32px;position:relative;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 24px 60px -30px rgba(40,50,45,.25);animation:cardin .55s cubic-bezier(.2,.7,.3,1) both;}
+  @keyframes cardin{from{opacity:0;transform:translateY(16px) scale(.99);}to{opacity:1;transform:none;}}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:5px 11px;border-radius:8px;margin-bottom:16px;}
+  .badge.demo{background:#efeee7;color:var(--muted);}
+  .badge.live{background:rgba(91,140,126,.14);color:var(--sage-d);}
+  .badge.cached{background:rgba(91,140,126,.1);color:var(--sage);}
+  .badge .lv{width:5px;height:5px;border-radius:50%;background:var(--sage);animation:breathe 1.6s infinite;}
+  .sector{font-size:13px;color:var(--muted);margin-bottom:20px;}
+  .sector b{color:var(--sage-d);font-weight:500;}
+  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:20px;}
+  .top h2{font-size:26px;font-weight:600;letter-spacing:-.6px;line-height:1.12;}
+  .top .subt{font-size:13px;color:var(--muted);margin-top:7px;}
+  .heron{text-align:right;}
+  .heron .n{font-size:44px;font-weight:600;letter-spacing:-2px;color:var(--sage);line-height:1;}
+  .heron .n .p{font-size:19px;color:#a8c4b8;}
+  .heron .cap{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+  .insight{font-size:14px;line-height:1.65;color:#3a3a34;background:rgba(91,140,126,.07);border-left:3px solid var(--sage);padding:13px 16px;border-radius:0 10px 10px 0;margin-bottom:24px;}
+  .insight b{font-weight:600;color:var(--ink);}
+  /* HEATMAP */
+  .hm{overflow-x:auto;}
+  .hm-grid{display:grid;gap:6px;min-width:min-content;}
+  .hm-corner{}
+  .hm-qh{font-size:11px;color:var(--muted);text-align:center;padding:0 4px 6px;line-height:1.3;align-self:end;}
+  .hm-bname{font-size:14px;font-weight:450;color:#3a3a34;display:flex;align-items:center;gap:7px;white-space:nowrap;padding-right:8px;}
+  .hm-bname .you{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--sage);border-radius:5px;padding:1px 6px;}
+  .cell{height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;cursor:default;position:relative;transform:scale(.6);opacity:0;transition:transform .12s,box-shadow .12s,filter .2s;}
+  .cell.in{transform:scale(1);opacity:1;}
+  .cell.has{cursor:pointer;color:#fff;}
+  .cell.empty{background:#eef0ec;color:transparent;}
+  .hm:hover .cell.has{filter:saturate(.7) brightness(1.04);}
+  .cell.has:hover{transform:scale(1.12) !important;filter:none !important;box-shadow:0 8px 22px -6px rgba(40,60,50,.4);z-index:5;}
+  .tip{position:fixed;z-index:50;background:var(--ink);color:#fff;font-size:12px;line-height:1.4;padding:9px 12px;border-radius:9px;max-width:260px;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s;box-shadow:0 12px 30px -8px rgba(0,0,0,.5);}
+  .tip.show{opacity:1;transform:none;}
+  .tip .q{color:#a8c4b8;font-size:11px;margin-top:3px;}
+  .hm-legend{font-size:11px;color:var(--faint);margin-top:14px;display:flex;align-items:center;gap:10px;}
+  .hm-legend .scale{display:flex;gap:3px;}
+  .hm-legend .scale i{width:16px;height:10px;border-radius:3px;}
+  .insights{display:flex;gap:28px;margin-top:24px;flex-wrap:wrap;}
+  .insights .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:4px;}
+  .insights .v{font-size:14px;}
+  .empty-state{text-align:center;padding:14px 0 4px;}
+  .empty-state .big{font-size:22px;font-weight:600;letter-spacing:-.4px;margin-bottom:8px;}
+  .empty-state .desc{font-size:14px;color:var(--muted);max-width:430px;margin:0 auto;line-height:1.6;}
+  .stage{text-align:center;color:var(--muted);font-size:14px;padding:30px 0;}
+  .stage .bar{height:3px;background:var(--line);border-radius:2px;max-width:280px;margin:18px auto 0;overflow:hidden;}
+  .stage .bar i{display:block;height:100%;width:30%;background:var(--sage);border-radius:2px;animation:slide 1.3s ease-in-out infinite;}
+  @keyframes slide{0%{margin-left:-30%;}100%{margin-left:100%;}}
+
+  .costline{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);flex-wrap:wrap;}
+  .cost{font-size:13px;color:var(--muted);line-height:1.5;}
+  .cost b{color:var(--sage-d);font-weight:600;font-variant-numeric:tabular-nums;}
+  .cost .joke{color:var(--faint);font-size:12px;}
+  .coffee{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;text-decoration:none;color:#15140f;background:#f9c66b;border:1px solid #e7ad3e;border-radius:10px;padding:8px 14px;white-space:nowrap;transition:transform .12s,box-shadow .2s;box-shadow:0 4px 14px -6px rgba(231,173,62,.7);}
+  .coffee:hover{transform:translateY(-1px);box-shadow:0 8px 20px -6px rgba(231,173,62,.8);}
+  .coffee:active{transform:translateY(0);}
+  footer{text-align:center;margin-top:30px;font-size:12px;color:var(--faint);}
+  footer a{color:var(--sage);text-decoration:none;}
+  @media(max-width:540px){h1{font-size:31px;}.bar-input{flex-direction:column;}.top h2{font-size:21px;}.heron .n{font-size:35px;}}
+</style>
+</head>
+<body>
+<div class="aurora"></div><div class="grain"></div>
+<div id="tip" class="tip"></div>
+<div class="wrap">
+  <div class="eyebrow"><span class="dot"></span> AI Visibility · powered by Claude</div>
+  <h1>Type your brand.<br>See who you're really up against.</h1>
+  <p class="lede">No setup. Claude infers your sector, competitors and buyer queries — then maps who wins each search.</p>
+
+  <div class="bar-input">
+    <input id="brand" type="text" placeholder="e.g. Notion, Stripe, Figma…" value="Notion" onkeydown="if(event.key==='Enter')run(true)"/>
+    <button id="goBtn" onclick="run(true)">Analyze →</button>
+  </div>
+  <div class="sub">
+    <span style="font-size:12px;color:var(--faint);">Try:</span>
+    <span class="chip" onclick="useChip('Stripe')">Stripe</span>
+    <span class="chip" onclick="useChip('Figma')">Figma</span>
+    <span class="chip" onclick="useChip('HubSpot')">HubSpot</span>
+    <span class="chip" onclick="run(false)" style="color:var(--muted);background:#efeee7;border-color:var(--line);">See sample</span>
+  </div>
+  <div class="how">
+    <span><span class="s">1</span> Claude infers competitors</span>
+    <span><span class="s">2</span> Live Google search</span>
+    <span><span class="s">3</span> Visibility heatmap</span>
+  </div>
+
+  <div id="out"></div>
+  <footer>Built by <a href="https://github.com/arochab">Adam Chabbi</a> · <a href="https://github.com/arochab/serp-scraper">source</a> · Claude Haiku + Bright Data</footer>
+</div>
+
+<script>
+  var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+  function useChip(b){document.getElementById('brand').value=b;run(true);}
+  function shortQ(q){return q.length>22?q.slice(0,20)+'…':q;}
+  // rank -> sage intensity (darker = better rank)
+  function rankColor(rank){if(rank==null)return '#eef0ec';var t=Math.max(0,Math.min(1,(10-rank)/9));
+    var stops=[[201,216,209],[156,188,176],[107,156,142],[61,107,92]];
+    var i=t*(stops.length-1),lo=Math.floor(i),hi=Math.min(lo+1,stops.length-1),f=i-lo;
+    var c=stops[lo].map(function(v,k){return Math.round(v+(stops[hi][k]-v)*f);});
+    return 'rgb('+c[0]+','+c[1]+','+c[2]+')';}
+
+  var tip=document.getElementById('tip');
+  function showTip(e,html){tip.innerHTML=html;tip.classList.add('show');moveTip(e);}
+  function moveTip(e){var x=e.clientX+14,y=e.clientY+14;if(x>window.innerWidth-270)x=e.clientX-260;tip.style.left=x+'px';tip.style.top=y+'px';}
+  function hideTip(){tip.classList.remove('show');}
+
+  async function run(live){
+    var out=document.getElementById('out'),btn=document.getElementById('goBtn');
+    var brand=document.getElementById('brand').value.trim();
+    if(live&&!brand){document.getElementById('brand').focus();return;}
+    btn.disabled=true;
+    out.innerHTML='<div class="card"><div class="stage">'+(live?('Claude is analyzing <b style="color:var(--sage)">'+esc(brand)+'</b> — finding competitors &amp; buyer queries…'):'Loading sample…')+'<div class="bar"><i></i></div></div></div>';
+    var data;
+    try{var res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:live,brand:brand})});data=await res.json();}
+    catch(e){out.innerHTML='<div class="card"><div class="stage">Could not reach the server.</div></div>';btn.disabled=false;return;}
+    render(data);btn.disabled=false;
+  }
+
+  function countUp(el,target){var t0=null,dur=850;function step(ts){if(!t0)t0=ts;var p=Math.min((ts-t0)/dur,1);var e=1-Math.pow(1-p,3);el.textContent=(target*e).toFixed(1);if(p<1)requestAnimationFrame(step);else el.textContent=target.toFixed(1);}requestAnimationFrame(step);}
+
+
+  function costBlock(d){
+    var coffee='<a class="coffee" href="https://www.buymeacoffee.com/arochab" target="_blank" rel="noopener">☕ Buy Adam a coffee</a>';
+    var c=d.cost;
+    if(c==null) return '<div class="costline"><div class="cost">Sample mode — no API calls, nothing spent.</div>'+coffee+'</div>';
+    var cents=(c*100);
+    var disp=cents<1?('$'+c.toFixed(5)):('$'+c.toFixed(4));
+    var coffees=Math.max(1,Math.round(5/Math.max(c,0.0001)/1000)*1000);
+    var joke;
+    if(d.cached) joke='This one was <b>free</b> — pulled from cache. Adam thanks you. ☕ stays full.';
+    else joke='This analysis cost Adam exactly <b>'+disp+'</b>. He’d need ~'+coffees.toLocaleString()+' of these to equal one coffee — so the math says: <span class="joke">buy him the coffee instead.</span>';
+    return '<div class="costline"><div class="cost">'+joke+'</div>'+coffee+'</div>';
+  }
+
+  function buildInsight(r,brandName){
+    var present=r.filter(function(x){return x.share_of_voice>0;});if(present.length===0)return null;
+    var leader=present[0],second=present[1];
+    var you=r.find(function(x){return x.brand.toLowerCase()===String(brandName).toLowerCase();});
+    var parts=['<b>'+esc(leader.brand)+'</b> leads with '+leader.share_of_voice+'% share of voice'];
+    if(second){var gap=Math.round((leader.share_of_voice-second.share_of_voice)*10)/10;parts.push(gap<8?'with <b>'+esc(second.brand)+'</b> right behind ('+second.share_of_voice+'%)':'well ahead of <b>'+esc(second.brand)+'</b> ('+second.share_of_voice+'%)');}
+    var tail='';
+    if(you){var rank=r.indexOf(you)+1;
+      if(you.share_of_voice===0)tail=' <b>'+esc(you.brand)+'</b> is invisible here — the clearest place to win.';
+      else if(rank===1)tail=' <b>'+esc(you.brand)+'</b> already leads.';
+      else tail=' <b>'+esc(you.brand)+'</b> sits at #'+rank+' — room to climb.';}
+    return parts.join(', ')+'.'+tail;
+  }
+
+  function render(d){
+    var r=d.ranking||[],queries=d.queries||[],brandName=d.brand||'';
+    var present=r.filter(function(x){return x.share_of_voice>0;});
+    var badge=d.cached?'<span class="badge cached">Cached · free</span>':(d.mode==='live'?'<span class="badge live"><span class="lv"></span>Live · Claude + Bright Data</span>':'<span class="badge demo">Sample</span>');
+    var notice=d.notice?'<div class="stage" style="padding:0 0 14px">'+esc(d.notice)+'</div>':'';
+    var sector=d.sector?'<div class="sector">Claude pegged the sector as <b>'+esc(d.sector)+'</b> — '+r.length+' rivals across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>':'';
+
+    if(present.length===0){
+      document.getElementById('out').innerHTML='<div class="card">'+badge+notice+sector+
+        '<div class="empty-state"><div class="big">No one shows up — including '+esc(brandName)+'</div>'+
+        '<div class="desc">None of these brands appear for these searches. Either the category is wide open, or the queries are too niche.</div></div>'+costBlock(d)+'</div>';
+      return;
+    }
+    var leader=present[0];
+    var withRank=r.filter(function(x){return x.avg_rank!=null;});
+    var bestRank=withRank.length?withRank.reduce(function(a,b){return b.avg_rank<a.avg_rank?b:a;}):null;
+    var blind=r.reduce(function(a,b){return parseInt(b.query_coverage)<parseInt(a.query_coverage)?b:a;});
+    var insight=buildInsight(r,brandName);
+
+    // Build heatmap grid
+    var cols='160px repeat('+queries.length+',minmax(70px,1fr))';
+    var head='<div class="hm-corner"></div>'+queries.map(function(q){return '<div class="hm-qh">'+esc(shortQ(q))+'</div>';}).join('');
+    var cellIdx=0;var body='';
+    r.forEach(function(x,ri){
+      var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
+      body+='<div class="hm-bname" style="color:'+(x.share_of_voice===0?'var(--faint)':'#3a3a34')+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
+      queries.forEach(function(q){
+        var cell=(x.cells||{})[q];
+        var diag=ri+queries.indexOf(q);
+        if(cell){
+          var c=rankColor(cell.rank);
+          var tipHtml='<b>'+esc(cell.title||x.brand)+'</b><div class="q">"'+esc(q)+'" · rank '+cell.rank+'</div>';
+          body+='<div class="cell has" data-d="'+diag+'" style="background:'+c+'" '+
+            'data-link="'+esc(cell.link||'')+'" '+
+            'onmouseenter=\'showTip(event,"'+esc(tipHtml).replace(/"/g,"&quot;")+'")\' onmousemove="moveTip(event)" onmouseleave="hideTip()" '+
+            'onclick="if(this.dataset.link)window.open(this.dataset.link,\'_blank\')">#'+cell.rank+'</div>';
+        } else {
+          body+='<div class="cell empty" data-d="'+diag+'">·</div>';
+        }
+      });
+    });
+
+    document.getElementById('out').innerHTML='<div class="card">'+badge+notice+sector+
+      '<div class="top"><div><h2>'+esc(leader.brand)+' owns<br>the conversation</h2>'+
+      '<div class="subt">'+r.length+' brands · '+queries.length+' '+(queries.length>1?'queries':'query')+'</div></div>'+
+      '<div class="heron"><div class="n"><span id="heroNum">0</span><span class="p">%</span></div><div class="cap">share of voice</div></div></div>'+
+      (insight?'<div class="insight">'+insight+'</div>':'')+
+      '<div class="hm"><div class="hm-grid" style="grid-template-columns:'+cols+'">'+head+body+'</div>'+
+      '<div class="hm-legend">Rank <span class="scale"><i style="background:#c9d8d1"></i><i style="background:#9cbcb0"></i><i style="background:#6b9c8e"></i><i style="background:#3d6b5c"></i></span> darker = higher · grey = absent · hover a cell for the page</div></div>'+
+      '<div class="insights">'+
+      '<div><div class="k">Coverage leader</div><div class="v">'+esc(leader.brand)+' · '+esc(leader.query_coverage)+'</div></div>'+
+      '<div><div class="k">Best avg. rank</div><div class="v">'+(bestRank?esc(bestRank.brand)+' · '+bestRank.avg_rank:'—')+'</div></div>'+
+      '<div><div class="k">Blind spot</div><div class="v">'+esc(blind.brand)+' · '+esc(blind.query_coverage)+'</div></div>'+
+      '</div>'+costBlock(d)+'</div>';
+
+    countUp(document.getElementById('heroNum'),leader.share_of_voice);
+    // diagonal cascade reveal
+    var cells=document.querySelectorAll('#out .cell');
+    cells.forEach(function(c){var diag=parseInt(c.getAttribute('data-d'))||0;setTimeout(function(){c.classList.add('in');},120+diag*70+Math.random()*30);});
+  }
+
+  run(false);
+</script>
+</body>
+</html>
