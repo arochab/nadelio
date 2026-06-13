@@ -3,7 +3,9 @@
 > **Type one brand. See who you're really up against.**
 > Claude infers your sector, competitors and buyer queries — then live Google data shows who wins each search.
 
-### → [**Try the live app**](https://brandpulse-app.onrender.com) · [Source](https://github.com/arochab/serp-scraper)
+### → [**Try the live app**](https://brandpulse-app.onrender.com) · [Source](https://github.com/arochab/brandpulse-app)
+
+![BrandPulse AI demo](demo.gif)
 
 When a buyer searches *"best tool for X"*, who shows up — you, or your competitors? BrandPulse answers that with data. You type a single brand; the app does the rest and maps visibility across the searches that actually drive purchases. This is the measurable side of **GEO / AI-search optimization** — one of the defining marketing problems of 2026.
 
@@ -39,8 +41,8 @@ A two-stage AI + data pipeline:
 ## Run it locally
 
 ```bash
-git clone https://github.com/arochab/serp-scraper.git
-cd serp-scraper
+git clone https://github.com/arochab/brandpulse-app.git
+cd brandpulse-app
 pip install -r requirements.txt
 
 export BRIGHTDATA_API_KEY="your_bright_data_key"
