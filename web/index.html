@@ -89,9 +89,9 @@
   .cost{font-size:13px;color:var(--muted);line-height:1.5;}
   .cost b{color:var(--sage-d);font-weight:600;font-variant-numeric:tabular-nums;}
   .cost .joke{color:var(--faint);font-size:12px;}
-  .coffee{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;text-decoration:none;color:#15140f;background:#f9c66b;border:1px solid #e7ad3e;border-radius:10px;padding:8px 14px;white-space:nowrap;transition:transform .12s,box-shadow .2s;box-shadow:0 4px 14px -6px rgba(231,173,62,.7);}
-  .coffee:hover{transform:translateY(-1px);box-shadow:0 8px 20px -6px rgba(231,173,62,.8);}
-  .coffee:active{transform:translateY(0);}
+
+  .coffee-link{font-size:12px;color:#b8935a;text-decoration:none;white-space:nowrap;transition:color .15s;}
+  .coffee-link:hover{color:#8a6a2e;}
   footer{text-align:center;margin-top:30px;font-size:12px;color:var(--faint);}
   footer a{color:var(--sage);text-decoration:none;}
   @media(max-width:540px){h1{font-size:31px;}.bar-input{flex-direction:column;}.top h2{font-size:21px;}.heron .n{font-size:35px;}}
@@ -123,7 +123,7 @@
   </div>
 
   <div id="out"></div>
-  <footer>Built by <a href="https://github.com/arochab">Adam Chabbi</a> · <a href="https://github.com/arochab/serp-scraper">source</a> · Claude Haiku + Bright Data</footer>
+  <footer>Built by <a href="https://github.com/arochab">Adam Chabbi</a> · <a href="https://github.com/arochab/serp-scraper">source</a> · <a href="https://buymeacoffee.com/arochab" target="_blank" rel="noopener" style="color:#b8935a;">☕ buy me a coffee</a></footer>
 </div>
 
 <script>
@@ -158,7 +158,7 @@
 
 
   function costBlock(d){
-    var coffee='<a class="coffee" href="https://www.buymeacoffee.com/arochab" target="_blank" rel="noopener">☕ Buy Adam a coffee</a>';
+    var coffee='<a class="coffee-link" href="https://buymeacoffee.com/arochab" target="_blank" rel="noopener">☕ buy me a coffee</a>';
     var c=d.cost;
     if(c==null) return '<div class="costline"><div class="cost">Sample mode — no API calls, nothing spent.</div>'+coffee+'</div>';
     var cents=(c*100);
