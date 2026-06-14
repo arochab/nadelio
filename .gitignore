@@ -19,3 +19,6 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Démo lourde (exclue du repo)
+demo-brandpulseapp.gif
