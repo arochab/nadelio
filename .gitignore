@@ -27,3 +27,8 @@ Thumbs.db
 
 # Démo lourde — servie depuis web/ pour og:image
 # (web/demo-brandpulseapp.gif is whitelisted below)
+
+# Internal strategy docs — never push to public repo
+PRICING-STRATEGY.md
+THE-WIRE-MOVE.md
+posts/
