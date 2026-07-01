@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BrandPulse vs Static GEO Tools — Live AI Visibility Data</title>
+<meta name="description" content="Compare BrandPulse to static GEO/AEO tools. BrandPulse runs live Google searches and maps who actually ranks — in 10 seconds, for free.">
+<link rel="canonical" href="https://brandpulse-app.onrender.com/compare">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://brandpulse-app.onrender.com/compare">
+<meta property="og:title" content="BrandPulse vs Static GEO Tools">
+<meta property="og:description" content="Most GEO/AEO tools publish specs you can't verify. BrandPulse runs real searches and shows you who actually ranks — live data in 10 seconds.">
+<meta property="og:image" content="https://brandpulse-app.onrender.com/demo-brandpulseapp.gif">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BrandPulse vs Static GEO Tools">
+<meta name="twitter:description" content="Most GEO/AEO tools publish specs you can't verify. BrandPulse runs real searches and shows you who actually ranks.">
+<meta name="twitter:image" content="https://brandpulse-app.onrender.com/demo-brandpulseapp.gif">
+
+<meta name="theme-color" content="#f4f2ec">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>P</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600&display=swap">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{--ink:#15140f;--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--card:#fbfaf6;--line:#e8e6dd;--muted:#9a988e;--faint:#918f84;}
+  html,body{height:100%;}
+  body{font-family:'Inter',-apple-system,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5;position:relative;overflow-x:hidden;}
+  .aurora{position:fixed;inset:0;z-index:-2;background:var(--paper);overflow:hidden;}
+  .aurora::before,.aurora::after{content:"";position:absolute;width:60vw;height:60vw;border-radius:50%;filter:blur(80px);opacity:.5;}
+  .aurora::before{background:radial-gradient(circle,#cfe0d7,transparent 65%);top:-15vw;left:-10vw;animation:drift1 26s ease-in-out infinite;}
+  .aurora::after{background:radial-gradient(circle,#e7ddcb,transparent 65%);bottom:-20vw;right:-12vw;animation:drift2 32s ease-in-out infinite;}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(8vw,6vw) scale(1.15);}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(-7vw,-5vw) scale(1.1);}}
+  .grain{position:fixed;inset:0;z-index:-1;opacity:.035;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .wrap{max-width:700px;margin:0 auto;padding:72px 20px 90px;}
+  .eyebrow{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:20px;justify-content:center;}
+  .eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--sage);animation:breathe 2.4s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(91,140,126,.4);}50%{opacity:.4;box-shadow:0 0 0 6px rgba(91,140,126,0);}}
+  h1{font-size:40px;font-weight:600;letter-spacing:-1.4px;line-height:1.04;text-align:center;margin-bottom:12px;}
+  .lede{font-size:16px;color:var(--muted);margin:0 auto 40px;max-width:440px;text-align:center;}
+  .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--sage);text-decoration:none;margin-bottom:24px;padding:8px 4px;transition:opacity .15s;}
+  .back:hover{opacity:.7;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:34px 32px;position:relative;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 24px 60px -30px rgba(40,50,45,.25);margin-bottom:28px;animation:cardin .55s cubic-bezier(.2,.7,.3,1) both;}
+  .card-delay{animation-delay:.12s;}
+  .card-delay-2{animation-delay:.24s;}
+  @keyframes cardin{from{opacity:0;transform:translateY(16px) scale(.99);}to{opacity:1;transform:none;}}
+  .card h2{font-size:22px;font-weight:600;letter-spacing:-.4px;margin-bottom:20px;}
+  /* Comparison table */
+  .cmp-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .cmp{width:100%;border-collapse:collapse;font-size:14px;}
+  .cmp th{text-align:left;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:0 12px 12px;font-weight:500;}
+  .cmp th:first-child{width:35%;}
+  .cmp td{padding:12px;border-top:1px solid var(--line);vertical-align:top;line-height:1.5;}
+  .cmp td:first-child{font-weight:500;color:var(--muted);font-size:13px;}
+  .cmp .bp{color:var(--sage-d);font-weight:500;}
+  .cmp .other{color:var(--muted);}
+  .yes{color:var(--sage);font-weight:600;}
+  .no{color:var(--faint);}
+  /* Demo image */
+  .demo-wrap{margin-bottom:28px;}
+  .demo-wrap img{width:100%;border-radius:14px;border:1px solid var(--line);box-shadow:0 12px 40px -16px rgba(40,50,45,.2);}
+  .demo-caption{font-size:12px;color:var(--faint);text-align:center;margin-top:10px;}
+  /* Steps */
+  .steps{font-size:14px;color:var(--muted);line-height:1.7;margin-bottom:16px;}
+  .steps-detail{font-size:14px;line-height:1.8;}
+  /* CTA */
+  .cta{text-align:center;margin-top:10px;}
+  .cta a{display:inline-block;font-family:inherit;font-size:16px;font-weight:500;text-decoration:none;border-radius:14px;padding:16px 32px;background:var(--ink);color:#fff;transition:transform .12s,opacity .2s;}
+  .cta a:hover{opacity:.9;}
+  .cta a:active{transform:scale(.96);}
+  .cta .sub{font-size:13px;color:var(--faint);margin-top:10px;}
+  .cta-gh{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--sage);text-decoration:none;margin-top:14px;transition:opacity .15s;}
+  .cta-gh:hover{opacity:.7;}
+  .cta-gh svg{width:16px;height:16px;fill:currentColor;}
+  footer{text-align:center;margin-top:30px;font-size:12px;color:var(--faint);}
+  footer a{color:var(--sage);text-decoration:none;}
+  /* Mobile-first table: stack on small screens */
+  @media(max-width:540px){
+    h1{font-size:31px;}
+    .card{padding:24px 18px;}
+    .cmp{font-size:13px;}
+    .cmp td,.cmp th{padding:10px 8px;}
+    /* Stack comparison rows on narrow screens */
+    .cmp thead{display:none;}
+    .cmp tbody tr{display:flex;flex-direction:column;padding:14px 0;border-top:1px solid var(--line);}
+    .cmp tbody tr:first-child{border-top:none;}
+    .cmp td{border-top:none;padding:3px 0;}
+    .cmp td:first-child{font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px;}
+    .cmp td.bp::before{content:"BrandPulse: ";font-size:11px;color:var(--faint);font-weight:400;text-transform:uppercase;letter-spacing:.06em;}
+    .cmp td.other::before{content:"Static tools: ";font-size:11px;color:var(--faint);font-weight:400;text-transform:uppercase;letter-spacing:.06em;}
+  }
+  /* Visually hidden (screen-reader-only) */
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;}
+</style>
+</head>
+<body>
+<div class="aurora"></div><div class="grain"></div>
+<div class="wrap">
+  <a href="/" class="back" aria-label="Back to BrandPulse home"><span aria-hidden="true">&larr;</span> Back to BrandPulse</a>
+  <div class="eyebrow"><span class="dot" aria-hidden="true"></span> Why BrandPulse</div>
+  <h1>Live visibility data,<br>not another framework.</h1>
+  <p class="lede">Most GEO/AEO tools publish specs you can't verify. BrandPulse runs live Google searches and checks AI engine mentions — so you see who ranks and who gets recommended.</p>
+
+  <div class="card">
+    <h2>BrandPulse vs static GEO tools</h2>
+    <div class="cmp-wrap" role="region" aria-label="Feature comparison table" tabindex="0">
+      <table class="cmp">
+        <thead>
+          <tr>
+            <th scope="col"><span class="sr-only">Feature</span></th>
+            <th scope="col" class="bp">BrandPulse</th>
+            <th scope="col" class="other">Static tools</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Data source</td>
+            <td class="bp"><span class="yes">Live</span> Google SERP via Bright Data</td>
+            <td class="other"><span class="no">None</span> — conceptual frameworks</td>
+          </tr>
+          <tr>
+            <td>Time to result</td>
+            <td class="bp"><span class="yes">~10 seconds</span></td>
+            <td class="other"><span class="no">N/A</span> — no runnable tool</td>
+          </tr>
+          <tr>
+            <td>Input required</td>
+            <td class="bp">One brand name — Claude infers the rest</td>
+            <td class="other">Manual configuration or none</td>
+          </tr>
+          <tr>
+            <td>Metrics</td>
+            <td class="bp">Share of Voice, Coverage, Avg. Rank, AI Engine Leader, Evidence links</td>
+            <td class="other">Theoretical scores (not implemented)</td>
+          </tr>
+          <tr>
+            <td>AI engine visibility</td>
+            <td class="bp"><span class="yes">Yes</span> — checks which brands AI would recommend for each query</td>
+            <td class="other"><span class="no">Not available</span></td>
+          </tr>
+          <tr>
+            <td>Competitor discovery</td>
+            <td class="bp"><span class="yes">Automatic</span> — Claude identifies rivals</td>
+            <td class="other"><span class="no">Manual</span> or absent</td>
+          </tr>
+          <tr>
+            <td>Buyer-intent queries</td>
+            <td class="bp"><span class="yes">Auto-generated</span> per sector</td>
+            <td class="other"><span class="no">Not available</span></td>
+          </tr>
+          <tr>
+            <td>Cost</td>
+            <td class="bp"><span class="yes">Free</span> — fraction of a penny per run (<a href="https://buymeacoffee.com/arochab" style="color:#b8935a;text-decoration:none;" target="_blank" rel="noopener">☕&nbsp;buy&nbsp;me&nbsp;a&nbsp;coffee</a>)</td>
+            <td class="other">Free (nothing to run)</td>
+          </tr>
+          <tr>
+            <td>Deployable</td>
+            <td class="bp"><span class="yes">Yes</span> — live on Render, <a href="https://github.com/arochab/brandpulse-app" style="color:var(--sage);">open source</a></td>
+            <td class="other"><span class="no">No</span> — spec documents only</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card card-delay demo-wrap">
+    <h2>See it in action</h2>
+    <img src="/demo-brandpulseapp.gif" alt="BrandPulse demo: typing a brand name and seeing the competitive visibility heatmap appear in 10 seconds" loading="lazy" width="700" height="394">
+    <p class="demo-caption">Type a brand. Get a live visibility heatmap. That's it.</p>
+  </div>
+
+  <div class="card card-delay-2">
+    <h2>How it works</h2>
+    <p class="steps">
+      BrandPulse is a 4-step pipeline that turns a single brand name into a dual visibility map — SERP + AI:
+    </p>
+    <p class="steps-detail">
+      <strong>1.</strong> You type a brand name.<br>
+      <strong>2.</strong> Claude Haiku infers your sector, identifies 4-5 direct competitors, and generates buyer-intent search queries.<br>
+      <strong>3.</strong> Each query runs against live Google via Bright Data, and Claude checks which brands an AI assistant would recommend for the same queries.<br>
+      <strong>4.</strong> Results are rendered as a dual heatmap: green for Google SERP ranks, purple for AI engine mentions — so you can see the gap between traditional and AI-powered search.
+    </p>
+  </div>
+
+  <div class="cta">
+    <a href="/">Try BrandPulse now &rarr;</a>
+    <div class="sub">No signup. No API key needed. Free to use.</div>
+    <div>
+      <a href="https://github.com/arochab/brandpulse-app" class="cta-gh" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+
+  <footer>Built by <a href="https://github.com/arochab">Adam Chabbi</a> · <a href="https://github.com/arochab/brandpulse-app">source</a> · <a href="https://buymeacoffee.com/arochab" target="_blank" rel="noopener" style="color:#b8935a;">☕ buy me a coffee</a></footer>
+</div>
+</body>
+</html>

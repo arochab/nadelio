@@ -3,11 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Visibility Checker</title>
+<title>BrandPulse — Who owns the search results in your niche?</title>
+<meta name="description" content="Type one brand. Get a live competitive visibility heatmap in 10 seconds. Free, open source, powered by Claude + Bright Data.">
+<link rel="canonical" href="https://brandpulse-app.onrender.com/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://brandpulse-app.onrender.com/">
+<meta property="og:title" content="BrandPulse — Who owns the search results in your niche?">
+<meta property="og:description" content="Type one brand. Get a live competitive visibility heatmap in 10 seconds. Free, open source.">
+<meta property="og:image" content="https://brandpulse-app.onrender.com/demo-brandpulseapp.gif">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BrandPulse — Who owns the search results in your niche?">
+<meta name="twitter:description" content="Type one brand. Get a live competitive visibility heatmap in 10 seconds. Free, open source.">
+<meta name="twitter:image" content="https://brandpulse-app.onrender.com/demo-brandpulseapp.gif">
+
+<meta name="theme-color" content="#f4f2ec">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>P</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
-  :root{--ink:#15140f;--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--card:#fbfaf6;--line:#e8e6dd;--muted:#9a988e;--faint:#bdbbb0;}
+  :root{--ink:#15140f;--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--card:#fbfaf6;--line:#e8e6dd;--muted:#9a988e;--faint:#918f84;}
   html,body{height:100%;}
   body{font-family:'Inter',-apple-system,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5;position:relative;overflow-x:hidden;}
   /* AURORA background */
@@ -71,7 +91,12 @@
   .tip{position:fixed;z-index:50;background:var(--ink);color:#fff;font-size:12px;line-height:1.4;padding:9px 12px;border-radius:9px;max-width:260px;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s;box-shadow:0 12px 30px -8px rgba(0,0,0,.5);}
   .tip.show{opacity:1;transform:none;}
   .tip .q{color:#a8c4b8;font-size:11px;margin-top:3px;}
-  .hm-legend{font-size:11px;color:var(--faint);margin-top:14px;display:flex;align-items:center;gap:10px;}
+  /* AI engine cells — purple tint to distinguish from SERP green */
+  .cell.ai{cursor:default;}
+  .cell.ai.has{color:#fff;}
+  .hm-section{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);grid-column:1/-1;padding:10px 0 4px;}
+  .hm-section+.hm-section{border-top:1px dashed var(--line);margin-top:4px;}
+  .hm-legend{font-size:11px;color:var(--faint);margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .hm-legend .scale{display:flex;gap:3px;}
   .hm-legend .scale i{width:16px;height:10px;border-radius:3px;}
   .insights{display:flex;gap:28px;margin-top:24px;flex-wrap:wrap;}
@@ -118,21 +143,28 @@
   </div>
   <div class="how">
     <span><span class="s">1</span> Claude infers competitors</span>
-    <span><span class="s">2</span> Live Google search</span>
-    <span><span class="s">3</span> Visibility heatmap</span>
+    <span><span class="s">2</span> Live Google SERP</span>
+    <span><span class="s">3</span> AI recommendation check</span>
+    <span><span class="s">4</span> Dual heatmap</span>
   </div>
 
   <div id="out"></div>
-  <footer>Built by <a href="https://github.com/arochab">Adam Chabbi</a> · <a href="https://github.com/arochab/serp-scraper">source</a> · <a href="https://buymeacoffee.com/arochab" target="_blank" rel="noopener" style="color:#b8935a;">☕ buy me a coffee</a></footer>
+  <footer>Built by <a href="https://github.com/arochab">Adam Chabbi</a> · <a href="https://github.com/arochab/brandpulse-app">source</a> · <a href="/compare">why BrandPulse?</a> · <a href="https://buymeacoffee.com/arochab" target="_blank" rel="noopener" style="color:#b8935a;">☕ buy me a coffee</a></footer>
 </div>
 
 <script>
-  var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+  var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c];});};
   function useChip(b){document.getElementById('brand').value=b;run(true);}
   function shortQ(q){return q.length>22?q.slice(0,20)+'…':q;}
-  // rank -> sage intensity (darker = better rank)
+  // rank -> sage intensity (darker = better rank) — SERP green
   function rankColor(rank){if(rank==null)return '#eef0ec';var t=Math.max(0,Math.min(1,(10-rank)/9));
     var stops=[[201,216,209],[156,188,176],[107,156,142],[61,107,92]];
+    var i=t*(stops.length-1),lo=Math.floor(i),hi=Math.min(lo+1,stops.length-1),f=i-lo;
+    var c=stops[lo].map(function(v,k){return Math.round(v+(stops[hi][k]-v)*f);});
+    return 'rgb('+c[0]+','+c[1]+','+c[2]+')';}
+  // rank -> purple intensity — AI engine
+  function rankColorAI(rank){if(rank==null)return '#eef0ec';var t=Math.max(0,Math.min(1,(10-rank)/9));
+    var stops=[[212,206,220],[180,166,200],[148,126,180],[110,86,150]];
     var i=t*(stops.length-1),lo=Math.floor(i),hi=Math.min(lo+1,stops.length-1),f=i-lo;
     var c=stops[lo].map(function(v,k){return Math.round(v+(stops[hi][k]-v)*f);});
     return 'rgb('+c[0]+','+c[1]+','+c[2]+')';}
@@ -150,7 +182,8 @@
     out.innerHTML='<div class="card"><div class="stage">'+(live?('Claude is analyzing <b style="color:var(--sage)">'+esc(brand)+'</b> — finding competitors &amp; buyer queries…'):'Loading sample…')+'<div class="bar"><i></i></div></div></div>';
     var data;
     try{var res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:live,brand:brand})});data=await res.json();}
-    catch(e){out.innerHTML='<div class="card"><div class="stage">Could not reach the server.</div></div>';btn.disabled=false;return;}
+    catch(e){out.innerHTML='<div class="card"><div class="stage">Could not reach the server. If this is your first visit, the server may be waking up — try again in 30 seconds.</div></div>';btn.disabled=false;return;}
+    if(data.error){out.innerHTML='<div class="card"><div class="stage">'+esc(data.error)+'</div></div>';btn.disabled=false;return;}
     render(data);btn.disabled=false;
   }
 
@@ -203,10 +236,17 @@
     var blind=r.reduce(function(a,b){return parseInt(b.query_coverage)<parseInt(a.query_coverage)?b:a;});
     var insight=buildInsight(r,brandName);
 
+    // Check if AI data exists
+    var hasAI=r.some(function(x){return x.ai_cells&&Object.keys(x.ai_cells).length>0;});
+
     // Build heatmap grid
     var cols='160px repeat('+queries.length+',minmax(70px,1fr))';
     var head='<div class="hm-corner"></div>'+queries.map(function(q){return '<div class="hm-qh">'+esc(shortQ(q))+'</div>';}).join('');
     var cellIdx=0;var body='';
+
+    // SERP section label
+    if(hasAI) body+='<div class="hm-section">Google SERP <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">— live results via Bright Data</span></div>';
+
     r.forEach(function(x,ri){
       var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
       body+='<div class="hm-bname" style="color:'+(x.share_of_voice===0?'var(--faint)':'#3a3a34')+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
@@ -226,18 +266,40 @@
       });
     });
 
+    // AI Engine section
+    if(hasAI){
+      body+='<div class="hm-section">AI Recommendation <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">— simulated via Claude</span></div>';
+      r.forEach(function(x,ri){
+        var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
+        body+='<div class="hm-bname" style="color:'+(x.ai_avg_rank==null?'var(--faint)':'#3a3a34')+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
+        queries.forEach(function(q){
+          var aiCell=(x.ai_cells||{})[q];
+          var diag=ri+queries.indexOf(q)+r.length;
+          if(aiCell){
+            var c=rankColorAI(aiCell.rank);
+            var tipHtml='<b>'+esc(x.brand)+'</b><div class="q">AI mentions for "'+esc(q)+'" · position '+aiCell.rank+'</div>';
+            body+='<div class="cell ai has" data-d="'+diag+'" style="background:'+c+'" '+
+              'onmouseenter=\'showTip(event,"'+esc(tipHtml).replace(/"/g,"&quot;")+'")\' onmousemove="moveTip(event)" onmouseleave="hideTip()">#'+aiCell.rank+'</div>';
+          } else {
+            body+='<div class="cell ai empty" data-d="'+diag+'">·</div>';
+          }
+        });
+      });
+    }
+
     document.getElementById('out').innerHTML='<div class="card">'+badge+notice+sector+
       '<div class="top"><div><h2>'+esc(leader.brand)+' owns<br>the conversation</h2>'+
       '<div class="subt">'+r.length+' brands · '+queries.length+' '+(queries.length>1?'queries':'query')+'</div></div>'+
       '<div class="heron"><div class="n"><span id="heroNum">0</span><span class="p">%</span></div><div class="cap">share of voice</div></div></div>'+
       (insight?'<div class="insight">'+insight+'</div>':'')+
       '<div class="hm"><div class="hm-grid" style="grid-template-columns:'+cols+'">'+head+body+'</div>'+
-      '<div class="hm-legend">Rank <span class="scale"><i style="background:#c9d8d1"></i><i style="background:#9cbcb0"></i><i style="background:#6b9c8e"></i><i style="background:#3d6b5c"></i></span> darker = higher · grey = absent · hover a cell for the page</div></div>'+
-      '<div class="insights">'+
+      '<div class="hm-legend">SERP <span class="scale"><i style="background:#c9d8d1"></i><i style="background:#9cbcb0"></i><i style="background:#6b9c8e"></i><i style="background:#3d6b5c"></i></span>'+(hasAI?' · AI <span class="scale"><i style="background:#d4ced8"></i><i style="background:#b4a6c8"></i><i style="background:#947eb4"></i><i style="background:#6e5696"></i></span>':'')+ ' · darker = higher · grey = absent</div></div>'+
+      (function(){var aiLeader=null;if(hasAI){var aiSorted=r.filter(function(x){return x.ai_avg_rank!=null;}).sort(function(a,b){return a.ai_avg_rank-b.ai_avg_rank;});if(aiSorted.length)aiLeader=aiSorted[0];}return '<div class="insights">'+
       '<div><div class="k">Coverage leader</div><div class="v">'+esc(leader.brand)+' · '+esc(leader.query_coverage)+'</div></div>'+
       '<div><div class="k">Best avg. rank</div><div class="v">'+(bestRank?esc(bestRank.brand)+' · '+bestRank.avg_rank:'—')+'</div></div>'+
       '<div><div class="k">Blind spot</div><div class="v">'+esc(blind.brand)+' · '+esc(blind.query_coverage)+'</div></div>'+
-      '</div>'+costBlock(d)+'</div>';
+      (aiLeader?'<div><div class="k">AI engine leader</div><div class="v">'+esc(aiLeader.brand)+' · avg #'+aiLeader.ai_avg_rank+'</div></div>':'')+
+      '</div>';})()+costBlock(d)+'</div>';
 
     countUp(document.getElementById('heroNum'),leader.share_of_voice);
     // diagonal cascade reveal
