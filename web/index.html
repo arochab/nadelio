@@ -181,10 +181,15 @@
     if(live&&!brand){document.getElementById('brand').focus();return;}
     btn.disabled=true;
     out.innerHTML='<div class="card"><div class="stage">'+(live?('Claude is analyzing <b style="color:var(--sage)">'+esc(brand)+'</b> — finding competitors &amp; buyer queries…'):'Loading sample…')+'<div class="bar"><i></i></div></div></div>';
-    var data;
-    try{var res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:live,brand:brand})});data=await res.json();}
+    var data,res;
+    try{res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:live,brand:brand})});data=await res.json();}
     catch(e){out.innerHTML='<div class="card"><div class="stage">Could not reach the server. If this is your first visit, the server may be waking up — try again in 30 seconds.</div></div>';btn.disabled=false;return;}
-    if(data.error){out.innerHTML='<div class="card"><div class="stage">'+esc(data.error)+'</div></div>';btn.disabled=false;return;}
+    if(res.status===429&&(data.error==='quota_ip'||data.error==='quota_global')){
+      out.innerHTML='<div class="card"><div class="stage" style="background:rgba(200,140,40,.1);border:1px solid rgba(200,140,40,.3);border-radius:12px;padding:18px;color:#8a5a1a;text-align:left">'+esc(data.message||'Live analysis limit reached.')+'</div>'+
+        '<div class="pro-cta"><button onclick="run(false)" style="background:var(--ink)">See sample instead</button></div>'+proCta()+'</div>';
+      btn.disabled=false;return;
+    }
+    if(data.error){out.innerHTML='<div class="card"><div class="stage">'+esc(typeof data.error==='string'?data.error:(data.message||'Something went wrong.'))+'</div></div>';btn.disabled=false;return;}
     render(data);btn.disabled=false;
   }
 
@@ -192,12 +197,12 @@
 
 
   function proCta(){
-    return ‘<div class="pro-cta"><span class="label">Pro plans with ongoing monitoring coming soon.</span><input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Notify me</button><span class="ok" id="proOk">You\’re on the list.</span></div>’;
+    return '<div class="pro-cta"><span class="label">Pro plans with ongoing monitoring coming soon.</span><input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Notify me</button><span class="ok" id="proOk">You\'re on the list.</span></div>';
   }
   function notifyMe(){
-    var em=document.getElementById(‘proEmail’);var ok=document.getElementById(‘proOk’);
-    if(!em||!em.value||em.value.indexOf(‘@’)<1)return;
-    fetch(‘/api/waitlist’,{method:’POST’,headers:{‘Content-Type’:’application/json’},body:JSON.stringify({email:em.value})}).then(function(){ok.style.display=’inline’;em.style.display=’none’;em.nextElementSibling.style.display=’none’;}).catch(function(){ok.textContent=’Something went wrong.’;ok.style.display=’inline’;ok.style.color=’var(--muted)’;});
+    var em=document.getElementById('proEmail');var ok=document.getElementById('proOk');
+    if(!em||!em.value||em.value.indexOf('@')<1)return;
+    fetch('/api/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em.value})}).then(function(){ok.style.display='inline';em.style.display='none';em.nextElementSibling.style.display='none';}).catch(function(){ok.textContent='Something went wrong.';ok.style.display='inline';ok.style.color='var(--muted)';});
   }
 
   function buildInsight(r,brandName){
@@ -214,11 +219,47 @@
     return parts.join(', ')+'.'+tail;
   }
 
+  function buildMatrix(r,brandName){
+    // Quadrants: SERP presence (share_of_voice>0) x AI presence (ai_avg_rank!=null)
+    var quads={dominant:[],aiOnly:[],serpOnly:[],invisible:[]};
+    r.forEach(function(x){
+      var inSerp=x.share_of_voice>0,inAI=x.ai_avg_rank!=null;
+      if(inSerp&&inAI)quads.dominant.push(x);
+      else if(inAI)quads.aiOnly.push(x);
+      else if(inSerp)quads.serpOnly.push(x);
+      else quads.invisible.push(x);
+    });
+    function names(list){return list.length?list.map(function(x){return esc(x.brand)+(x.brand.toLowerCase()===brandName.toLowerCase()?' <span class="you">you</span>':'');}).join(', '):'<span style="color:var(--faint)">—</span>';}
+    var you=r.find(function(x){return x.brand.toLowerCase()===brandName.toLowerCase();});
+    var youQuad=you?(you.share_of_voice>0&&you.ai_avg_rank!=null?'dominant':you.ai_avg_rank!=null?'aiOnly':you.share_of_voice>0?'serpOnly':'invisible'):null;
+    function cellStyle(key){return youQuad===key?'box-shadow:inset 0 0 0 2px var(--sage);':'';}
+    return '<div style="margin-top:26px;padding-top:20px;border-top:1px dashed var(--line)">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+
+      '<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">SERP × AI matrix</div>'+
+      '<button onclick="copyMatrix(this,'+"'"+esc(brandName).replace(/'/g,"\\'")+"'"+')" style="font-family:inherit;font-size:11px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--muted);cursor:pointer">Copy summary</button>'+
+      '</div>'+
+      '<div id="matrixGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+        '<div style="'+cellStyle('dominant')+'background:rgba(91,140,126,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--sage-d);margin-bottom:4px">Dominant — SERP + AI</div><div style="font-size:13px;line-height:1.5">'+names(quads.dominant)+'</div></div>'+
+        '<div style="'+cellStyle('aiOnly')+'background:rgba(110,86,150,.08);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:#6e5696;margin-bottom:4px">AI-only</div><div style="font-size:13px;line-height:1.5">'+names(quads.aiOnly)+'</div></div>'+
+        '<div style="'+cellStyle('serpOnly')+'background:#eef0ec;border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:#3a3a34;margin-bottom:4px">SERP-only</div><div style="font-size:13px;line-height:1.5">'+names(quads.serpOnly)+'</div></div>'+
+        '<div style="'+cellStyle('invisible')+'background:#f6f5f0;border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--faint);margin-bottom:4px">Invisible</div><div style="font-size:13px;line-height:1.5">'+names(quads.invisible)+'</div></div>'+
+      '</div></div>';
+  }
+
+  function copyMatrix(btn,brandName){
+    var grid=document.getElementById('matrixGrid');
+    if(!grid)return;
+    var text='BrandPulse — SERP × AI matrix for '+brandName+'\n'+
+      Array.prototype.map.call(grid.children,function(cell){return cell.children[0].textContent+': '+cell.children[1].textContent;}).join('\n');
+    var done=function(){var old=btn.textContent;btn.textContent='Copied';setTimeout(function(){btn.textContent=old;},1400);};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(done);}else{done();}
+  }
+
   function render(d){
     var r=d.ranking||[],queries=d.queries||[],brandName=d.brand||'';
     var present=r.filter(function(x){return x.share_of_voice>0;});
     var badge=d.cached?'<span class="badge cached">Cached</span>':(d.mode==='live'?'<span class="badge live"><span class="lv"></span>Live analysis</span>':'<span class="badge demo">Sample</span>');
-    var notice=d.notice?'<div class="stage" style="padding:0 0 14px">'+esc(d.notice)+'</div>':'';
+    var notice=d.notice?'<div style="background:rgba(200,140,40,.1);border:1px solid rgba(200,140,40,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:#8a5a1a;margin-bottom:16px">'+esc(d.notice)+'</div>':'';
     var sector=d.sector?'<div class="sector">Claude pegged the sector as <b>'+esc(d.sector)+'</b> — '+r.length+' rivals across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>':'';
 
     if(present.length===0){
@@ -252,11 +293,13 @@
         var diag=ri+queries.indexOf(q);
         if(cell){
           var c=rankColor(cell.rank);
-          var tipHtml='<b>'+esc(cell.title||x.brand)+'</b><div class="q">"'+esc(q)+'" · rank '+cell.rank+'</div>';
+          var kind=cell.kind||'mention';
+          var kindLabel=kind==='citation'?'their own site ranked':'mentioned by another site';
+          var tipHtml='<b>'+esc(cell.title||x.brand)+'</b><div class="q">"'+esc(q)+'" · rank '+cell.rank+' · '+kindLabel+'</div>';
           body+='<div class="cell has" data-d="'+diag+'" style="background:'+c+'" '+
             'data-link="'+esc(cell.link||'')+'" '+
             'onmouseenter=\'showTip(event,"'+esc(tipHtml).replace(/"/g,"&quot;")+'")\' onmousemove="moveTip(event)" onmouseleave="hideTip()" '+
-            'onclick="if(this.dataset.link)window.open(this.dataset.link,\'_blank\')">#'+cell.rank+'</div>';
+            'onclick="if(this.dataset.link)window.open(this.dataset.link,\'_blank\')">#'+cell.rank+(kind==='citation'?'':'<sup style="font-size:8px;opacity:.75">m</sup>')+'</div>';
         } else {
           body+='<div class="cell empty" data-d="'+diag+'">·</div>';
         }
@@ -265,7 +308,7 @@
 
     // AI Engine section
     if(hasAI){
-      body+='<div class="hm-section">AI Recommendation <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">— simulated via Claude</span></div>';
+      body+='<div class="hm-section">AI Recommendation <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">— measured across '+(r[0]&&r[0].ai_cells&&Object.values(r[0].ai_cells)[0]?Object.values(r[0].ai_cells)[0].runs||1:1)+' Claude runs</span></div>';
       r.forEach(function(x,ri){
         var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
         body+='<div class="hm-bname" style="color:'+(x.ai_avg_rank==null?'var(--faint)':'#3a3a34')+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
@@ -274,8 +317,11 @@
           var diag=ri+queries.indexOf(q)+r.length;
           if(aiCell){
             var c=rankColorAI(aiCell.rank);
-            var tipHtml='<b>'+esc(x.brand)+'</b><div class="q">AI mentions for "'+esc(q)+'" · position '+aiCell.rank+'</div>';
-            body+='<div class="cell ai has" data-d="'+diag+'" style="background:'+c+'" '+
+            var isPrimary=aiCell.kind==='primary';
+            var tipHtml='<b>'+esc(x.brand)+'</b><div class="q">AI mentions for "'+esc(q)+'" · avg position '+aiCell.rank+
+              (aiCell.consistency!=null?' · consistent in '+aiCell.consistency+'% of runs':'')+
+              (isPrimary?' · primary recommendation':' · mentioned in passing')+'</div>';
+            body+='<div class="cell ai has" data-d="'+diag+'" style="background:'+c+(isPrimary?';box-shadow:inset 0 0 0 2px rgba(255,255,255,.55)':'')+'" '+
               'onmouseenter=\'showTip(event,"'+esc(tipHtml).replace(/"/g,"&quot;")+'")\' onmousemove="moveTip(event)" onmouseleave="hideTip()">#'+aiCell.rank+'</div>';
           } else {
             body+='<div class="cell ai empty" data-d="'+diag+'">·</div>';
@@ -290,13 +336,19 @@
       '<div class="heron"><div class="n"><span id="heroNum">0</span><span class="p">%</span></div><div class="cap">share of voice</div></div></div>'+
       (insight?'<div class="insight">'+insight+'</div>':'')+
       '<div class="hm"><div class="hm-grid" style="grid-template-columns:'+cols+'">'+head+body+'</div>'+
-      '<div class="hm-legend">SERP <span class="scale"><i style="background:#c9d8d1"></i><i style="background:#9cbcb0"></i><i style="background:#6b9c8e"></i><i style="background:#3d6b5c"></i></span>'+(hasAI?' · AI <span class="scale"><i style="background:#d4ced8"></i><i style="background:#b4a6c8"></i><i style="background:#947eb4"></i><i style="background:#6e5696"></i></span>':'')+ ' · darker = higher · grey = absent</div></div>'+
-      (function(){var aiLeader=null;if(hasAI){var aiSorted=r.filter(function(x){return x.ai_avg_rank!=null;}).sort(function(a,b){return a.ai_avg_rank-b.ai_avg_rank;});if(aiSorted.length)aiLeader=aiSorted[0];}return '<div class="insights">'+
+      '<div class="hm-legend">SERP <span class="scale"><i style="background:#c9d8d1"></i><i style="background:#9cbcb0"></i><i style="background:#6b9c8e"></i><i style="background:#3d6b5c"></i></span>'+(hasAI?' · AI <span class="scale"><i style="background:#d4ced8"></i><i style="background:#b4a6c8"></i><i style="background:#947eb4"></i><i style="background:#6e5696"></i></span>':'')+ ' · darker = higher · grey = absent'+(hasAI?' · <sup>m</sup> = mention (not their own site) · solid ring = AI\'s primary pick':'')+'</div></div>'+
+      (function(){var aiLeader=null,avgConsist=null;if(hasAI){var aiSorted=r.filter(function(x){return x.ai_avg_rank!=null;}).sort(function(a,b){return a.ai_avg_rank-b.ai_avg_rank;});if(aiSorted.length)aiLeader=aiSorted[0];
+      var consistVals=r.map(function(x){return x.ai_consistency;}).filter(function(v){return v!=null;});
+      if(consistVals.length)avgConsist=Math.round(consistVals.reduce(function(a,b){return a+b;},0)/consistVals.length);}
+      return '<div class="insights">'+
       '<div><div class="k">Coverage leader</div><div class="v">'+esc(leader.brand)+' · '+esc(leader.query_coverage)+'</div></div>'+
       '<div><div class="k">Best avg. rank</div><div class="v">'+(bestRank?esc(bestRank.brand)+' · '+bestRank.avg_rank:'—')+'</div></div>'+
       '<div><div class="k">Blind spot</div><div class="v">'+esc(blind.brand)+' · '+esc(blind.query_coverage)+'</div></div>'+
       (aiLeader?'<div><div class="k">AI engine leader</div><div class="v">'+esc(aiLeader.brand)+' · avg #'+aiLeader.ai_avg_rank+'</div></div>':'')+
-      '</div>';})()+proCta()+'</div>';
+      (avgConsist!=null?'<div><div class="k">AI consistency</div><div class="v">'+avgConsist+'% <span style="color:var(--faint);font-size:12px">across repeated runs</span></div></div>':'')+
+      '</div>';})()+
+      (hasAI?buildMatrix(r,brandName):'')+
+      proCta()+'</div>';
 
     countUp(document.getElementById('heroNum'),leader.share_of_voice);
     // diagonal cascade reveal

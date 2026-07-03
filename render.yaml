@@ -12,3 +12,9 @@ services:
         sync: false
       - key: MAX_LIVE_RUNS
         value: "25"
+      - key: LIVE_RUNS_PER_IP
+        value: "3"
+      - key: AI_RUNS
+        value: "3"
+      - key: WAITLIST_WEBHOOK_URL
+        sync: false

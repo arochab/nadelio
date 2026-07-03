@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import os
@@ -22,6 +23,7 @@ ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"  # cheapest model — minimal cost
 
 MAX_LIVE_RUNS = int(os.environ.get("MAX_LIVE_RUNS", "15"))
+LIVE_RUNS_PER_IP = int(os.environ.get("LIVE_RUNS_PER_IP", "3"))
 MAX_BRANDS = 6
 MAX_QUERIES = 2            # absolute minimum SERP calls — lowest cost
 MAX_BRAND_LEN = 100        # reject absurdly long brand names
@@ -39,9 +41,25 @@ logger = logging.getLogger(__name__)
 # counter, so the effective global limit is MAX_LIVE_RUNS * num_workers.
 # For a free-tier Render deploy (1 worker) this is fine.  Cross-process
 # limiting would require Redis or a shared file lock.
+#
+# Both the global counter and the per-IP counters reset when the UTC date
+# changes (a simple daily quota, no external scheduler needed).
 # ---------------------------------------------------------------------------
 _live_lock = threading.Lock()
 _live_runs = 0
+_live_runs_date = None  # UTC date (str) the counter above applies to
+_ip_runs = {}  # {ip: [date_utc_str, count]}
+
+
+def _today_utc():
+    return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+
+
+def _client_ip():
+    fwd = request.headers.get("X-Forwarded-For")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.remote_addr or "unknown"
 
 # ---------------------------------------------------------------------------
 # Persistent cache
@@ -207,6 +225,16 @@ def brand_in(brand, result):
     return re.search(r"\b" + re.escape(brand.lower()) + r"\b", hay) is not None
 
 
+def _brand_slug(brand):
+    return re.sub(r"[^a-z0-9]", "", brand.lower())
+
+
+def _result_kind(brand, result):
+    """'citation' if the brand's own domain ranked, else 'mention' (named by someone else)."""
+    host = urllib.parse.urlparse(str(result.get("link", ""))).netloc.lower()
+    return "citation" if _brand_slug(brand) in host.replace("-", "").replace(".", "") else "mention"
+
+
 def analyze(brands, queries, api_key):
     stats = {b: {"mentions": 0, "appearances": 0, "ranks": [], "evidence": [], "cells": {}} for b in brands}
     for query in queries:
@@ -222,6 +250,7 @@ def analyze(brands, queries, api_key):
                         "rank": pos,
                         "title": result.get("title", ""),
                         "link": result.get("link", ""),
+                        "kind": _result_kind(b, result),
                     }
         for b in brands:
             if hit[b]:
@@ -232,6 +261,7 @@ def analyze(brands, queries, api_key):
     for b, s in stats.items():
         avg = round(sum(s["ranks"]) / len(s["ranks"]), 1) if s["ranks"] else None
         ev = [dict(c, query=q) for q, c in s["cells"].items()]
+        citations = sum(1 for c in s["cells"].values() if c.get("kind") == "citation")
         ranking.append({
             "brand": b,
             "query_coverage": str(s["mentions"]) + "/" + str(len(queries)),
@@ -239,35 +269,48 @@ def analyze(brands, queries, api_key):
             "share_of_voice": round(100 * s["appearances"] / total, 1),
             "evidence": ev,
             "cells": s["cells"],
+            "citation_count": citations,
+            "mention_count": len(s["cells"]) - citations,
         })
     ranking.sort(key=lambda r: (-int(r["query_coverage"].split("/")[0]),
                                  r["avg_rank"] if r["avg_rank"] else 999))
     return ranking
 
 # ---------------------------------------------------------------------------
-# Step 3: AI Engine visibility (simulated via Claude Haiku)
+# Step 3: AI Engine visibility (measured via repeated Claude Haiku calls)
 # ---------------------------------------------------------------------------
-# Instead of paying for Perplexity/OpenAI APIs, we ask Claude to role-play as
-# an AI assistant answering buyer-intent queries.  One call covers ALL queries
-# at once → cost = ~$0.00012 total regardless of query count.
+# Claude is itself a public AI assistant, so asking it which brands it would
+# recommend is a real measurement of Claude's recommendation behavior — not a
+# simulation of some other engine. Because LLM output is non-deterministic,
+# a single call is a noisy sample; we run it AI_RUNS times at a non-zero
+# temperature and aggregate, which also yields a consistency score (how
+# stable the brand's presence/rank is across runs).
 # ---------------------------------------------------------------------------
-def check_ai_visibility(brands, queries, api_key):
-    """Ask Claude which brands it would recommend for each buyer query."""
+AI_RUNS = int(os.environ.get("AI_RUNS", "3"))
+AI_RUN_TEMPERATURE = 0.7
+
+
+def _run_ai_visibility_once(brands, queries, api_key):
+    """One sampled call. Returns {query: {brand: {"rank": int, "kind": "primary"|"mentioned"}}}."""
     queries_block = "\n".join(f"{i+1}. {q}" for i, q in enumerate(queries))
     brands_list = ", ".join(brands)
     prompt = (
         "You are a helpful AI assistant answering buyer questions. "
         "A user asks each of the following questions. For EACH question, "
         "list which of these brands you would mention in your answer, "
-        "in the order you would mention them (first = most prominent).\n\n"
+        "in the order you would mention them (first = most prominent). "
+        "For each brand you list, say whether it is your 'primary' recommendation "
+        "(the main answer to the question) or just 'mentioned' in passing.\n\n"
         f"Brands to consider: {brands_list}\n\n"
         f"Questions:\n{queries_block}\n\n"
         "Return STRICT JSON only, no other text:\n"
-        '{"results":[{"query":"...","mentioned":["Brand1","Brand2"]}]}'
+        '{"results":[{"query":"...","mentioned":[{"brand":"Brand1","kind":"primary"},'
+        '{"brand":"Brand2","kind":"mentioned"}]}]}'
     )
     body = json.dumps({
         "model": ANTHROPIC_MODEL,
-        "max_tokens": 500,
+        "max_tokens": 600,
+        "temperature": AI_RUN_TEMPERATURE,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
     req = urllib.request.Request(
@@ -283,7 +326,7 @@ def check_ai_visibility(brands, queries, api_key):
         with urllib.request.urlopen(req, timeout=40) as resp:
             data = json.loads(resp.read().decode())
     except Exception:
-        logger.exception("AI visibility check failed")
+        logger.exception("AI visibility run failed")
         return {}  # graceful degradation — SERP data still works
 
     text = "".join(b.get("text", "") for b in data.get("content", []))
@@ -295,11 +338,9 @@ def check_ai_visibility(brands, queries, api_key):
     except (json.JSONDecodeError, ValueError):
         return {}
 
-    # Build a dict: {query: {brand: rank_position}}
     ai_map = {}
     for entry in parsed.get("results", []):
         q = entry.get("query", "")
-        # Match to our actual query strings (fuzzy: find best match)
         matched_q = None
         for real_q in queries:
             if real_q.lower() in q.lower() or q.lower() in real_q.lower():
@@ -309,12 +350,53 @@ def check_ai_visibility(brands, queries, api_key):
             matched_q = queries[0]  # fallback
         mentioned = entry.get("mentioned", [])
         ai_map[matched_q] = {}
-        for pos, b in enumerate(mentioned, 1):
-            # Match brand names case-insensitively
+        for pos, item in enumerate(mentioned, 1):
+            if isinstance(item, dict):
+                b, kind = item.get("brand", ""), item.get("kind", "mentioned")
+            else:
+                b, kind = str(item), "mentioned"  # tolerate older/simpler model output
+            kind = "primary" if str(kind).lower() == "primary" else "mentioned"
             for real_b in brands:
                 if real_b.lower() == b.lower():
-                    ai_map[matched_q][real_b] = pos
+                    ai_map[matched_q][real_b] = {"rank": pos, "kind": kind}
                     break
+    return ai_map
+
+
+def check_ai_visibility(brands, queries, api_key):
+    """Run the AI-visibility probe AI_RUNS times and aggregate into per-brand
+    per-query stats: average rank, mention rate (consistency), and whether the
+    brand was ever the primary recommendation."""
+    runs = [_run_ai_visibility_once(brands, queries, api_key) for _ in range(AI_RUNS)]
+    runs = [r for r in runs if r]  # drop failed runs
+    if not runs:
+        return {}
+
+    agg = {q: {b: {"ranks": [], "hits": 0, "primary_hits": 0} for b in brands} for q in queries}
+    for run in runs:
+        for q in queries:
+            for b in brands:
+                cell = run.get(q, {}).get(b)
+                if cell:
+                    agg[q][b]["ranks"].append(cell["rank"])
+                    agg[q][b]["hits"] += 1
+                    if cell["kind"] == "primary":
+                        agg[q][b]["primary_hits"] += 1
+
+    n_runs = len(runs)
+    ai_map = {}
+    for q in queries:
+        ai_map[q] = {}
+        for b in brands:
+            s = agg[q][b]
+            if not s["ranks"]:
+                continue
+            ai_map[q][b] = {
+                "rank": round(sum(s["ranks"]) / len(s["ranks"]), 1),
+                "consistency": round(100 * s["hits"] / n_runs),
+                "kind": "primary" if s["primary_hits"] * 2 >= s["hits"] else "mentioned",
+                "runs": n_runs,
+            }
     return ai_map
 
 
@@ -358,6 +440,25 @@ def _save_waitlist(wl):
 _waitlist = _load_waitlist()
 
 
+WAITLIST_WEBHOOK_URL = os.environ.get("WAITLIST_WEBHOOK_URL")
+
+
+def _notify_waitlist_webhook(email):
+    if not WAITLIST_WEBHOOK_URL:
+        return
+    try:
+        body = json.dumps({"email": email, "source": "brandpulse-waitlist"}).encode()
+        req = urllib.request.Request(
+            WAITLIST_WEBHOOK_URL, data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5):
+            pass
+    except Exception:
+        logger.exception("Waitlist webhook notification failed for %s", email)
+
+
 @app.route("/api/waitlist", methods=["POST"])
 def api_waitlist():
     data = request.get_json(force=True, silent=True) or {}
@@ -368,12 +469,14 @@ def api_waitlist():
         if email not in _waitlist and len(_waitlist) < 10000:
             _waitlist.append(email)
             _save_waitlist(_waitlist)
+    app.logger.warning("WAITLIST SIGNUP: %s", email)
+    _notify_waitlist_webhook(email)
     return jsonify({"ok": True})
 
 
 @app.route("/api/analyze", methods=["POST"])
 def api_analyze():
-    global _live_runs
+    global _live_runs, _live_runs_date
     data = request.get_json(force=True, silent=True) or {}
     live = bool(data.get("live"))
     brand = (data.get("brand") or "").strip()
@@ -392,15 +495,41 @@ def api_analyze():
     if not serp_key or not llm_key:
         return jsonify(dict(SAMPLE, notice="Server missing an API key - showing sample analysis."))
 
+    ip = _client_ip()
+    today = _today_utc()
     with _live_lock:
+        # Reset the global daily counter when the UTC date has rolled over.
+        if _live_runs_date != today:
+            _live_runs_date = today
+            _live_runs = 0
+
+        # Clean out any per-IP entries from previous days to avoid leaking memory.
+        for stale_ip in [k for k, v in _ip_runs.items() if v[0] != today]:
+            del _ip_runs[stale_ip]
+
+        ip_entry = _ip_runs.get(ip)
+        ip_count = ip_entry[1] if ip_entry else 0
+
+        if ip_count >= LIVE_RUNS_PER_IP:
+            return jsonify({
+                "error": "quota_ip",
+                "message": "Free daily limit reached (3 live analyses/day). Upgrade to Pro for unlimited analyses — join the waitlist below."
+            }), 429
         if _live_runs >= MAX_LIVE_RUNS:
-            return jsonify(dict(SAMPLE, notice="Live quota reached for this demo - showing sample analysis."))
+            return jsonify({
+                "error": "quota_global",
+                "message": "Today's free analysis pool is used up. Come back tomorrow, or join the Pro waitlist for priority access."
+            }), 429
+
         _live_runs += 1
+        _ip_runs[ip] = [today, ip_count + 1]
 
     cache_key = brand.lower()
     if cache_key in _cache:
         with _live_lock:
             _live_runs -= 1  # cached hit doesn't consume a slot
+            if ip in _ip_runs and _ip_runs[ip][0] == today:
+                _ip_runs[ip][1] = max(0, _ip_runs[ip][1] - 1)
         return jsonify(dict(_cache[cache_key], cached=True))
 
     try:
@@ -419,14 +548,17 @@ def api_analyze():
             b = entry["brand"]
             entry["ai_cells"] = {}
             for q in queries:
-                if q in ai_vis and b in ai_vis[q]:
-                    entry["ai_cells"][q] = {"rank": ai_vis[q][b]}
+                cell = ai_vis.get(q, {}).get(b)
+                if cell:
+                    entry["ai_cells"][q] = cell
             ai_mentioned = sum(1 for q in queries if q in ai_vis and b in ai_vis[q])
             entry["ai_coverage"] = f"{ai_mentioned}/{len(queries)}"
-            ai_ranks = [ai_vis[q][b] for q in queries if q in ai_vis and b in ai_vis[q]]
+            ai_ranks = [ai_vis[q][b]["rank"] for q in queries if q in ai_vis and b in ai_vis[q]]
             entry["ai_avg_rank"] = round(sum(ai_ranks) / len(ai_ranks), 1) if ai_ranks else None
-        # 2 LLM calls (strategy + AI vis) + SERP queries
-        cost = round(LLM_COST_PER_CALL * 2 + SERP_COST_PER_QUERY * len(queries), 5)
+            ai_consist = [ai_vis[q][b]["consistency"] for q in queries if q in ai_vis and b in ai_vis[q]]
+            entry["ai_consistency"] = round(sum(ai_consist) / len(ai_consist)) if ai_consist else None
+        # 1 LLM call (strategy) + AI_RUNS LLM calls (AI visibility) + SERP queries
+        cost = round(LLM_COST_PER_CALL * (1 + AI_RUNS) + SERP_COST_PER_QUERY * len(queries), 5)
         result = {
             "brand": brand,
             "sector": strat.get("sector", ""),
@@ -447,6 +579,8 @@ def api_analyze():
     finally:
         with _live_lock:
             _live_runs -= 1
+            if ip in _ip_runs and _ip_runs[ip][0] == today:
+                _ip_runs[ip][1] = max(0, _ip_runs[ip][1] - 1)
 
 
 if __name__ == "__main__":
