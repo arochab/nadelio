@@ -18,3 +18,11 @@ services:
         value: "3"
       - key: WAITLIST_WEBHOOK_URL
         sync: false
+      # Stripe Checkout (Deep Audit paywall). Both must be set in the Render
+      # dashboard for payments to work; if either is missing the payment
+      # endpoints return "payments not configured" and the free flow is
+      # unaffected.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false

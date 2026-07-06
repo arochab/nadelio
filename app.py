@@ -1,3 +1,4 @@
+import base64
 import datetime
 import json
 import logging
@@ -90,6 +91,106 @@ def _save_cache(c):
 
 
 _cache = _load_cache()  # persists across restarts — never re-pay for a brand
+
+# ---------------------------------------------------------------------------
+# Stripe Checkout (Deep Audit paywall) — implemented with urllib, no SDK
+# ---------------------------------------------------------------------------
+# The Deep Audit (5 SERP queries instead of the free 2) is a one-time paid
+# unlock. We create a Stripe Checkout session server-side, redirect the buyer
+# to Stripe's hosted page, and on return verify the payment server-side before
+# ever running a deep analysis. Keys are read from the environment only — never
+# hard-coded — so the app runs fine in dev/demo with Stripe unconfigured.
+#
+# Anti-replay: a Stripe session_id that has already unlocked a deep audit is
+# recorded in _consumed_sessions so the same paid session cannot be reused to
+# unlock unlimited deep audits. ONE paid session == ONE deep audit.
+#
+# NOTE (MVP limitation): _consumed_sessions lives in process memory and is lost
+# on restart/redeploy. After a redeploy a not-yet-consumed paid session could in
+# theory be replayed once. Acceptable for an MVP; a durable store (Redis/DB) or
+# Stripe webhooks would be the production hardening. Because each Checkout
+# session is single-use for payment and the buyer is redirected straight into
+# their audit, the practical exposure is minimal.
+STRIPE_API_BASE = "https://api.stripe.com/v1"
+
+
+def _stripe_config():
+    """Return (secret_key, price_id) from the environment, or (None, None) if
+    either is missing. Payment endpoints treat a missing config as
+    'payments not configured' rather than crashing."""
+    return os.environ.get("STRIPE_SECRET_KEY"), os.environ.get("STRIPE_PRICE_ID")
+
+
+def _stripe_auth_header(secret_key):
+    """Stripe uses HTTP Basic auth with the secret key as the username and an
+    empty password: base64("sk_...:"). Note the trailing colon."""
+    token = base64.b64encode((secret_key + ":").encode()).decode()
+    return "Basic " + token
+
+
+def _stripe_request(method, path, secret_key, form=None):
+    """Minimal Stripe API call over urllib. `form` is a dict serialized as
+    application/x-www-form-urlencoded (Stripe's expected content type).
+    Returns the parsed JSON dict. Raises RuntimeError on transport/HTTP error
+    with a safe message (full detail is logged server-side, never leaked)."""
+    url = STRIPE_API_BASE + path
+    headers = {
+        "Authorization": _stripe_auth_header(secret_key),
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    data = urllib.parse.urlencode(form).encode() if form is not None else None
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as he:
+        detail = he.read().decode()[:300]
+        logger.error("Stripe API HTTP %d on %s %s: %s", he.code, method, path, detail)
+        raise RuntimeError("Stripe API returned an error (HTTP " + str(he.code) + ")")
+    except urllib.error.URLError as ue:
+        logger.error("Stripe API unreachable: %s", ue.reason)
+        raise RuntimeError("Could not reach the Stripe API")
+    except (json.JSONDecodeError, ValueError):
+        logger.error("Stripe API returned non-JSON on %s %s", method, path)
+        raise RuntimeError("Stripe API returned an unexpected response")
+
+
+# session_id strings already redeemed for a deep audit (protected by _live_lock).
+_consumed_sessions = set()
+
+
+def _site_base():
+    """Public base URL to build Stripe success/cancel URLs from. Prefer an
+    explicit STRIPE_SUCCESS_URL_BASE (e.g. behind a proxy where request.host_url
+    is wrong), else derive from the incoming request. Always returned without a
+    trailing slash."""
+    base = (os.environ.get("STRIPE_SUCCESS_URL_BASE") or request.host_url or "").strip()
+    return base.rstrip("/")
+
+
+def _verify_paid_session(session_id):
+    """Server-side check that `session_id` is a real, fully-paid Stripe Checkout
+    session. Returns (ok, brand) where brand comes from the session metadata we
+    set at creation (never trusted from the client). Returns (False, "") if
+    Stripe is unconfigured, the session is unknown, or it is not paid."""
+    secret_key, _ = _stripe_config()
+    if not secret_key or not session_id:
+        return False, ""
+    try:
+        session = _stripe_request(
+            "GET", "/checkout/sessions/" + urllib.parse.quote(str(session_id), safe=""),
+            secret_key,
+        )
+    except RuntimeError:
+        return False, ""
+    if session.get("payment_status") != "paid":
+        return False, ""
+    brand = ""
+    meta = session.get("metadata") or {}
+    if isinstance(meta, dict):
+        brand = str(meta.get("brand") or "").strip()
+    return True, brand
+
 
 # ---------------------------------------------------------------------------
 # Security / production headers
@@ -546,6 +647,87 @@ def api_waitlist():
     return jsonify({"ok": True})
 
 
+# ---------------------------------------------------------------------------
+# Stripe Checkout endpoints (Deep Audit paywall)
+# ---------------------------------------------------------------------------
+@app.route("/api/checkout", methods=["POST"])
+def api_checkout():
+    """Create a Stripe Checkout session for a one-time Deep Audit and return
+    {url} for the frontend to redirect to. The brand to audit is stored in the
+    session metadata so it can be recovered (and trusted) at verification time."""
+    secret_key, price_id = _stripe_config()
+    if not secret_key or not price_id:
+        return jsonify({"error": "payments not configured"}), 502
+
+    data = request.get_json(force=True, silent=True) or {}
+    brand = (data.get("brand") or "").strip()
+    hint = (data.get("hint") or "").strip()
+    market = (data.get("market") or "").strip()
+    if not brand:
+        return jsonify({"error": "Type a brand name."}), 400
+    if len(brand) > MAX_BRAND_LEN:
+        return jsonify({"error": "Brand name is too long (max " + str(MAX_BRAND_LEN) + " chars)."}), 400
+
+    site = _site_base()
+    # success_url MUST carry the literal {CHECKOUT_SESSION_ID} placeholder —
+    # Stripe substitutes the real session id on redirect. We also pass the brand
+    # back (url-encoded) so the home page can resume the audit after payment.
+    success_url = (site + "/?paid={CHECKOUT_SESSION_ID}&brand="
+                   + urllib.parse.quote(brand))
+    cancel_url = site + "/"
+
+    form = {
+        "mode": "payment",
+        "line_items[0][price]": price_id,
+        "line_items[0][quantity]": "1",
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        # Trust the brand from metadata at verify time, not from the client.
+        "metadata[brand]": brand[:MAX_BRAND_LEN],
+    }
+    # Carry hint/market so the resumed audit can reproduce the same targeting.
+    if hint:
+        form["metadata[hint]"] = hint[:200]
+    if market:
+        form["metadata[market]"] = market[:40]
+
+    try:
+        session = _stripe_request("POST", "/checkout/sessions", secret_key, form)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+
+    url = session.get("url")
+    if not url:
+        logger.error("Stripe checkout session created without a url")
+        return jsonify({"error": "Stripe did not return a checkout URL"}), 502
+    return jsonify({"url": url})
+
+
+@app.route("/api/verify-payment", methods=["POST"])
+def api_verify_payment():
+    """Verify a returned Checkout session was actually paid. Returns
+    {ok:true, brand} on success. Does NOT consume the session here — consumption
+    happens atomically inside /api/analyze when the deep audit actually runs, so
+    a verify call never burns the single-use unlock on its own."""
+    secret_key, price_id = _stripe_config()
+    if not secret_key or not price_id:
+        return jsonify({"error": "payments not configured"}), 502
+
+    data = request.get_json(force=True, silent=True) or {}
+    session_id = (data.get("session_id") or "").strip()
+    if not session_id:
+        return jsonify({"ok": False, "error": "Missing session_id"}), 400
+
+    ok, brand = _verify_paid_session(session_id)
+    if not ok:
+        return jsonify({"ok": False})
+    with _live_lock:
+        already = session_id in _consumed_sessions
+    # Report whether this paid session still has its (single) deep audit unused,
+    # so the frontend can message clearly if the user refreshes an old link.
+    return jsonify({"ok": True, "brand": brand, "consumed": already})
+
+
 def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE):
     """Shared sanitation for a raw infer_strategy() result: strip stray
     characters from competitor names, cap list sizes, and make sure the
@@ -567,12 +749,52 @@ def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE):
     return competitors, queries, market, query_language
 
 
+def _deep_requested(data):
+    """True if the request body asks for a deep audit. Accepts either
+    `deep` (bool-ish) or `tier` ("paid"/"free"). This is only an INTENT flag —
+    it does NOT by itself grant the deeper (paid) query depth."""
+    return bool(data.get("deep")) or str(data.get("tier", "")).strip().lower() == "paid"
+
+
 def _resolve_depth(data):
-    """Read an optional depth flag from a request body and return the query
-    cap to use. Accepts either `deep` (bool-ish) or `tier` ("paid"/"free").
-    Defaults to the free cap so the public flow is unchanged."""
-    deep = bool(data.get("deep")) or str(data.get("tier", "")).strip().lower() == "paid"
-    return MAX_QUERIES_PAID if deep else MAX_QUERIES_FREE
+    """Return the query cap for a request that does NOT require payment (e.g.
+    the free inference preview). Deep intent here widens the *inferred* query
+    list only; it never spends paid SERP budget. The paid SERP path in
+    /api/analyze is gated separately by _resolve_paid_depth()."""
+    return MAX_QUERIES_PAID if _deep_requested(data) else MAX_QUERIES_FREE
+
+
+def _resolve_paid_depth(data):
+    """Security gate for the paid Deep Audit in /api/analyze.
+
+    A deep (5-query) SERP run is authorized ONLY when the request carries a
+    `paid_session` that is (a) a real Stripe Checkout session, (b) payment_status
+    == "paid", and (c) not already consumed for a previous deep audit. When all
+    three hold, the session is atomically marked consumed (one paid session ==
+    one deep audit) and this returns (MAX_QUERIES_PAID, session_id, True).
+
+    In every other case — no session, unpaid, already consumed, Stripe
+    unconfigured, or the client merely sending {deep:true} without paying — it
+    silently falls back to the free cap and returns (MAX_QUERIES_FREE, "",
+    False). The client can never obtain a deep audit by sending deep=true alone.
+
+    Consumption is done here (not in /api/verify-payment) and inside the same
+    critical section as the paid check, so a race can never redeem one paid
+    session for two concurrent deep audits."""
+    if not _deep_requested(data):
+        return MAX_QUERIES_FREE, "", False
+    session_id = (data.get("paid_session") or "").strip()
+    if not session_id:
+        return MAX_QUERIES_FREE, "", False
+    ok, _brand = _verify_paid_session(session_id)  # network call to Stripe
+    if not ok:
+        return MAX_QUERIES_FREE, "", False
+    # Atomically claim the single-use unlock.
+    with _live_lock:
+        if session_id in _consumed_sessions:
+            return MAX_QUERIES_FREE, "", False
+        _consumed_sessions.add(session_id)
+    return MAX_QUERIES_PAID, session_id, True
 
 
 @app.route("/api/infer", methods=["POST"])
@@ -625,7 +847,6 @@ def api_analyze():
     brand = (data.get("brand") or "").strip()
     hint = (data.get("hint") or "").strip()
     market = (data.get("market") or "").strip()  # optional forced market
-    max_queries = _resolve_depth(data)            # 2 (free) or 5 (deep)
 
     if not live:
         return jsonify(SAMPLE)
@@ -648,34 +869,49 @@ def api_analyze():
     if not serp_key or not llm_key:
         return jsonify(dict(SAMPLE, notice="Server missing an API key - showing sample analysis."))
 
+    # PAID GATE — resolved only now, after we know this is a valid live request
+    # (so we never burn a paid session on an invalid/demo call). Deep (5-query)
+    # depth is granted ONLY for a verified, paid, not-yet-consumed Stripe
+    # session. Sending {deep:true} without a valid paid_session silently falls
+    # back to the free 2-query cap. When paid_ok is True the session has been
+    # atomically claimed (single-use); we roll that claim back on hard failure
+    # in the except-block so a paying customer is never charged for nothing.
+    max_queries, paid_session, paid_ok = _resolve_paid_depth(data)
+
     ip = _client_ip()
     today = _today_utc()
-    with _live_lock:
-        # Reset the global daily counter when the UTC date has rolled over.
-        if _live_runs_date != today:
-            _live_runs_date = today
-            _live_runs = 0
+    # A verified paid deep audit bypasses the FREE per-IP / global daily quota
+    # (the customer paid for it) but still runs under a sanity ceiling so a
+    # single paid unlock can never fan out into an unbounded number of SERP
+    # calls. paid_ok is only ever True for a single-use, already-consumed
+    # session, so this authorizes exactly one deep run.
+    if not paid_ok:
+        with _live_lock:
+            # Reset the global daily counter when the UTC date has rolled over.
+            if _live_runs_date != today:
+                _live_runs_date = today
+                _live_runs = 0
 
-        # Clean out any per-IP entries from previous days to avoid leaking memory.
-        for stale_ip in [k for k, v in _ip_runs.items() if v[0] != today]:
-            del _ip_runs[stale_ip]
+            # Clean out any per-IP entries from previous days to avoid leaking memory.
+            for stale_ip in [k for k, v in _ip_runs.items() if v[0] != today]:
+                del _ip_runs[stale_ip]
 
-        ip_entry = _ip_runs.get(ip)
-        ip_count = ip_entry[1] if ip_entry else 0
+            ip_entry = _ip_runs.get(ip)
+            ip_count = ip_entry[1] if ip_entry else 0
 
-        if ip_count >= LIVE_RUNS_PER_IP:
-            return jsonify({
-                "error": "quota_ip",
-                "message": "Free daily limit reached (3 live analyses/day). Upgrade to Pro for unlimited analyses — join the waitlist below."
-            }), 429
-        if _live_runs >= MAX_LIVE_RUNS:
-            return jsonify({
-                "error": "quota_global",
-                "message": "Today's free analysis pool is used up. Come back tomorrow, or join the Pro waitlist for priority access."
-            }), 429
+            if ip_count >= LIVE_RUNS_PER_IP:
+                return jsonify({
+                    "error": "quota_ip",
+                    "message": "Free daily limit reached (3 live analyses/day). Upgrade to Pro for unlimited analyses — join the waitlist below."
+                }), 429
+            if _live_runs >= MAX_LIVE_RUNS:
+                return jsonify({
+                    "error": "quota_global",
+                    "message": "Today's free analysis pool is used up. Come back tomorrow, or join the Pro waitlist for priority access."
+                }), 429
 
-        _live_runs += 1
-        _ip_runs[ip] = [today, ip_count + 1]
+            _live_runs += 1
+            _ip_runs[ip] = [today, ip_count + 1]
 
     # NOTE on caching custom runs: when the client supplies pre-validated
     # competitors/queries (from a confirmed /api/infer preview, possibly with
@@ -688,8 +924,12 @@ def api_analyze():
     # Simplest safe choice: custom runs neither read nor write the shared
     # brand cache; they always run fresh (still cost-bounded by MAX_QUERIES
     # SERP calls and the quota counters above).
+    # A paid deep audit never uses the shared brand cache: the customer paid for
+    # a fresh, wider (5-query) run, and the cache is keyed only on brand.lower()
+    # with no notion of depth — serving a cached 2-query result would short-
+    # change them. Treated like a custom run (no read, no write).
     cache_key = brand.lower()
-    if not use_custom_strategy and cache_key in _cache:
+    if not use_custom_strategy and not paid_ok and cache_key in _cache:
         with _live_lock:
             _live_runs -= 1  # cached hit doesn't consume a slot
             if ip in _ip_runs and _ip_runs[ip][0] == today:
@@ -737,9 +977,13 @@ def api_analyze():
             "queries": queries,
             "ranking": ranking,
             "mode": "live",
+            "tier": "deep" if paid_ok else "free",
             "cost": cost,
         }
-        if not use_custom_strategy:
+        # A paid deep run is never written to the shared brand cache (see the
+        # cache-read note above): a later free run of the same brand must not be
+        # served a 5-query deep result, and vice versa.
+        if not use_custom_strategy and not paid_ok:
             with _live_lock:
                 if len(_cache) < MAX_CACHE_ENTRIES:
                     _cache[cache_key] = result
@@ -747,13 +991,23 @@ def api_analyze():
         return jsonify(result)
     except Exception as e:
         logger.exception("Live analysis failed for brand='%s'", brand)
+        # A paid deep audit that failed before producing a result should NOT
+        # burn the customer's single-use unlock — release the claimed session so
+        # they can retry. (Replay safety is preserved: only an un-produced run
+        # rolls back, and the claim/rollback are both under _live_lock.)
+        if paid_ok and paid_session:
+            with _live_lock:
+                _consumed_sessions.discard(paid_session)
         # Return a safe, generic message — full error is logged server-side
         return jsonify(dict(SAMPLE, notice="Live analysis failed — showing sample."))
     finally:
-        with _live_lock:
-            _live_runs -= 1
-            if ip in _ip_runs and _ip_runs[ip][0] == today:
-                _ip_runs[ip][1] = max(0, _ip_runs[ip][1] - 1)
+        # Only the FREE quota consumes/releases the daily counters. A paid deep
+        # run never incremented them, so it must not decrement them here.
+        if not paid_ok:
+            with _live_lock:
+                _live_runs -= 1
+                if ip in _ip_runs and _ip_runs[ip][0] == today:
+                    _ip_runs[ip][1] = max(0, _ip_runs[ip][1] - 1)
 
 
 if __name__ == "__main__":

@@ -166,9 +166,8 @@
     <span><span class="s">4</span> Dual heatmap</span>
   </div>
   <div style="text-align:center;margin-top:12px;">
-    <label style="font-size:11px;color:var(--faint);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
-      <input id="deep" type="checkbox" style="accent-color:var(--sage);cursor:pointer;"/> Deep audit (5 queries)
-    </label>
+    <a id="deepAuditCta" href="javascript:void(0)" onclick="startCheckout()" style="font-size:12px;color:var(--sage-d);background:rgba(91,140,126,.09);border:1px solid rgba(91,140,126,.22);border-radius:9px;padding:7px 13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:background .15s;">Deep Audit &mdash; 5 queries (79&euro;)</a>
+    <div id="deepAuditMsg" style="font-size:12px;color:var(--faint);margin-top:8px;display:none;"></div>
   </div>
 
   <div id="out"></div>
@@ -182,6 +181,10 @@
   // Optional market/depth controls. Safe defaults (empty market = auto,
   // deep unchecked = 2 queries) keep the public flow identical.
   function getMarket(){var el=document.getElementById('market');return el?el.value.trim():'';}
+  // Deep audit is now a paid unlock (Stripe), no longer a free checkbox. isDeep()
+  // stays defined (referenced by the shared preview/analyze helpers) but reports
+  // false in the normal free flow, so a free run always stays at 2 queries. The
+  // paid deep run uses its own dedicated path (resumeDeepAudit) after payment.
   function isDeep(){var el=document.getElementById('deep');return !!(el&&el.checked);}
   // rank -> sage intensity (darker = better rank) — SERP green
   function rankColor(rank){if(rank==null)return '#eef0ec';var t=Math.max(0,Math.min(1,(10-rank)/9));
@@ -337,6 +340,123 @@
     fetch('/api/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em.value})}).then(function(){ok.style.display='inline';em.style.display='none';em.nextElementSibling.style.display='none';}).catch(function(){ok.textContent='Something went wrong.';ok.style.display='inline';ok.style.color='var(--muted)';});
   }
 
+  // ---- Deep Audit (paid, Stripe Checkout) ----
+  function deepMsg(text,isError){
+    var el=document.getElementById('deepAuditMsg');if(!el)return;
+    el.textContent=text||'';
+    el.style.display=text?'block':'none';
+    el.style.color=isError?'#8a5a1a':'var(--faint)';
+  }
+
+  // Click on the "Deep Audit" CTA: create a Stripe Checkout session for the
+  // brand currently in the box, then hand off to Stripe's hosted payment page.
+  async function startCheckout(){
+    var brand=document.getElementById('brand').value.trim();
+    if(!brand){document.getElementById('brand').focus();return;}
+    var hintEl=document.getElementById('hint');
+    var hint=hintEl?hintEl.value.trim():'';
+    var market=getMarket();
+    var cta=document.getElementById('deepAuditCta');
+    if(cta)cta.style.pointerEvents='none';
+    deepMsg('Opening secure checkout...',false);
+    var data,res;
+    try{
+      res=await fetch('/api/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:brand,hint:hint,market:market})});
+      data=await res.json();
+    }catch(e){
+      deepMsg('Could not reach the server. Try again in a moment.',true);
+      if(cta)cta.style.pointerEvents='';return;
+    }
+    if(!res.ok||!data.url){
+      var msg=data&&data.error==='payments not configured'
+        ?'Deep Audit checkout is not available yet.'
+        :(data&&typeof data.error==='string'?data.error:'Could not start checkout.');
+      deepMsg(msg,true);
+      if(cta)cta.style.pointerEvents='';return;
+    }
+    // Redirect to Stripe's hosted checkout page.
+    window.location=data.url;
+  }
+
+  // Synchronous check: did we return from a Stripe payment?
+  function hasPaidParam(){
+    try{return !!new URLSearchParams(window.location.search).get('paid');}catch(e){return false;}
+  }
+
+  // On return from Stripe (success_url = /?paid=<session_id>&brand=<brand>):
+  // verify the payment server-side, then, if paid, auto-run the deep audit.
+  // The URL is cleaned immediately so a refresh never re-triggers this.
+  async function resumeDeepAudit(){
+    var params=new URLSearchParams(window.location.search);
+    var sessionId=params.get('paid');
+    if(!sessionId)return false;
+    var brandParam=params.get('brand')||'';
+    // Clean the URL right away (before any await) so a refresh cannot re-fire.
+    try{history.replaceState({},document.title,window.location.pathname);}catch(e){}
+    if(brandParam){var bEl=document.getElementById('brand');if(bEl)bEl.value=brandParam;}
+    var out=document.getElementById('out');
+    out.innerHTML='<div class="card"><div class="stage">Confirming your payment...<div class="bar"><i></i></div></div></div>';
+    var data,res;
+    try{
+      res=await fetch('/api/verify-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sessionId})});
+      data=await res.json();
+    }catch(e){
+      out.innerHTML='<div class="card"><div class="stage" style="text-align:left">Could not confirm your payment right now. If you were charged, refresh in a moment or contact support with your receipt.</div></div>';
+      return true;
+    }
+    if(!data.ok){
+      out.innerHTML='<div class="card"><div class="stage" style="text-align:left">We could not verify this payment. If you were charged, contact support with your Stripe receipt.</div></div>';
+      return true;
+    }
+    if(data.consumed){
+      out.innerHTML='<div class="card"><div class="stage" style="text-align:left">This Deep Audit has already been used. Each payment unlocks one deep audit. Start a new Deep Audit to run another.</div></div>';
+      return true;
+    }
+    var brand=(data.brand||brandParam||document.getElementById('brand').value.trim());
+    runDeepAnalysis(brand,sessionId);
+    return true;
+  }
+
+  // Paid deep flow: infer a wider (5-query) strategy, then run the analysis with
+  // the verified paid_session so the server authorizes the deep depth exactly
+  // once. Kept separate from the free preview/confirm flow.
+  async function runDeepAnalysis(brand,sessionId){
+    var out=document.getElementById('out');
+    out.innerHTML='<div class="card"><div class="stage">Running your Deep Audit for <b style="color:var(--sage)">'+esc(brand)+'</b>...<div class="bar"><i></i></div></div></div>';
+    // Step 1: infer a deep (5-query) strategy for the paid brand.
+    var infer,ires;
+    try{
+      ires=await fetch('/api/infer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:brand,deep:true})});
+      infer=await ires.json();
+    }catch(e){infer=null;}
+    var competitors=[],queries=[],sector='',marketLabel='',queryLanguage='';
+    if(infer&&!infer.error){
+      competitors=infer.competitors||[];queries=infer.queries||[];
+      sector=infer.sector||'';marketLabel=infer.market||'';queryLanguage=infer.query_language||'';
+    }
+    // Step 2: run the deep analysis. deep:true + paid_session unlocks 5 queries
+    // server-side (validated + single-use). If inference failed we still send
+    // deep:true so the server infers a deep strategy itself.
+    var body={live:true,brand:brand,deep:true,paid_session:sessionId};
+    if(competitors.length&&queries.length){
+      body.competitors=competitors;body.queries=queries;body.sector=sector;
+      body.market_label=marketLabel;body.query_language=queryLanguage;
+    }
+    var data,res;
+    try{
+      res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      data=await res.json();
+    }catch(e){
+      out.innerHTML='<div class="card"><div class="stage" style="text-align:left">Your payment went through but the audit could not run. Refresh in a moment to retry your Deep Audit.</div></div>';
+      return;
+    }
+    if(data.error){
+      out.innerHTML='<div class="card"><div class="stage">'+esc(typeof data.error==='string'?data.error:(data.message||'Something went wrong.'))+'</div></div>';
+      return;
+    }
+    render(data);
+  }
+
   function buildInsight(r,brandName){
     var present=r.filter(function(x){return x.share_of_voice>0;});if(present.length===0)return null;
     var leader=present[0],second=present[1];
@@ -489,7 +609,9 @@
     cells.forEach(function(c){var diag=parseInt(c.getAttribute('data-d'))||0;setTimeout(function(){c.classList.add('in');},120+diag*70+Math.random()*30);});
   }
 
-  run(false);
+  // On load: if we came back from a Stripe payment (?paid=...), resume the
+  // deep audit; otherwise show the sample as before.
+  if(hasPaidParam())resumeDeepAudit();else run(false);
 </script>
 </body>
 </html>
