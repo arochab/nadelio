@@ -4,7 +4,9 @@ import json
 import logging
 import os
 import pathlib
+import random
 import re
+import socket
 import tempfile
 import threading
 import time
@@ -406,6 +408,59 @@ SAMPLE = {
 }
 
 # ---------------------------------------------------------------------------
+# Resilient HTTP helper — retries transient failures (rate-limit / overload /
+# server errors / network hiccups) with a short exponential backoff, so a
+# single flaky upstream call doesn't tank an entire analysis. Non-transient
+# errors (bad request, auth, not found) are never retried — they won't fix
+# themselves and should surface immediately.
+# ---------------------------------------------------------------------------
+_TRANSIENT_HTTP_CODES = {429, 500, 502, 503, 529}
+
+
+def _urlopen_json_with_retry(req, timeout, max_attempts=3, what="upstream API"):
+    """POST/GET via urllib.request.urlopen(req, timeout=timeout) and return the
+    parsed JSON body. Retries transient failures (HTTP 429/500/502/503/529,
+    URLError, socket.timeout) up to max_attempts times with a short exponential
+    backoff + jitter (0.5s, 1.5s, ...). Non-transient HTTPErrors (400/401/403/
+    404/422/...) are raised immediately without retrying. After exhausting
+    retries on a transient error, raises a clear RuntimeError.
+
+    `what` is only used to label log lines / the final error message (e.g.
+    "Claude API", "Bright Data")."""
+    last_detail = ""
+    last_code = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as he:
+            code = he.code
+            detail = he.read().decode(errors="replace")[:300]
+            if code not in _TRANSIENT_HTTP_CODES:
+                logger.error("%s HTTP %d (non-retryable): %s", what, code, detail)
+                raise RuntimeError(what + " returned an error (HTTP " + str(code) + ")")
+            last_code, last_detail = code, detail
+        except (urllib.error.URLError, socket.timeout) as ue:
+            reason = getattr(ue, "reason", ue)
+            last_code, last_detail = None, str(reason)
+
+        if attempt < max_attempts:
+            logger.warning(
+                "%s transient error (attempt %d/%d, code=%s): %s — retrying",
+                what, attempt, max_attempts, last_code, last_detail,
+            )
+            backoff = 0.5 * (3 ** (attempt - 1))  # 0.5s, 1.5s, 4.5s, ...
+            time.sleep(backoff + random.uniform(0, 0.25))
+        else:
+            logger.error(
+                "%s still failing after %d attempts (code=%s): %s",
+                what, max_attempts, last_code, last_detail,
+            )
+
+    raise RuntimeError(what + " temporarily unavailable after " + str(max_attempts) + " attempts")
+
+
+# ---------------------------------------------------------------------------
 # Step 1: Claude infers sector, competitors, queries from a single brand
 # ---------------------------------------------------------------------------
 # Human-readable labels for the market presets the caller can force. Anything
@@ -476,16 +531,7 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=40) as resp:
-            data = json.loads(resp.read().decode())
-    except urllib.error.HTTPError as he:
-        detail = he.read().decode()[:200]
-        logger.error("Claude API HTTP %d: %s", he.code, detail)
-        raise RuntimeError("Claude API returned an error (HTTP " + str(he.code) + ")")
-    except urllib.error.URLError as ue:
-        logger.error("Claude API unreachable: %s", ue.reason)
-        raise RuntimeError("Could not reach the Claude API")
+    data = _urlopen_json_with_retry(req, timeout=40, what="Claude API")
 
     text = "".join(b.get("text", "") for b in data.get("content", []))
     m = re.search(r"\{.*\}", text, re.S)
@@ -514,20 +560,11 @@ def run_query(query, api_key):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            raw = resp.read().decode()
-    except urllib.error.HTTPError as he:
-        logger.error("Bright Data HTTP %d for query '%s'", he.code, query)
-        raise RuntimeError("SERP API error (HTTP " + str(he.code) + ")")
-    except urllib.error.URLError as ue:
-        logger.error("Bright Data unreachable: %s", ue.reason)
-        raise RuntimeError("Could not reach the SERP API")
-
-    try:
-        return json.loads(raw).get("organic", [])
+        parsed = _urlopen_json_with_retry(req, timeout=60, what="SERP API")
     except (json.JSONDecodeError, ValueError):
-        logger.error("Bright Data returned non-JSON for query '%s': %s", query, raw[:200])
+        logger.error("Bright Data returned non-JSON for query '%s'", query)
         raise RuntimeError("SERP API returned an unexpected response format")
+    return parsed.get("organic", [])
 
 
 def brand_in(brand, result):
@@ -656,11 +693,10 @@ def _run_ai_visibility_once(brands, queries, api_key):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=40) as resp:
-            data = json.loads(resp.read().decode())
+        data = _urlopen_json_with_retry(req, timeout=40, what="Claude API (AI visibility)")
     except Exception:
         logger.exception("AI visibility run failed")
-        return {}  # graceful degradation — SERP data still works
+        return {}  # graceful degradation — SERP data still works (after retries)
 
     text = "".join(b.get("text", "") for b in data.get("content", []))
     m = re.search(r"\{.*\}", text, re.S)
