@@ -135,6 +135,15 @@
     <input id="brand" type="text" placeholder="e.g. Notion, Stripe, Figma…" value="Notion" onkeydown="if(event.key==='Enter')run(true)"/>
     <button id="goBtn" onclick="run(true)">Analyze →</button>
   </div>
+  <div style="text-align:center;margin-top:10px;">
+    <a id="hintToggle" href="javascript:void(0)" onclick="toggleHint()" style="font-size:12px;color:var(--faint);text-decoration:underline;text-underline-offset:2px;">Ambiguous name? Specify the brand</a>
+  </div>
+  <div id="hintRow" style="display:none;max-width:520px;margin:10px auto 0;gap:10px;">
+    <input id="hint" type="text" placeholder="Website or short description, e.g. payflows.io or 'AP automation for finance teams'" style="width:100%;font-family:inherit;font-size:13px;color:var(--ink);background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:12px;padding:11px 14px;outline:none;transition:border-color .2s;" onkeydown="if(event.key==='Enter')preview()"/>
+    <div style="text-align:center;margin-top:8px;">
+      <button id="previewBtn" onclick="preview()" style="font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;border-radius:10px;padding:8px 18px;border:1px solid var(--line);background:#fff;color:var(--ink);">Preview sector &amp; competitors</button>
+    </div>
+  </div>
   <div class="sub">
     <span style="font-size:12px;color:var(--faint);">Try:</span>
     <span class="chip" onclick="useChip('Stripe')">Stripe</span>
@@ -175,15 +184,101 @@
   function moveTip(e){var x=e.clientX+14,y=e.clientY+14;if(x>window.innerWidth-270)x=e.clientX-260;tip.style.left=x+'px';tip.style.top=y+'px';}
   function hideTip(){tip.classList.remove('show');}
 
+  function toggleHint(){
+    var row=document.getElementById('hintRow');
+    var open=row.style.display!=='none';
+    row.style.display=open?'none':'flex';
+    row.style.flexDirection='column';
+    if(!open)document.getElementById('hint').focus();
+  }
+
   async function run(live){
     var out=document.getElementById('out'),btn=document.getElementById('goBtn');
     var brand=document.getElementById('brand').value.trim();
     if(live&&!brand){document.getElementById('brand').focus();return;}
+    // If the user opened the hint field and typed something, go through the
+    // preview step first so they can confirm sector/competitors before the
+    // costly SERP + AI calls run. Without a hint, behavior is unchanged.
+    var hintEl=document.getElementById('hint');
+    var hint=hintEl?hintEl.value.trim():'';
+    if(live&&hint){preview();return;}
     btn.disabled=true;
     out.innerHTML='<div class="card"><div class="stage">'+(live?('Claude is analyzing <b style="color:var(--sage)">'+esc(brand)+'</b> — finding competitors &amp; buyer queries…'):'Loading sample…')+'<div class="bar"><i></i></div></div></div>';
     var data,res;
     try{res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:live,brand:brand})});data=await res.json();}
     catch(e){out.innerHTML='<div class="card"><div class="stage">Could not reach the server. If this is your first visit, the server may be waking up — try again in 30 seconds.</div></div>';btn.disabled=false;return;}
+    if(res.status===429&&(data.error==='quota_ip'||data.error==='quota_global')){
+      out.innerHTML='<div class="card"><div class="stage" style="background:rgba(200,140,40,.1);border:1px solid rgba(200,140,40,.3);border-radius:12px;padding:18px;color:#8a5a1a;text-align:left">'+esc(data.message||'Live analysis limit reached.')+'</div>'+
+        '<div class="pro-cta"><button onclick="run(false)" style="background:var(--ink)">See sample instead</button></div>'+proCta()+'</div>';
+      btn.disabled=false;return;
+    }
+    if(data.error){out.innerHTML='<div class="card"><div class="stage">'+esc(typeof data.error==='string'?data.error:(data.message||'Something went wrong.'))+'</div></div>';btn.disabled=false;return;}
+    render(data);btn.disabled=false;
+  }
+
+  async function preview(){
+    var out=document.getElementById('out'),btn=document.getElementById('goBtn'),pbtn=document.getElementById('previewBtn');
+    var brand=document.getElementById('brand').value.trim();
+    if(!brand){document.getElementById('brand').focus();return;}
+    var hintEl=document.getElementById('hint');
+    var hint=hintEl?hintEl.value.trim():'';
+    btn.disabled=true;if(pbtn)pbtn.disabled=true;
+    out.innerHTML='<div class="card"><div class="stage">Claude is identifying <b style="color:var(--sage)">'+esc(brand)+'</b>…<div class="bar"><i></i></div></div></div>';
+    var data,res;
+    try{
+      res=await fetch('/api/infer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:brand,hint:hint})});
+      data=await res.json();
+    }catch(e){
+      out.innerHTML='<div class="card"><div class="stage">Could not reach the server. Try again in a moment.</div></div>';
+      btn.disabled=false;if(pbtn)pbtn.disabled=false;return;
+    }
+    if(!res.ok||data.error){
+      out.innerHTML='<div class="card"><div class="stage" style="text-align:left">'+esc(typeof data.error==='string'?data.error:'Could not identify this brand.')+'</div></div>';
+      btn.disabled=false;if(pbtn)pbtn.disabled=false;return;
+    }
+    renderPreview(data);
+    btn.disabled=false;if(pbtn)pbtn.disabled=false;
+  }
+
+  function renderPreview(data){
+    var out=document.getElementById('out');
+    var competitors=data.competitors||[],queries=data.queries||[];
+    var compList=competitors.map(function(c){return '<span class="chip" style="cursor:default;background:rgba(91,140,126,.1);">'+esc(c)+'</span>';}).join(' ');
+    var queryList=queries.map(function(q){return '<li>'+esc(q)+'</li>';}).join('');
+    out.innerHTML='<div class="card">'+
+      '<div class="badge demo">Preview — not analyzed yet</div>'+
+      '<div class="sector">Claude thinks this is <b>'+esc(data.brand)+'</b> in <b>'+esc(data.sector||'an unclear sector')+'</b>.</div>'+
+      '<div style="margin:14px 0;"><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;">Competitors</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+compList+'</div></div>'+
+      '<div style="margin:14px 0;"><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;">Buyer queries</div>'+
+      '<ul style="padding-left:18px;font-size:14px;line-height:1.7;">'+queryList+'</ul></div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;">'+
+      '<button onclick="confirmAnalyze()" style="font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;border-radius:12px;padding:12px 22px;border:none;background:var(--ink);color:#fff;">Run the analysis →</button>'+
+      '<button onclick="document.getElementById(\'hint\').focus()" style="font-family:inherit;font-size:13px;cursor:pointer;border-radius:12px;padding:12px 18px;border:1px solid var(--line);background:#fff;color:var(--ink);">Not right? Edit the hint above and preview again</button>'+
+      '</div></div>';
+    out.dataset.previewBrand=data.brand;
+    out.dataset.previewSector=data.sector||'';
+    out.dataset.previewCompetitors=JSON.stringify(competitors);
+    out.dataset.previewQueries=JSON.stringify(queries);
+  }
+
+  async function confirmAnalyze(){
+    var out=document.getElementById('out'),btn=document.getElementById('goBtn');
+    var brand=out.dataset.previewBrand||document.getElementById('brand').value.trim();
+    var sector=out.dataset.previewSector||'';
+    var competitors=[],queries=[];
+    try{competitors=JSON.parse(out.dataset.previewCompetitors||'[]');}catch(e){}
+    try{queries=JSON.parse(out.dataset.previewQueries||'[]');}catch(e){}
+    btn.disabled=true;
+    out.innerHTML='<div class="card"><div class="stage">Running live SERP &amp; AI checks for <b style="color:var(--sage)">'+esc(brand)+'</b>…<div class="bar"><i></i></div></div></div>';
+    var data,res;
+    try{
+      res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:true,brand:brand,sector:sector,competitors:competitors,queries:queries})});
+      data=await res.json();
+    }catch(e){
+      out.innerHTML='<div class="card"><div class="stage">Could not reach the server. Try again in a moment.</div></div>';
+      btn.disabled=false;return;
+    }
     if(res.status===429&&(data.error==='quota_ip'||data.error==='quota_global')){
       out.innerHTML='<div class="card"><div class="stage" style="background:rgba(200,140,40,.1);border:1px solid rgba(200,140,40,.3);border-radius:12px;padding:18px;color:#8a5a1a;text-align:left">'+esc(data.message||'Live analysis limit reached.')+'</div>'+
         '<div class="pro-cta"><button onclick="run(false)" style="background:var(--ink)">See sample instead</button></div>'+proCta()+'</div>';

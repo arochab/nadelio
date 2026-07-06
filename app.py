@@ -141,7 +141,7 @@ SAMPLE = {
 # ---------------------------------------------------------------------------
 # Step 1: Claude infers sector, competitors, queries from a single brand
 # ---------------------------------------------------------------------------
-def infer_strategy(brand, api_key):
+def infer_strategy(brand, api_key, hint=None):
     prompt = (
         "You are a competitive-intelligence analyst. Given a single brand or company name, "
         "infer its market and return STRICT JSON with this exact shape and nothing else:\n"
@@ -150,8 +150,18 @@ def infer_strategy(brand, api_key):
         "Rules: include the given brand as the FIRST competitor. List 4-5 real, well-known direct competitors. "
         "Queries must be the searches a real buyer would type when shopping in this category "
         "(e.g. 'best CRM for startups', 'salesforce alternative'). Exactly 2 queries.\n\n"
+        "Disambiguation: brand names are often shared by unrelated companies (e.g. a fintech "
+        "and a consumer app with the same name). Identify the REAL company this name most likely "
+        "refers to. If the name is ambiguous and no context is given, prefer the B2B/SaaS "
+        "interpretation over a consumer one, since this tool is used for competitive intelligence "
+        "in software markets.\n\n"
         "Brand: " + brand
     )
+    if hint and hint.strip():
+        prompt += (
+            "\n\nAdditional context to disambiguate the brand (use this to identify the CORRECT "
+            "company, especially if the name is ambiguous): " + hint.strip()
+        )
     body = json.dumps({
         "model": ANTHROPIC_MODEL,
         "max_tokens": 400,
@@ -474,12 +484,63 @@ def api_waitlist():
     return jsonify({"ok": True})
 
 
+def _sanitize_strategy(brand, strat):
+    """Shared sanitation for a raw infer_strategy() result: strip stray
+    characters from competitor names, cap list sizes, and make sure the
+    queried brand itself is present as the first competitor."""
+    competitors = [re.sub(r'[^\w\s\-\.\&]', '', c.strip())[:MAX_BRAND_LEN]
+                   for c in strat.get("competitors", []) if c.strip()][:MAX_BRANDS]
+    queries = [q.strip() for q in strat.get("queries", []) if q.strip()][:MAX_QUERIES]
+    if brand not in competitors:
+        competitors = [brand] + competitors
+    return competitors, queries
+
+
+@app.route("/api/infer", methods=["POST"])
+def api_infer():
+    """Inference-only endpoint: sector + competitors + queries for a brand,
+    with no SERP calls and no AI-visibility calls. Lets the frontend show a
+    confirmation preview before paying for the expensive part of the pipeline.
+    Does NOT touch the live-run quota counters — a single Haiku call costs
+    about $0.0001, and gating it behind the same daily quota as a full
+    analysis would defeat the point of letting users cheaply refine a hint."""
+    data = request.get_json(force=True, silent=True) or {}
+    brand = (data.get("brand") or "").strip()
+    hint = (data.get("hint") or "").strip()
+
+    if not brand:
+        return jsonify({"error": "Type a brand name."}), 400
+    if len(brand) > MAX_BRAND_LEN:
+        return jsonify({"error": "Brand name is too long (max " + str(MAX_BRAND_LEN) + " chars)."}), 400
+
+    llm_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not llm_key:
+        return jsonify({"error": "Server missing an API key - cannot run inference."}), 502
+
+    try:
+        strat = infer_strategy(brand, llm_key, hint)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+
+    competitors, queries = _sanitize_strategy(brand, strat)
+    if not competitors or not queries:
+        return jsonify({"error": "Could not infer competitors for this brand."}), 502
+
+    return jsonify({
+        "brand": brand,
+        "sector": strat.get("sector", ""),
+        "competitors": competitors,
+        "queries": queries,
+    })
+
+
 @app.route("/api/analyze", methods=["POST"])
 def api_analyze():
     global _live_runs, _live_runs_date
     data = request.get_json(force=True, silent=True) or {}
     live = bool(data.get("live"))
     brand = (data.get("brand") or "").strip()
+    hint = (data.get("hint") or "").strip()
 
     if not live:
         return jsonify(SAMPLE)
@@ -489,6 +550,13 @@ def api_analyze():
         return jsonify({"error": "Type a brand name."}), 400
     if len(brand) > MAX_BRAND_LEN:
         return jsonify({"error": "Brand name is too long (max " + str(MAX_BRAND_LEN) + " chars)."}), 400
+
+    # Optional pre-validated competitors/queries (from a confirmed /api/infer
+    # preview). When both are present and non-empty we skip infer_strategy
+    # entirely and re-sanitize what the client sent, for safety.
+    raw_competitors = data.get("competitors") or []
+    raw_queries = data.get("queries") or []
+    use_custom_strategy = bool(raw_competitors) and bool(raw_queries)
 
     serp_key = os.environ.get("BRIGHTDATA_API_KEY")
     llm_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -524,8 +592,19 @@ def api_analyze():
         _live_runs += 1
         _ip_runs[ip] = [today, ip_count + 1]
 
+    # NOTE on caching custom runs: when the client supplies pre-validated
+    # competitors/queries (from a confirmed /api/infer preview, possibly with
+    # a disambiguation hint), the resulting analysis can legitimately differ
+    # from an "auto" analysis of the same bare brand name. The cache is keyed
+    # only on brand.lower(), so if we wrote a custom result there, a later
+    # plain (non-hinted) analysis of the same brand would incorrectly be
+    # served that custom data — and vice versa, a custom run could get served
+    # a stale "auto" cache hit that doesn't match the confirmed strategy.
+    # Simplest safe choice: custom runs neither read nor write the shared
+    # brand cache; they always run fresh (still cost-bounded by MAX_QUERIES
+    # SERP calls and the quota counters above).
     cache_key = brand.lower()
-    if cache_key in _cache:
+    if not use_custom_strategy and cache_key in _cache:
         with _live_lock:
             _live_runs -= 1  # cached hit doesn't consume a slot
             if ip in _ip_runs and _ip_runs[ip][0] == today:
@@ -533,12 +612,16 @@ def api_analyze():
         return jsonify(dict(_cache[cache_key], cached=True))
 
     try:
-        strat = infer_strategy(brand, llm_key)
-        competitors = [re.sub(r'[^\w\s\-\.\&]', '', c.strip())[:MAX_BRAND_LEN]
-                       for c in strat.get("competitors", []) if c.strip()][:MAX_BRANDS]
-        queries = [q.strip() for q in strat.get("queries", []) if q.strip()][:MAX_QUERIES]
-        if brand not in competitors:
-            competitors = [brand] + competitors
+        if use_custom_strategy:
+            competitors, queries = _sanitize_strategy(brand, {
+                "competitors": raw_competitors,
+                "queries": raw_queries,
+            })
+            sector = (data.get("sector") or "").strip() or "(confirmed by user)"
+        else:
+            strat = infer_strategy(brand, llm_key, hint)
+            competitors, queries = _sanitize_strategy(brand, strat)
+            sector = strat.get("sector", "")
         if not competitors or not queries:
             return jsonify(dict(SAMPLE, notice="Could not infer competitors - showing sample analysis."))
         ranking = analyze(competitors, queries, serp_key)
@@ -561,16 +644,17 @@ def api_analyze():
         cost = round(LLM_COST_PER_CALL * (1 + AI_RUNS) + SERP_COST_PER_QUERY * len(queries), 5)
         result = {
             "brand": brand,
-            "sector": strat.get("sector", ""),
+            "sector": sector,
             "queries": queries,
             "ranking": ranking,
             "mode": "live",
             "cost": cost,
         }
-        with _live_lock:
-            if len(_cache) < MAX_CACHE_ENTRIES:
-                _cache[cache_key] = result
-                _save_cache(_cache)
+        if not use_custom_strategy:
+            with _live_lock:
+                if len(_cache) < MAX_CACHE_ENTRIES:
+                    _cache[cache_key] = result
+                    _save_cache(_cache)
         return jsonify(result)
     except Exception as e:
         logger.exception("Live analysis failed for brand='%s'", brand)
