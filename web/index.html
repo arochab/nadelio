@@ -3,199 +3,395 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BrandPulse — Who owns the search results in your niche?</title>
-<meta name="description" content="Type one brand. See who owns the search results and AI recommendations in your niche. Live competitive visibility heatmap in 10 seconds.">
+<title>BrandPulse — Does AI recommend your brand, or your competitor?</title>
+<meta name="description" content="Type one brand. See who owns the answers your buyers follow — Google and ChatGPT/Claude — in 10 seconds. The GEO visibility index.">
 <link rel="canonical" href="https://brandpulse-app.onrender.com/">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://brandpulse-app.onrender.com/">
-<meta property="og:title" content="BrandPulse — Who owns the search results in your niche?">
-<meta property="og:description" content="Type one brand. See who owns the search results and AI recommendations in your niche. Live dual heatmap.">
+<meta property="og:title" content="BrandPulse — Does AI recommend your brand, or your competitor?">
+<meta property="og:description" content="Type one brand. See who owns the answers your buyers follow — Google and ChatGPT/Claude. The GEO visibility index.">
 <meta property="og:image" content="https://brandpulse-app.onrender.com/demo-brandpulseapp.gif">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="BrandPulse — Who owns the search results in your niche?">
-<meta name="twitter:description" content="Type one brand. See who owns the search results and AI recommendations in your niche. Live dual heatmap.">
+<meta name="twitter:title" content="BrandPulse — Does AI recommend your brand, or your competitor?">
+<meta name="twitter:description" content="Type one brand. See who owns the answers your buyers follow — Google and ChatGPT/Claude.">
 <meta name="twitter:image" content="https://brandpulse-app.onrender.com/demo-brandpulseapp.gif">
 
-<meta name="theme-color" content="#f4f2ec">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>P</text></svg>">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600&display=swap">
+<meta name="theme-color" content="#0E1512">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230E1512'/><circle cx='16' cy='16' r='9' fill='none' stroke='%234FD1A5' stroke-width='2.4'/><circle cx='16' cy='16' r='3.2' fill='%238B6FE8'/></svg>">
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
-  :root{--ink:#15140f;--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--card:#fbfaf6;--line:#e8e6dd;--muted:#9a988e;--faint:#918f84;}
+  /* ============ SIGNAL ROOM — design tokens ============ */
+  :root{
+    /* instrument (dark measure zone) */
+    --ground:#0E1512;--ground-2:#141D19;--hairline-dark:rgba(255,255,255,.09);
+    /* document (light deliverable zone) */
+    --surface:#EDEBE4;--card-light:#FBFAF6;--line:#D9D6CC;
+    /* ink */
+    --ink:#0E1512;--paper-ink:#EAE8E0;--muted-dark:#8A968F;--muted-light:#6E6C64;
+    /* DATA colours (never for a button/link) */
+    --sage-signal:#4FD1A5;--sage-ink:#3D6B5C;--violet-ai:#8B6FE8;--violet-ink:#6E5696;
+    /* single alert token */
+    --amber:#D9A441;
+    /* radii */
+    --r-sm:14px;--r-md:18px;--r-lg:22px;
+    /* type voices (CSP-safe, zero CDN, zero FOUT) */
+    --display:"Segoe UI Semibold","Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;
+    --body:"Inter","Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Consolas,"Liberation Mono",monospace;
+  }
   html,body{height:100%;}
-  body{font-family:'Inter',-apple-system,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5;position:relative;overflow-x:hidden;}
-  /* AURORA background */
-  .aurora{position:fixed;inset:0;z-index:-2;background:var(--paper);overflow:hidden;}
-  .aurora::before,.aurora::after{content:"";position:absolute;width:60vw;height:60vw;border-radius:50%;filter:blur(80px);opacity:.5;}
-  .aurora::before{background:radial-gradient(circle,#cfe0d7,transparent 65%);top:-15vw;left:-10vw;animation:drift1 26s ease-in-out infinite;}
-  .aurora::after{background:radial-gradient(circle,#e7ddcb,transparent 65%);bottom:-20vw;right:-12vw;animation:drift2 32s ease-in-out infinite;}
-  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(8vw,6vw) scale(1.15);}}
-  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(-7vw,-5vw) scale(1.1);}}
-  .grain{position:fixed;inset:0;z-index:-1;opacity:.035;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
-  .wrap{max-width:700px;margin:0 auto;padding:72px 20px 90px;}
-  .eyebrow{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:20px;justify-content:center;}
-  .eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--sage);animation:breathe 2.4s ease-in-out infinite;}
-  @keyframes breathe{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(91,140,126,.4);}50%{opacity:.4;box-shadow:0 0 0 6px rgba(91,140,126,0);}}
-  h1{font-size:40px;font-weight:600;letter-spacing:-1.4px;line-height:1.04;text-align:center;}
-  .lede{font-size:16px;color:var(--muted);margin:16px auto 0;max-width:440px;text-align:center;}
-  .bar-input{display:flex;gap:10px;margin:38px auto 0;max-width:520px;}
-  .bar-input input{flex:1;font-family:inherit;font-size:17px;color:var(--ink);background:rgba(255,255,255,.7);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px;padding:16px 18px;outline:none;transition:border-color .2s,box-shadow .2s,background .2s;}
-  .bar-input input:focus{border-color:var(--sage);box-shadow:0 0 0 4px rgba(91,140,126,.12);background:#fff;}
-  .bar-input button{font-family:inherit;font-size:16px;font-weight:500;cursor:pointer;border-radius:14px;padding:0 26px;border:none;background:var(--ink);color:#fff;white-space:nowrap;transition:transform .12s,opacity .2s;}
-  .bar-input button:hover{opacity:.9;}.bar-input button:active{transform:scale(.96);}
-  .bar-input button:disabled{opacity:.5;cursor:wait;}
-  .sub{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap;}
-  .chip{font-size:13px;color:var(--sage-d);background:rgba(91,140,126,.1);border:1px solid rgba(91,140,126,.2);padding:6px 13px;border-radius:9px;cursor:pointer;transition:background .15s,transform .1s;}
-  .chip:hover{background:rgba(91,140,126,.16);}.chip:active{transform:scale(.95);}
-  .how{display:flex;gap:16px;justify-content:center;margin-top:18px;font-size:12px;color:var(--faint);flex-wrap:wrap;}
-  .how span{display:flex;align-items:center;gap:6px;}
-  .how .s{width:18px;height:18px;border-radius:50%;background:rgba(91,140,126,.12);color:var(--sage);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;}
-  #out{margin-top:38px;}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:34px 32px;position:relative;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 24px 60px -30px rgba(40,50,45,.25);animation:cardin .55s cubic-bezier(.2,.7,.3,1) both;}
-  @keyframes cardin{from{opacity:0;transform:translateY(16px) scale(.99);}to{opacity:1;transform:none;}}
-  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:5px 11px;border-radius:8px;margin-bottom:16px;}
-  .badge.demo{background:#efeee7;color:var(--muted);}
-  .badge.live{background:rgba(91,140,126,.14);color:var(--sage-d);}
-  .badge.cached{background:rgba(91,140,126,.1);color:var(--sage);}
-  .badge .lv{width:5px;height:5px;border-radius:50%;background:var(--sage);animation:breathe 1.6s infinite;}
-  .sector{font-size:13px;color:var(--muted);margin-bottom:20px;}
-  .sector b{color:var(--sage-d);font-weight:500;}
-  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:20px;}
-  .top h2{font-size:26px;font-weight:600;letter-spacing:-.6px;line-height:1.12;}
-  .top .subt{font-size:13px;color:var(--muted);margin-top:7px;}
-  .heron{text-align:right;}
-  .heron .n{font-size:44px;font-weight:600;letter-spacing:-2px;color:var(--sage);line-height:1;}
-  .heron .n .p{font-size:19px;color:#a8c4b8;}
-  .heron .cap{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
-  .insight{font-size:14px;line-height:1.65;color:#3a3a34;background:rgba(91,140,126,.07);border-left:3px solid var(--sage);padding:13px 16px;border-radius:0 10px 10px 0;margin-bottom:24px;}
-  .insight b{font-weight:600;color:var(--ink);}
-  /* HEATMAP */
-  .hm{overflow-x:auto;}
-  .hm-grid{display:grid;gap:6px;min-width:min-content;}
-  .hm-corner{}
-  .hm-qh{font-size:11px;color:var(--muted);text-align:center;padding:0 4px 6px;line-height:1.3;align-self:end;}
-  .hm-bname{font-size:14px;font-weight:450;color:#3a3a34;display:flex;align-items:center;gap:7px;white-space:nowrap;padding-right:8px;}
-  .hm-bname .you{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--sage);border-radius:5px;padding:1px 6px;}
-  .cell{height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;cursor:default;position:relative;transform:scale(.6);opacity:0;transition:transform .12s,box-shadow .12s,filter .2s;}
-  .cell.in{transform:scale(1);opacity:1;}
-  .cell.has{cursor:pointer;color:#fff;}
-  .cell.empty{background:#eef0ec;color:transparent;}
-  .hm:hover .cell.has{filter:saturate(.7) brightness(1.04);}
-  .cell.has:hover{transform:scale(1.12) !important;filter:none !important;box-shadow:0 8px 22px -6px rgba(40,60,50,.4);z-index:5;}
-  .tip{position:fixed;z-index:50;background:var(--ink);color:#fff;font-size:12px;line-height:1.4;padding:9px 12px;border-radius:9px;max-width:260px;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s;box-shadow:0 12px 30px -8px rgba(0,0,0,.5);}
-  .tip.show{opacity:1;transform:none;}
-  .tip .q{color:#a8c4b8;font-size:11px;margin-top:3px;}
-  /* AI engine cells — purple tint to distinguish from SERP green */
-  .cell.ai{cursor:default;}
-  .cell.ai.has{color:#fff;}
-  .hm-section{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);grid-column:1/-1;padding:10px 0 4px;}
-  .hm-section+.hm-section{border-top:1px dashed var(--line);margin-top:4px;}
-  .hm-legend{font-size:11px;color:var(--faint);margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-  .hm-legend .scale{display:flex;gap:3px;}
-  .hm-legend .scale i{width:16px;height:10px;border-radius:3px;}
-  .insights{display:flex;gap:28px;margin-top:24px;flex-wrap:wrap;}
-  .insights .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:4px;}
-  .insights .v{font-size:14px;}
-  .empty-state{text-align:center;padding:14px 0 4px;}
-  .empty-state .big{font-size:22px;font-weight:600;letter-spacing:-.4px;margin-bottom:8px;}
-  .empty-state .desc{font-size:14px;color:var(--muted);max-width:430px;margin:0 auto;line-height:1.6;}
-  .stage{text-align:center;color:var(--muted);font-size:14px;padding:30px 0;}
-  .stage .bar{height:3px;background:var(--line);border-radius:2px;max-width:280px;margin:18px auto 0;overflow:hidden;}
-  .stage .bar i{display:block;height:100%;width:30%;background:var(--sage);border-radius:2px;animation:slide 1.3s ease-in-out infinite;}
-  @keyframes slide{0%{margin-left:-30%;}100%{margin-left:100%;}}
+  body{font-family:var(--body);color:var(--paper-ink);background:var(--ground);-webkit-font-smoothing:antialiased;line-height:1.5;position:relative;overflow-x:hidden;}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;}
+  ::selection{background:rgba(79,209,165,.28);color:#fff;}
 
-  .pro-cta{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);flex-wrap:wrap;}
-  .pro-cta .label{font-size:13px;color:var(--muted);}
-  .pro-cta input{font-family:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;outline:none;background:rgba(255,255,255,.7);color:var(--ink);width:200px;transition:border-color .2s;}
-  .pro-cta input:focus{border-color:var(--sage);}
-  .pro-cta button{font-family:inherit;font-size:12px;font-weight:500;padding:8px 14px;border:none;border-radius:8px;background:var(--sage);color:#fff;cursor:pointer;transition:opacity .15s;}
-  .pro-cta button:hover{opacity:.85;}
-  .pro-cta .ok{font-size:12px;color:var(--sage);display:none;}
-  footer{text-align:center;margin-top:30px;font-size:12px;color:var(--faint);}
-  footer a{color:var(--sage);text-decoration:none;}
-  footer .coffee{color:#b8935a;}
-  @media(max-width:540px){h1{font-size:31px;}.bar-input{flex-direction:column;}.top h2{font-size:21px;}.heron .n{font-size:35px;}}
+  /* ============ layout ============ */
+  .measure{background:var(--ground);position:relative;}
+  .wrap{max-width:760px;margin:0 auto;padding:64px 20px 72px;}
+  a{color:inherit;}
+  :focus-visible{outline:2px solid var(--sage-signal);outline-offset:3px;border-radius:6px;}
+
+  /* ============ HERO (act 1) ============ */
+  .eyebrow{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:22px;justify-content:center;}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--sage-signal);box-shadow:0 0 12px 1px rgba(79,209,165,.6);}
+  h1{font-family:var(--display);font-size:34px;font-weight:600;letter-spacing:-.03em;line-height:1.08;text-align:center;color:#fff;max-width:640px;margin:0 auto;}
+  .lede{font-size:16px;color:var(--muted-dark);margin:18px auto 0;max-width:520px;text-align:center;line-height:1.6;}
+  .lede b{color:var(--paper-ink);font-weight:500;}
+
+  .bar-input{display:flex;gap:10px;margin:34px auto 0;max-width:560px;}
+  .bar-input input{flex:1;font-family:var(--body);font-size:17px;color:#fff;background:var(--ground-2);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:16px 18px;outline:none;transition:border-color .2s,box-shadow .2s;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);}
+  .bar-input input::placeholder{color:#5c6660;}
+  .bar-input input:focus{border-color:var(--sage-signal);box-shadow:0 0 0 4px rgba(79,209,165,.15),inset 0 1px 0 rgba(255,255,255,.04);}
+  .bar-input button{font-family:var(--body);font-size:16px;font-weight:600;cursor:pointer;border-radius:var(--r-sm);padding:0 30px;border:none;background:var(--sage-signal);color:#08110D;white-space:nowrap;transition:transform .12s,filter .2s;}
+  .bar-input button:hover{filter:brightness(1.08);}
+  .bar-input button:active{transform:scale(.97);}
+  .bar-input button:disabled{opacity:.5;cursor:wait;}
+
+  .trustline{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted-dark);text-align:center;margin-top:16px;letter-spacing:.01em;}
+  .trustline b{color:var(--sage-signal);font-weight:600;}
+
+  .refine-toggle{text-align:center;margin-top:18px;}
+  .refine-toggle a{font-size:13px;color:var(--muted-dark);text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(138,150,143,.5);cursor:pointer;}
+  .refine-toggle a:hover{color:var(--paper-ink);}
+  #hintRow{display:none;max-width:560px;margin:12px auto 0;flex-direction:column;gap:8px;}
+  .refine-field{width:100%;font-family:var(--body);font-size:14px;color:#fff;background:var(--ground-2);border:1px solid var(--hairline-dark);border-radius:12px;padding:12px 14px;outline:none;transition:border-color .2s;}
+  .refine-field::placeholder{color:#5c6660;}
+  .refine-field:focus{border-color:var(--sage-signal);}
+  .refine-row{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:4px;flex-wrap:wrap;}
+  .refine-row label{font-family:var(--mono);font-size:12px;color:var(--muted-dark);text-transform:uppercase;letter-spacing:.08em;}
+  #market{font-family:var(--body);font-size:13px;color:#fff;background:var(--ground-2);border:1px solid var(--hairline-dark);border-radius:10px;padding:9px 11px;outline:none;cursor:pointer;}
+  .refine-run{font-family:var(--body);font-size:13px;font-weight:500;cursor:pointer;border-radius:10px;padding:9px 18px;border:1px solid var(--hairline-dark);background:transparent;color:var(--paper-ink);}
+  .refine-run:hover{border-color:var(--sage-signal);color:#fff;}
+
+  .sample-line{text-align:center;margin-top:18px;font-size:13px;color:var(--muted-dark);}
+  .sample-line a{color:var(--paper-ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(234,232,224,.35);cursor:pointer;}
+  .sample-line a:hover{color:var(--sage-signal);}
+
+  #out{margin-top:36px;}
+
+  /* ============ empty state — filigree heatmap skeleton ============ */
+  .skeleton{border:1px solid var(--hairline-dark);border-radius:var(--r-lg);padding:30px 26px;background:var(--ground-2);position:relative;overflow:hidden;}
+  .sk-label{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:16px;}
+  .sk-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;opacity:.5;}
+  .sk-grid i{height:30px;border-radius:8px;background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.07),rgba(255,255,255,.03));background-size:200% 100%;animation:shimmer 3.2s ease-in-out infinite;}
+  .sk-grid i:nth-child(4n){background-color:rgba(79,209,165,.06);}
+  .sk-grid i:nth-child(7n){background-color:rgba(139,111,232,.06);}
+  @keyframes shimmer{0%,100%{background-position:200% 0;}50%{background-position:-200% 0;}}
+  .sk-copy{text-align:center;font-size:14px;color:var(--muted-dark);margin-top:22px;}
+
+  /* ============ dark card (instrument) ============ */
+  .card{background:var(--ground-2);border:1px solid var(--hairline-dark);border-radius:var(--r-lg);padding:32px 30px;position:relative;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 30px 70px -40px rgba(0,0,0,.7);animation:cardin .5s cubic-bezier(.2,.7,.3,1) both;}
+  @keyframes cardin{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+
+  .badge{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:6px 11px;border-radius:8px;margin-bottom:18px;}
+  .badge.demo{background:rgba(255,255,255,.05);color:var(--muted-dark);}
+  .badge.live{background:rgba(79,209,165,.14);color:var(--sage-signal);}
+  .badge.cached{background:rgba(79,209,165,.1);color:var(--sage-signal);}
+  .badge .lv{width:6px;height:6px;border-radius:50%;background:var(--sage-signal);box-shadow:0 0 8px rgba(79,209,165,.7);animation:breathe 1.8s infinite;}
+  @keyframes breathe{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+  /* guarantee badge (positive, web-sourced) */
+  .guarantee{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--sage-signal);background:rgba(79,209,165,.09);border:1px solid rgba(79,209,165,.25);border-radius:10px;padding:9px 13px;margin-bottom:18px;line-height:1.4;flex-wrap:wrap;}
+  .guarantee .chk{font-weight:700;}
+  .guarantee a{color:var(--sage-signal);text-decoration:underline;text-underline-offset:2px;}
+
+  .sector{font-size:13px;color:var(--muted-dark);margin-bottom:20px;line-height:1.6;}
+  .sector b{color:var(--paper-ink);font-weight:500;}
+
+  /* verdict — centred on YOU */
+  .verdict{margin-bottom:22px;}
+  .verdict h2{font-family:var(--display);font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1.15;color:#fff;}
+  .verdict .biz{font-size:15px;color:var(--paper-ink);line-height:1.6;margin-top:12px;}
+  .verdict .biz b{color:#fff;font-weight:600;}
+  .heronrow{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap;margin:20px 0 6px;}
+  .heron .n{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:56px;font-weight:600;letter-spacing:-.02em;color:var(--sage-signal);line-height:.95;}
+  .heron .n .p{font-size:22px;color:var(--muted-dark);}
+  .heron .cap{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-top:8px;}
+  .heron.sec .n{font-size:30px;color:var(--paper-ink);}
+
+  .insight{font-size:14px;line-height:1.65;color:var(--paper-ink);background:rgba(79,209,165,.06);border-left:3px solid var(--sage-signal);padding:13px 16px;border-radius:0 10px 10px 0;margin-bottom:22px;}
+  .insight b{font-weight:600;color:#fff;}
+
+  /* ============ HEATMAP — two territories ============ */
+  .hm{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .hm-grid{display:grid;gap:6px;min-width:min-content;}
+  .hm-qh{font-family:var(--mono);font-size:11px;color:var(--muted-dark);text-align:center;padding:0 4px 6px;line-height:1.3;align-self:end;}
+  .hm-bname{font-size:14px;font-weight:450;color:var(--paper-ink);display:flex;align-items:center;gap:7px;white-space:nowrap;padding-right:8px;}
+  .hm-bname.you-row{color:#fff;font-weight:600;}
+  .hm-bname .you{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#08110D;background:var(--amber);border-radius:5px;padding:1px 6px;}
+  .cell{height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12px;font-weight:600;cursor:default;position:relative;transform:scale(.6);opacity:0;transition:transform .12s,box-shadow .12s,filter .2s;}
+  .cell.in{transform:scale(1);opacity:1;}
+  .cell.has{cursor:pointer;color:#08110D;}
+  .cell.empty{background:transparent;border:1px dashed rgba(255,255,255,.14);color:transparent;}
+  .cell.you-cell{box-shadow:0 0 0 2px var(--amber);}
+  .hm:hover .cell.has{filter:saturate(.8) brightness(1.05);}
+  .cell.has:hover,.cell.has:focus-visible{transform:scale(1.12) !important;filter:none !important;box-shadow:0 8px 22px -6px rgba(0,0,0,.6);z-index:5;}
+  .cell.you-cell:hover{box-shadow:0 0 0 2px var(--amber),0 8px 22px -6px rgba(0,0,0,.6) !important;}
+  .cell.ai.has{color:#fff;}
+  .cell.ai.primary{box-shadow:inset 0 0 0 2px rgba(255,255,255,.7);}
+  .cell.ai.primary.you-cell{box-shadow:inset 0 0 0 2px rgba(255,255,255,.7),0 0 0 2px var(--amber);}
+
+  .tip{position:fixed;z-index:50;background:#050907;color:#fff;font-size:12px;line-height:1.45;padding:9px 12px;border-radius:9px;max-width:260px;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s;box-shadow:0 12px 30px -8px rgba(0,0,0,.7);border:1px solid var(--hairline-dark);}
+  .tip.show{opacity:1;transform:none;}
+  .tip .q{color:var(--sage-signal);font-size:11px;margin-top:3px;font-family:var(--mono);}
+
+  .hm-section{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;grid-column:1/-1;padding:14px 0 6px;display:flex;align-items:center;gap:8px;}
+  .hm-section.serp{color:var(--sage-signal);}
+  .hm-section.ai{color:var(--violet-ai);border-top:1px dashed var(--hairline-dark);margin-top:8px;}
+  .hm-section .sub{font-weight:400;color:var(--muted-dark);text-transform:none;letter-spacing:0;font-family:var(--body);}
+  .hm-legend{font-size:12px;color:var(--muted-dark);margin-top:16px;line-height:1.6;}
+  .hm-legend b{color:var(--sage-signal);}.hm-legend .vi{color:var(--violet-ai);}
+
+  /* tap-to-reveal detail panel (mobile) */
+  .celldetail{grid-column:1/-1;font-size:13px;color:var(--paper-ink);background:rgba(255,255,255,.04);border:1px solid var(--hairline-dark);border-radius:10px;padding:11px 14px;margin-top:4px;display:none;}
+  .celldetail.show{display:block;}
+  .celldetail .q{color:var(--sage-signal);font-family:var(--mono);font-size:12px;}
+
+  /* ============ mobile stacked heatmap ============ */
+  .hm-cards{display:none;}
+  @media(max-width:640px){
+    .hm-grid{display:none;}
+    .hm-cards{display:block;}
+    .hm-qcard{border:1px solid var(--hairline-dark);border-radius:12px;padding:13px 14px;margin-bottom:10px;background:rgba(255,255,255,.02);}
+    .hm-qcard .qt{font-family:var(--mono);font-size:12px;color:var(--muted-dark);margin-bottom:9px;line-height:1.4;}
+    .hm-qcard .terr{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin:8px 0 5px;}
+    .hm-qcard .terr.serp{color:var(--sage-signal);}
+    .hm-qcard .terr.ai{color:var(--violet-ai);}
+    .hm-brow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;font-size:13px;}
+    .hm-brow .bn{color:var(--paper-ink);display:flex;align-items:center;gap:6px;}
+    .hm-brow.you-row .bn{color:#fff;font-weight:600;}
+    .hm-brow .rk{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;padding:2px 9px;border-radius:6px;color:#08110D;}
+    .hm-brow .rk.ai{color:#fff;}
+    .hm-brow .rk.absent{background:transparent;border:1px dashed rgba(255,255,255,.14);color:var(--muted-dark);}
+    .hm-brow .you{font-family:var(--mono);font-size:9px;text-transform:uppercase;color:#08110D;background:var(--amber);border-radius:5px;padding:1px 6px;}
+  }
+
+  .insights{display:flex;gap:26px;margin-top:24px;flex-wrap:wrap;}
+  .insights .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:5px;}
+  .insights .v{font-size:14px;color:var(--paper-ink);}
+  .insights .v .mono{color:#fff;}
+
+  .empty-state{text-align:center;padding:14px 0 4px;}
+  .empty-state .big{font-family:var(--display);font-size:22px;font-weight:600;letter-spacing:-.02em;margin-bottom:8px;color:#fff;}
+  .empty-state .desc{font-size:14px;color:var(--muted-dark);max-width:430px;margin:0 auto;line-height:1.6;}
+
+  /* progress stage — 3-beat / neutral worked loader */
+  .stage{text-align:center;color:var(--muted-dark);font-size:14px;padding:26px 0;}
+  .stage b{color:var(--sage-signal);}
+  .stage .bar{height:3px;background:rgba(255,255,255,.08);border-radius:2px;max-width:300px;margin:18px auto 0;overflow:hidden;}
+  .stage .bar i{display:block;height:100%;width:32%;background:var(--sage-signal);border-radius:2px;animation:slide 1.3s ease-in-out infinite;}
+  @keyframes slide{0%{margin-left:-32%;}100%{margin-left:100%;}}
+  .beats{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:16px;font-family:var(--mono);font-size:12px;}
+  .beats span{color:var(--muted-dark);}
+  .beats span.done{color:var(--sage-signal);}
+  .beats span.active{color:#fff;}
+  .beats .sep{color:rgba(255,255,255,.2);}
+
+  /* decision / confirm card (low-confidence only) */
+  .decision{background:rgba(255,255,255,.03);border:1px solid var(--hairline-dark);border-left:3px solid var(--amber);border-radius:0 12px 12px 0;padding:16px 18px;margin-bottom:18px;}
+  .decision .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);margin-bottom:8px;}
+  .decision .idn{font-size:15px;line-height:1.5;color:#fff;}
+  .decision .src{font-size:12px;color:var(--muted-dark);margin-top:6px;}
+  .decision .src a{color:var(--sage-signal);text-decoration:underline;text-underline-offset:2px;}
+  .decision .prompt{font-size:13px;color:var(--muted-dark);margin-top:14px;}
+  .btn-primary{font-family:var(--body);font-size:14px;font-weight:600;cursor:pointer;border-radius:12px;padding:12px 22px;border:none;background:var(--sage-signal);color:#08110D;}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-ghost{font-family:var(--body);font-size:13px;cursor:pointer;border:none;background:none;color:var(--muted-dark);text-decoration:underline;text-underline-offset:3px;padding:8px 4px;}
+  .btn-ghost:hover{color:var(--paper-ink);}
+
+  /* email gate (pre-paywall, light-touch) — sits on dark */
+  .pro-cta{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:22px;padding-top:18px;border-top:1px dashed var(--hairline-dark);flex-wrap:wrap;}
+  .pro-cta .label{font-size:13px;color:var(--muted-dark);width:100%;text-align:center;margin-bottom:4px;}
+  .pro-cta input{font-family:var(--body);font-size:13px;padding:10px 13px;border:1px solid var(--hairline-dark);border-radius:9px;outline:none;background:var(--ground-2);color:#fff;width:220px;transition:border-color .2s;}
+  .pro-cta input::placeholder{color:#5c6660;}
+  .pro-cta input:focus{border-color:var(--sage-signal);}
+  .pro-cta button{font-family:var(--body);font-size:13px;font-weight:600;padding:10px 16px;border:none;border-radius:9px;background:var(--sage-signal);color:#08110D;cursor:pointer;}
+  .pro-cta button:hover{filter:brightness(1.08);}
+  .pro-cta .ok{font-size:13px;color:var(--sage-signal);display:none;width:100%;text-align:center;}
+  .pro-cta .monitor{width:100%;text-align:center;font-size:12px;color:var(--muted-dark);margin-top:10px;}
+  .pro-cta .monitor a{color:var(--sage-signal);text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
+
+  /* ============ LIGHT DOCUMENT ZONE (act 3) ============ */
+  .doc{background:var(--surface);color:var(--ink);border-radius:var(--r-lg);margin-top:30px;padding:34px 30px;border:1px solid var(--line);box-shadow:0 30px 70px -45px rgba(0,0,0,.6);}
+  .doc .doc-eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-light);margin-bottom:14px;}
+  .doc h3{font-family:var(--display);font-size:24px;font-weight:600;letter-spacing:-.02em;color:var(--ink);line-height:1.2;margin-bottom:8px;}
+  .doc .doc-sub{font-size:14px;color:var(--muted-light);line-height:1.6;margin-bottom:22px;}
+  .doc .insight{color:#2b2b26;background:rgba(61,107,92,.08);border-left:3px solid var(--sage-ink);}
+  .doc .insight b{color:var(--ink);}
+  .doc .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-light);}
+  .doc ol,.doc ul{padding-left:20px;}
+  .doc li{margin-bottom:8px;line-height:1.55;font-size:14px;}
+  .doc a{color:var(--sage-ink);text-underline-offset:2px;}
+  .doc .divider{border-top:1px dashed var(--line);margin:24px 0;}
+
+  .preview-actions{background:var(--card-light);border:1px solid var(--line);border-radius:var(--r-md);padding:20px 22px;margin-top:20px;}
+  .thumb{display:flex;align-items:center;gap:14px;background:var(--card-light);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:18px;}
+  .thumb .ico{width:42px;height:42px;border-radius:10px;background:var(--ground);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .thumb .t{font-size:14px;font-weight:600;color:var(--ink);}
+  .thumb .d{font-size:12px;color:var(--muted-light);margin-top:2px;}
+
+  .anchor{display:flex;gap:14px;flex-wrap:wrap;margin:22px 0;}
+  .anchor .col{flex:1;min-width:180px;border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--card-light);}
+  .anchor .col.hi{border-color:var(--sage-ink);background:rgba(61,107,92,.06);}
+  .anchor .col .lab{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-light);margin-bottom:6px;}
+  .anchor .col .big{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:600;letter-spacing:-.01em;color:var(--ink);line-height:1.05;}
+  .anchor .col .sm{font-size:12px;color:var(--muted-light);margin-top:4px;line-height:1.4;}
+
+  .doc-cta{text-align:center;margin-top:8px;}
+  .doc-cta .go{font-family:var(--body);font-size:16px;font-weight:600;cursor:pointer;border-radius:14px;padding:14px 30px;border:none;background:var(--ink);color:#fff;}
+  .doc-cta .go:hover{filter:brightness(1.15);}
+  .doc-cta .bene{font-size:13px;color:var(--muted-light);margin-top:12px;line-height:1.5;}
+  .doc-cta .stripe{font-family:var(--mono);font-size:11px;color:var(--muted-light);margin-top:10px;display:inline-flex;align-items:center;gap:6px;letter-spacing:.04em;}
+  .doc-cta .stripe .lock{color:var(--sage-ink);}
+
+  /* GEO gauge (arc SVG) */
+  .gauge{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin:22px 0;padding:20px 22px;background:var(--card-light);border:1px solid var(--line);border-radius:var(--r-md);}
+  .gauge svg{flex-shrink:0;}
+  .gauge .num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:42px;font-weight:600;letter-spacing:-.02em;line-height:1;}
+  .gauge .num .o{font-size:18px;color:var(--muted-light);}
+  .gauge .meta{flex:1;min-width:180px;}
+  .gauge .meta .lab{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-light);margin-bottom:6px;}
+  .gauge .meta .desc{font-size:12px;color:var(--muted-light);margin-top:8px;line-height:1.5;}
+  .dl-btn{font-family:var(--body);font-size:14px;font-weight:600;cursor:pointer;border-radius:12px;padding:12px 22px;border:1px solid var(--sage-ink);background:transparent;color:var(--sage-ink);}
+  .dl-btn:hover{background:rgba(61,107,92,.08);}
+
+  /* payment status thread */
+  .paythread{font-family:var(--mono);font-size:13px;line-height:1.9;color:var(--muted-dark);}
+  .paythread .step{display:block;}
+  .paythread .step.done{color:var(--sage-signal);}
+  .paythread .step.active{color:#fff;}
+  .retry-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:18px;align-items:center;}
+  .support-link{color:var(--sage-signal);text-decoration:underline;text-underline-offset:2px;}
+
+  /* ============ FOOTER ============ */
+  footer.site{margin-top:44px;padding-top:24px;border-top:1px solid var(--hairline-dark);text-align:center;font-size:12px;color:var(--muted-dark);line-height:1.9;}
+  footer.site .brandline{font-family:var(--display);font-size:14px;color:var(--paper-ink);font-weight:600;margin-bottom:8px;letter-spacing:-.01em;}
+  footer.site a{color:var(--sage-signal);text-decoration:none;}
+  footer.site a:hover{text-decoration:underline;text-underline-offset:2px;}
+  footer.site .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center;}
+  footer.site .sep{color:rgba(138,150,143,.4);}
+  footer.site .stripe-badge{font-family:var(--mono);font-size:11px;color:var(--muted-dark);letter-spacing:.03em;}
+  footer.site .count{font-family:var(--mono);color:var(--sage-signal);}
+
+  @media(max-width:540px){
+    .wrap{padding:44px 16px 56px;}
+    h1{font-size:27px;}
+    .bar-input{flex-direction:column;}
+    .verdict h2{font-size:22px;}
+    .heron .n{font-size:44px;}
+    .heron.sec .n{font-size:24px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
+    .cell{transform:none;opacity:1;}
+  }
 </style>
 </head>
 <body>
-<div class="aurora"></div><div class="grain"></div>
-<div id="tip" class="tip"></div>
+<div id="tip" class="tip" aria-hidden="true"></div>
+<div class="measure">
 <div class="wrap">
-  <div class="eyebrow"><span class="dot"></span> AI Visibility Intelligence</div>
-  <h1>Your brand is invisible<br>in AI search. This shows you where.</h1>
-  <p class="lede">One input. BrandPulse maps who owns the search results and AI recommendations in your niche. Live data, not guesswork.</p>
+  <!-- ============ ACT 1 — HERO ============ -->
+  <div class="eyebrow"><span class="dot" aria-hidden="true"></span> GEO Visibility Index</div>
+  <h1>When a buyer asks AI what to choose in your market, does it name your brand &mdash; or your competitor?</h1>
+  <p class="lede">One brand is enough. See who owns the answers your buyers follow &mdash; <b>Google + ChatGPT/Claude</b> &mdash; in 10 seconds.</p>
 
   <div class="bar-input">
-    <input id="brand" type="text" placeholder="e.g. Notion, Stripe, Figma…" value="Notion" onkeydown="if(event.key==='Enter')run(true)"/>
-    <button id="goBtn" onclick="run(true)">Analyze →</button>
+    <input id="brand" type="text" placeholder="e.g. Notion, Stripe, Figma…" onkeydown="if(event.key==='Enter')run(true)" aria-label="Your brand"/>
+    <button id="goBtn" onclick="run(true)">Measure</button>
   </div>
-  <div style="text-align:center;margin-top:10px;">
-    <a id="hintToggle" href="javascript:void(0)" onclick="toggleHint()" style="font-size:12px;color:var(--faint);text-decoration:underline;text-underline-offset:2px;">Ambiguous name or wrong market? Refine it</a>
+  <div class="trustline mono"><b>21</b> brands mapped &middot; dual engine &middot; sources cited</div>
+
+  <div class="refine-toggle">
+    <a id="hintToggle" onclick="toggleHint()" tabindex="0" onkeydown="if(event.key==='Enter')toggleHint()">Ambiguous name or wrong market? Refine it</a>
   </div>
-  <div id="hintRow" style="display:none;max-width:520px;margin:10px auto 0;gap:10px;">
-    <input id="officialUrl" type="text" placeholder="Official website (source of truth), e.g. yoyaku.io" style="width:100%;font-family:inherit;font-size:13px;color:var(--ink);background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:12px;padding:11px 14px;outline:none;transition:border-color .2s;margin-bottom:8px;" onkeydown="if(event.key==='Enter')preview()"/>
-    <input id="hint" type="text" placeholder="Or a short description, e.g. 'French techno record label' or 'AP automation for finance teams'" style="width:100%;font-family:inherit;font-size:13px;color:var(--ink);background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:12px;padding:11px 14px;outline:none;transition:border-color .2s;" onkeydown="if(event.key==='Enter')preview()"/>
-    <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px;flex-wrap:wrap;">
-      <label for="market" style="font-size:12px;color:var(--faint);">Market</label>
-      <select id="market" style="font-family:inherit;font-size:13px;color:var(--ink);background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none;cursor:pointer;">
+  <div id="hintRow">
+    <input id="officialUrl" class="refine-field" type="text" placeholder="Official website (source of truth), e.g. yoyaku.io" onkeydown="if(event.key==='Enter')preview()"/>
+    <input id="hint" class="refine-field" type="text" placeholder="Or a short description, e.g. 'French techno record label' or 'AP automation for finance teams'" onkeydown="if(event.key==='Enter')preview()"/>
+    <div class="refine-row">
+      <label for="market">Market</label>
+      <select id="market">
         <option value="">Auto</option>
         <option value="fr">France</option>
         <option value="us">US / Global</option>
         <option value="dach">DACH</option>
         <option value="uk">UK</option>
       </select>
-      <button id="previewBtn" onclick="preview()" style="font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;border-radius:10px;padding:8px 18px;border:1px solid var(--line);background:#fff;color:var(--ink);">Preview sector &amp; competitors</button>
+      <button id="previewBtn" class="refine-run" onclick="preview()">Preview sector &amp; competitors</button>
     </div>
   </div>
-  <div class="sub">
-    <span style="font-size:12px;color:var(--faint);">Try:</span>
-    <span class="chip" onclick="useChip('Stripe')">Stripe</span>
-    <span class="chip" onclick="useChip('Figma')">Figma</span>
-    <span class="chip" onclick="useChip('HubSpot')">HubSpot</span>
-    <span class="chip" onclick="run(false)" style="color:var(--muted);background:#efeee7;border-color:var(--line);">See sample</span>
-  </div>
-  <div class="how">
-    <span><span class="s">1</span> Claude infers competitors</span>
-    <span><span class="s">2</span> Live Google SERP</span>
-    <span><span class="s">3</span> AI recommendation check</span>
-    <span><span class="s">4</span> Dual heatmap</span>
-  </div>
-  <div style="text-align:center;margin-top:12px;">
-    <a id="deepAuditCta" href="javascript:void(0)" onclick="startCheckout()" style="font-size:12px;color:var(--sage-d);background:rgba(91,140,126,.09);border:1px solid rgba(91,140,126,.22);border-radius:9px;padding:7px 13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:background .15s;">Deep Audit &mdash; 5 queries (79&euro;)</a>
-    <div id="deepAuditMsg" style="font-size:12px;color:var(--faint);margin-top:8px;display:none;"></div>
-  </div>
+
+  <div class="sample-line">Not your brand yet? <a onclick="run(false)" tabindex="0" onkeydown="if(event.key==='Enter')run(false)">See a sample measurement</a></div>
 
   <div id="out"></div>
-  <footer>Built by <a href="https://github.com/arochab">Adam Chabbi</a> · <a href="/compare">why BrandPulse?</a> · <a href="https://buymeacoffee.com/arochab" target="_blank" rel="noopener" class="coffee">☕</a></footer>
+
+  <footer class="site">
+    <div class="brandline">BrandPulse</div>
+    <div class="row">
+      <a href="mailto:adam.chabbi94@gmail.com">Contact support</a>
+      <span class="sep">&middot;</span>
+      <a href="/compare">Why BrandPulse?</a>
+      <span class="sep">&middot;</span>
+      <a href="mailto:adam.chabbi94@gmail.com">Legal &amp; terms</a>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <span class="stripe-badge">&#128274; Secure payment by Stripe</span>
+      <span class="sep">&middot;</span>
+      <span class="count">21+ brands analysed</span>
+    </div>
+  </footer>
+</div>
 </div>
 
 <script>
+  var SUPPORT_EMAIL='adam.chabbi94@gmail.com';
   var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c];});};
   function useChip(b){document.getElementById('brand').value=b;run(true);}
   function shortQ(q){return q.length>22?q.slice(0,20)+'…':q;}
   // Optional market/depth controls. Safe defaults (empty market = auto,
   // deep unchecked = 2 queries) keep the public flow identical.
   function getMarket(){var el=document.getElementById('market');return el?el.value.trim():'';}
-  // Deep audit is now a paid unlock (Stripe), no longer a free checkbox. isDeep()
-  // stays defined (referenced by the shared preview/analyze helpers) but reports
-  // false in the normal free flow, so a free run always stays at 2 queries. The
-  // paid deep run uses its own dedicated path (resumeDeepAudit) after payment.
-  function isDeep(){var el=document.getElementById('deep');return !!(el&&el.checked);}
+  // Deep audit is now a paid unlock (Stripe), no longer a free checkbox. The only
+  // legitimate deep run is the post-payment flow, which carries a Stripe session id
+  // (?paid=<id> in the URL, read by hasPaidParam()). So isDeep() reflects reality:
+  // true only when a paid session is present. In the normal free flow there is no
+  // paid session, so this stays false and a free run always sends deep:false
+  // (2 queries). The dedicated paid path (resumeDeepAudit -> runDeepAnalysis) sends
+  // deep:true + paid_session explicitly; the backend (_resolve_paid_depth) remains
+  // the source of truth. (hasPaidParam is hoisted, defined lower in this script.)
+  function isDeep(){return hasPaidParam();}
   // rank -> sage intensity (darker = better rank) — SERP green
-  function rankColor(rank){if(rank==null)return '#eef0ec';var t=Math.max(0,Math.min(1,(10-rank)/9));
-    var stops=[[201,216,209],[156,188,176],[107,156,142],[61,107,92]];
+  function rankColor(rank){if(rank==null)return 'transparent';var t=Math.max(0,Math.min(1,(10-rank)/9));
+    var stops=[[42,74,64],[62,120,102],[79,180,140],[79,209,165]];
     var i=t*(stops.length-1),lo=Math.floor(i),hi=Math.min(lo+1,stops.length-1),f=i-lo;
     var c=stops[lo].map(function(v,k){return Math.round(v+(stops[hi][k]-v)*f);});
     return 'rgb('+c[0]+','+c[1]+','+c[2]+')';}
   // rank -> purple intensity — AI engine
-  function rankColorAI(rank){if(rank==null)return '#eef0ec';var t=Math.max(0,Math.min(1,(10-rank)/9));
-    var stops=[[212,206,220],[180,166,200],[148,126,180],[110,86,150]];
+  function rankColorAI(rank){if(rank==null)return 'transparent';var t=Math.max(0,Math.min(1,(10-rank)/9));
+    var stops=[[58,48,86],[92,74,150],[125,100,205],[139,111,232]];
     var i=t*(stops.length-1),lo=Math.floor(i),hi=Math.min(lo+1,stops.length-1),f=i-lo;
     var c=stops[lo].map(function(v,k){return Math.round(v+(stops[hi][k]-v)*f);});
     return 'rgb('+c[0]+','+c[1]+','+c[2]+')';}
@@ -204,13 +400,28 @@
   function showTip(e,html){tip.innerHTML=html;tip.classList.add('show');moveTip(e);}
   function moveTip(e){var x=e.clientX+14,y=e.clientY+14;if(x>window.innerWidth-270)x=e.clientX-260;tip.style.left=x+'px';tip.style.top=y+'px';}
   function hideTip(){tip.classList.remove('show');}
+  // Tap-to-reveal for touch: toggles an inline detail panel below the grid.
+  function tapCell(el,html){
+    var host=el.closest('.hm-grid');if(!host)return;
+    var panel=host.querySelector('.celldetail');
+    if(!panel){panel=document.createElement('div');panel.className='celldetail';host.appendChild(panel);}
+    panel.innerHTML=html;panel.classList.add('show');
+  }
 
   function toggleHint(){
     var row=document.getElementById('hintRow');
-    var open=row.style.display!=='none';
+    var open=row.style.display!=='none'&&row.style.display!=='';
     row.style.display=open?'none':'flex';
-    row.style.flexDirection='column';
     if(!open)document.getElementById('hint').focus();
+  }
+
+  // Drawn empty state: filigree heatmap skeleton + micro-copy. No auto-run.
+  function drawEmptyState(){
+    var out=document.getElementById('out');if(!out)return;
+    var cells='';for(var i=0;i<15;i++)cells+='<i></i>';
+    out.innerHTML='<div class="skeleton"><div class="sk-label mono">Signal grid &mdash; idle</div>'+
+      '<div class="sk-grid" aria-hidden="true">'+cells+'</div>'+
+      '<div class="sk-copy">Type a brand to light up the grid.</div></div>';
   }
 
   async function run(live){
@@ -219,18 +430,18 @@
     // Demo / sample mode is unchanged: fetch the precomputed SAMPLE directly.
     if(!live){
       btn.disabled=true;
-      out.innerHTML='<div class="card"><div class="stage">Loading sample…<div class="bar"><i></i></div></div></div>';
+      out.innerHTML='<div class="card"><div class="stage">Loading a sample measurement…<div class="bar"><i></i></div></div></div>';
       var sd,sr;
       try{sr=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false,brand:brand})});sd=await sr.json();}
-      catch(e){out.innerHTML='<div class="card"><div class="stage">Could not reach the server. If this is your first visit, the server may be waking up — try again in 30 seconds.</div></div>';btn.disabled=false;return;}
+      catch(e){out.innerHTML='<div class="card"><div class="stage">The instrument is spinning up. Give it a few seconds and measure again.</div></div>';btn.disabled=false;return;}
       if(sd.error){out.innerHTML='<div class="card"><div class="stage">'+esc(typeof sd.error==='string'?sd.error:(sd.message||'Something went wrong.'))+'</div></div>';btn.disabled=false;return;}
       render(sd);btn.disabled=false;return;
     }
     if(!brand){document.getElementById('brand').focus();return;}
-    // Live mode always runs a free /api/infer preview first and shows a light
-    // confirmation card, so an ambiguous name (or wrong market) never triggers
-    // a silent, potentially-wrong paid analysis. The actual SERP + AI calls
-    // only fire once the user confirms via confirmAnalyze().
+    // Live mode always runs a free /api/infer preview first. On HIGH confidence
+    // we chain straight into confirmAnalyze() (one click). Only an ambiguous name
+    // (or wrong market) surfaces a confirmation card, so a wrong diagnosis never
+    // passes silently. The actual SERP + AI calls fire via confirmAnalyze().
     preview();
   }
 
@@ -244,13 +455,14 @@
     var officialUrl=urlEl?urlEl.value.trim():'';
     var market=getMarket(),deep=isDeep();
     btn.disabled=true;if(pbtn)pbtn.disabled=true;
-    out.innerHTML='<div class="card"><div class="stage">Checking the web to identify <b style="color:var(--sage)">'+esc(brand)+'</b>…<div class="bar"><i></i></div></div></div>';
+    out.innerHTML='<div class="card"><div class="stage">Identifying <b>'+esc(brand)+'</b> on the web…<div class="bar"><i></i></div>'+
+      '<div class="beats"><span class="active">Identification</span><span class="sep">→</span><span>SERP</span><span class="sep">→</span><span>AI</span></div></div></div>';
     var data,res;
     try{
       res=await fetch('/api/infer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:brand,hint:hint,official_url:officialUrl,market:market,deep:deep,force_web:!!forceWeb})});
       data=await res.json();
     }catch(e){
-      out.innerHTML='<div class="card"><div class="stage">Could not reach the server. Try again in a moment.</div></div>';
+      out.innerHTML='<div class="card"><div class="stage">Could not reach the instrument. Try again in a moment.</div></div>';
       btn.disabled=false;if(pbtn)pbtn.disabled=false;return;
     }
     if(!res.ok||data.error){
@@ -270,43 +482,8 @@
     var officialUrl=data.official_url||'';
     var evidence=data.evidence||[];
     var lowConfidence=(confidence!=='high')||(evidence.length===0);
-    var compList=competitors.map(function(c){return '<span class="chip" style="cursor:default;background:rgba(91,140,126,.1);">'+esc(c)+'</span>';}).join(' ');
-    var queryList=queries.map(function(q){return '<li>'+esc(q)+'</li>';}).join('');
-    // MANDATORY confirmation card: the factual identity verdict + its source is
-    // shown BEFORE any analysis/checkout can run, so a wrong diagnosis can never
-    // pass silently. The user must confirm "Yes" or correct it via "No".
-    var sourceLink=officialUrl?' <a href="'+esc(officialUrl)+'" target="_blank" rel="noopener" style="color:var(--sage-d);text-decoration:underline;text-underline-offset:2px;">'+esc(officialUrl.replace(/^https?:\/\//,''))+'</a>':'';
-    var confBadge=lowConfidence
-      ?'<span style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#8a5a1a;background:rgba(200,140,40,.14);border-radius:6px;padding:2px 7px;margin-left:8px;">low confidence</span>'
-      :'<span style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--sage-d);background:rgba(91,140,126,.14);border-radius:6px;padding:2px 7px;margin-left:8px;">web-sourced</span>';
-    var identityBlock=
-      '<div style="background:rgba(91,140,126,.07);border:1px solid var(--line);border-left:3px solid var(--sage);border-radius:0 12px 12px 0;padding:14px 16px;margin-bottom:18px;">'+
-        '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px;">We identified'+confBadge+'</div>'+
-        '<div style="font-size:15px;line-height:1.5;color:var(--ink);">'+(identifiedAs?esc(identifiedAs):'<span style="color:var(--muted)">Could not identify this brand from the web — add its official site below.</span>')+'</div>'+
-        (sourceLink?'<div style="font-size:12px;color:var(--muted);margin-top:6px;">Source:'+sourceLink+'</div>':'')+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;">'+
-          '<span style="font-size:13px;color:var(--muted);">Is this the right brand?</span>'+
-          '<button onclick="confirmAnalyze()" style="font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;border-radius:9px;padding:7px 15px;border:1px solid rgba(91,140,126,.4);background:rgba(91,140,126,.12);color:var(--sage-d);">Yes, that\'s it</button>'+
-          '<button onclick="refinePreview()" style="font-family:inherit;font-size:13px;cursor:pointer;border-radius:9px;padding:7px 15px;border:1px solid var(--line);background:#fff;color:var(--ink);">No, wrong brand</button>'+
-        '</div>'+
-      '</div>';
-    // Light confirmation line: sector · market · query count. Shown for every
-    // live run so the user always sees what is about to be analyzed.
-    var marketBit=market?' · market <b>'+esc(market)+'</b>':'';
-    var summary='Analyzing <b>'+esc(data.brand)+'</b> in <b>'+esc(data.sector||'an unclear sector')+'</b>'+marketBit+
-      ' · <b>'+queries.length+'</b> buyer '+(queries.length>1?'queries':'query')+'.';
-    out.innerHTML='<div class="card">'+
-      '<div class="badge demo">Preview — not analyzed yet</div>'+
-      identityBlock+
-      '<div class="sector">'+summary+'</div>'+
-      '<div style="margin:14px 0;"><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;">Competitors</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+compList+'</div></div>'+
-      '<div style="margin:14px 0;"><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;">Buyer queries'+(lang?' <span style="text-transform:none;letter-spacing:0;color:var(--muted)">('+esc(lang)+')</span>':'')+'</div>'+
-      '<ul style="padding-left:18px;font-size:14px;line-height:1.7;">'+queryList+'</ul></div>'+
-      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;">'+
-      '<button onclick="confirmAnalyze()" style="font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;border-radius:12px;padding:12px 22px;border:none;background:var(--ink);color:#fff;">Run the analysis →</button>'+
-      '<button onclick="refinePreview()" style="font-family:inherit;font-size:13px;cursor:pointer;border-radius:12px;padding:12px 18px;border:1px solid var(--line);background:#fff;color:var(--ink);">Not this? Refine brand / market</button>'+
-      '</div></div>';
+    // Stash the preview payload FIRST so confirmAnalyze() can read it whether we
+    // auto-chain (high confidence) or the user clicks Confirm (low confidence).
     out.dataset.previewBrand=data.brand;
     out.dataset.previewSector=data.sector||'';
     out.dataset.previewMarket=market;
@@ -316,23 +493,58 @@
     out.dataset.previewIdentifiedAs=identifiedAs;
     out.dataset.previewConfidence=confidence;
     out.dataset.previewOfficialUrl=officialUrl;
-    // Low-confidence / no-evidence -> auto-open the hint + official-URL row and
-    // focus it, so the user is nudged to disambiguate before analyzing/paying.
-    if(lowConfidence){
-      var row=document.getElementById('hintRow');
-      if(row&&row.style.display==='none'){row.style.display='flex';row.style.flexDirection='column';}
-      var u=document.getElementById('officialUrl');if(u)u.focus();
+
+    // HIGH confidence + evidence -> one path, no confirmation screen. Chain
+    // straight into the live SERP + AI analysis with a 3-beat progress thread.
+    if(!lowConfidence){
+      out.innerHTML='<div class="card"><div class="stage">Identity confirmed &mdash; measuring <b>'+esc(data.brand)+'</b>…<div class="bar"><i></i></div>'+
+        '<div class="beats"><span class="done">Identification &#10003;</span><span class="sep">→</span><span class="active">SERP running</span><span class="sep">→</span><span>AI running</span></div></div></div>';
+      confirmAnalyze();
+      return;
     }
+
+    // LOW confidence -> ONE decision card (identity + confirm/correct). Action
+    // copy, never anxiety. refinePreview() still opens officialUrl/hint/market.
+    var sourceLink=officialUrl?' <a href="'+esc(officialUrl)+'" target="_blank" rel="noopener">'+esc(officialUrl.replace(/^https?:\/\//,''))+'</a>':'';
+    var compList=competitors.map(function(c){return '<span style="font-family:var(--mono);font-size:12px;color:var(--paper-ink);background:rgba(255,255,255,.05);border:1px solid var(--hairline-dark);padding:5px 11px;border-radius:8px;display:inline-block;margin:0 4px 4px 0;">'+esc(c)+'</span>';}).join('');
+    var queryList=queries.map(function(q){return '<li style="font-family:var(--mono);font-size:13px;">'+esc(q)+'</li>';}).join('');
+    var marketBit=market?' &middot; market <b>'+esc(market)+'</b>':'';
+    var idText=identifiedAs?esc(identifiedAs):'<span style="color:var(--muted-dark)">Could not identify this brand from the web &mdash; add its official site below.</span>';
+    out.innerHTML='<div class="card">'+
+      '<div class="badge demo">Confirm before measuring</div>'+
+      '<div class="decision">'+
+        '<div class="k">Confirm the official site for an exact diagnosis</div>'+
+        '<div class="idn">'+idText+'</div>'+
+        (sourceLink?'<div class="src">Source:'+sourceLink+'</div>':'')+
+        '<div class="prompt">Analysing <b style="color:#fff">'+esc(data.brand)+'</b> in <b style="color:#fff">'+esc(data.sector||'an unclear sector')+'</b>'+marketBit+' &middot; <b style="color:#fff">'+queries.length+'</b> buyer '+(queries.length>1?'queries':'query')+'.</div>'+
+        // LOW confidence -> the PRIMARY action is the CORRECTION (add the official
+        // site / refine), so the CTA matches the message ("we could not identify
+        // this brand"). Measuring a fuzzy sector is demoted to a discreet ghost
+        // link. Both paths keep the exact same downstream contract:
+        // refinePreview() reveals/re-runs identification, confirmAnalyze() runs the
+        // measurement — neither is changed, only their visual priority is swapped.
+        '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;align-items:center;">'+
+          '<button class="btn-primary" onclick="refinePreview()">Add the official site</button>'+
+          '<button class="btn-ghost" onclick="confirmAnalyze()">Measure '+esc(data.brand)+' anyway</button>'+
+        '</div>'+
+      '</div>'+
+      (compList?'<div style="margin:14px 0;"><div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:8px;">Competitors</div><div>'+compList+'</div></div>':'')+
+      (queryList?'<div style="margin:14px 0;"><div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:8px;">Buyer queries'+(lang?' <span style="text-transform:none;letter-spacing:0;color:var(--muted-dark)">('+esc(lang)+')</span>':'')+'</div><ul style="padding-left:18px;line-height:1.7;color:var(--paper-ink);">'+queryList+'</ul></div>':'')+
+      '</div>';
+    // Low-confidence -> auto-open the hint + official-URL row and focus it, so the
+    // user is nudged to disambiguate before analysing/paying.
+    var row=document.getElementById('hintRow');
+    if(row&&(row.style.display==='none'||row.style.display==='')){row.style.display='flex';}
+    var u=document.getElementById('officialUrl');if(u)u.focus();
   }
 
-  // "No, wrong brand" / "Not this? Refine" — reveal the official-URL + hint +
-  // market controls so the user can correct the disambiguation. If they already
-  // supplied an official URL or a hint, immediately re-run the identification
-  // forcing a fresh web read (force_web bypasses the recon cache); otherwise we
-  // just reveal + focus the URL field so they can add the source of truth.
+  // "Not it? Correct" — reveal the official-URL + hint + market controls so the
+  // user can correct the disambiguation. If they already supplied an official URL
+  // or a hint, immediately re-run identification forcing a fresh web read
+  // (force_web bypasses the recon cache); otherwise reveal + focus the URL field.
   function refinePreview(){
     var row=document.getElementById('hintRow');
-    if(row&&row.style.display==='none'){row.style.display='flex';row.style.flexDirection='column';}
+    if(row&&(row.style.display==='none'||row.style.display==='')){row.style.display='flex';}
     var u=document.getElementById('officialUrl');
     var h=document.getElementById('hint');
     var haveUrl=u&&u.value.trim();
@@ -353,7 +565,8 @@
     try{competitors=JSON.parse(out.dataset.previewCompetitors||'[]');}catch(e){}
     try{queries=JSON.parse(out.dataset.previewQueries||'[]');}catch(e){}
     btn.disabled=true;
-    out.innerHTML='<div class="card"><div class="stage">Running live SERP &amp; AI checks for <b style="color:var(--sage)">'+esc(brand)+'</b>…<div class="bar"><i></i></div></div></div>';
+    out.innerHTML='<div class="card"><div class="stage">Measuring live SERP &amp; AI for <b>'+esc(brand)+'</b>…<div class="bar"><i></i></div>'+
+      '<div class="beats"><span class="done">Identification &#10003;</span><span class="sep">→</span><span class="active">SERP running</span><span class="sep">→</span><span>AI running</span></div></div></div>';
     var data,res;
     try{
       // competitors + queries are pre-validated from the preview, so /api/analyze
@@ -362,12 +575,12 @@
       res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:true,brand:brand,sector:sector,competitors:competitors,queries:queries,market_label:marketLabel,query_language:queryLanguage,identified_as:identifiedAs,confidence:confidence,deep:isDeep()})});
       data=await res.json();
     }catch(e){
-      out.innerHTML='<div class="card"><div class="stage">Could not reach the server. Try again in a moment.</div></div>';
+      out.innerHTML='<div class="card"><div class="stage">Could not reach the instrument. Try again in a moment.</div></div>';
       btn.disabled=false;return;
     }
     if(res.status===429&&(data.error==='quota_ip'||data.error==='quota_global')){
-      out.innerHTML='<div class="card"><div class="stage" style="background:rgba(200,140,40,.1);border:1px solid rgba(200,140,40,.3);border-radius:12px;padding:18px;color:#8a5a1a;text-align:left">'+esc(data.message||'Live analysis limit reached.')+'</div>'+
-        '<div class="pro-cta"><button onclick="run(false)" style="background:var(--ink)">See sample instead</button></div>'+proCta()+'</div>';
+      out.innerHTML='<div class="card"><div class="stage" style="background:rgba(217,164,65,.1);border:1px solid rgba(217,164,65,.3);border-radius:12px;padding:18px;color:var(--amber);text-align:left">'+esc(data.message||'Live analysis limit reached.')+'</div>'+
+        '<div class="pro-cta"><button onclick="run(false)" style="background:var(--paper-ink)">See sample instead</button></div>'+proCta()+'</div>';
       btn.disabled=false;return;
     }
     if(data.error){out.innerHTML='<div class="card"><div class="stage">'+esc(typeof data.error==='string'?data.error:(data.message||'Something went wrong.'))+'</div></div>';btn.disabled=false;return;}
@@ -377,13 +590,23 @@
   function countUp(el,target){var t0=null,dur=850;function step(ts){if(!t0)t0=ts;var p=Math.min((ts-t0)/dur,1);var e=1-Math.pow(1-p,3);el.textContent=(target*e).toFixed(1);if(p<1)requestAnimationFrame(step);else el.textContent=target.toFixed(1);}requestAnimationFrame(step);}
 
 
+  // Email capture BEFORE the paywall + a single pre-sell monitoring line.
   function proCta(){
-    return '<div class="pro-cta"><span class="label">Pro plans with ongoing monitoring coming soon.</span><input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Notify me</button><span class="ok" id="proOk">You\'re on the list.</span></div>';
+    return '<div class="pro-cta"><span class="label">Receive this diagnosis + your 3 blind spots by email.</span><input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Send it to me</button><span class="ok" id="proOk">You\'re on the list.</span>'+
+      '<span class="monitor">Monthly monitoring from 29&euro;/mo &mdash; <a onclick="notifyMonitoring(this)" tabindex="0" onkeydown="if(event.key===\'Enter\')notifyMonitoring(this)">keep me posted</a></span></div>';
   }
   function notifyMe(){
     var em=document.getElementById('proEmail');var ok=document.getElementById('proOk');
     if(!em||!em.value||em.value.indexOf('@')<1)return;
-    fetch('/api/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em.value})}).then(function(){ok.style.display='inline';em.style.display='none';em.nextElementSibling.style.display='none';}).catch(function(){ok.textContent='Something went wrong.';ok.style.display='inline';ok.style.color='var(--muted)';});
+    fetch('/api/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em.value})}).then(function(){ok.style.display='inline';em.style.display='none';em.nextElementSibling.style.display='none';}).catch(function(){ok.textContent='Something went wrong.';ok.style.display='inline';ok.style.color='var(--muted-dark)';});
+  }
+  // Single pre-sell line for recurring monitoring. Reuses /api/waitlist with a
+  // {plan:'monitoring'} flag; falls back to the email field if one is present.
+  function notifyMonitoring(a){
+    var em=document.getElementById('proEmail');
+    var email=em&&em.value&&em.value.indexOf('@')>0?em.value:'';
+    fetch('/api/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,plan:'monitoring'})}).catch(function(){});
+    if(a)a.textContent='Noted — we\'ll be in touch.';
   }
 
   // ---- Deep Audit (paid, Stripe Checkout) ----
@@ -391,7 +614,7 @@
     var el=document.getElementById('deepAuditMsg');if(!el)return;
     el.textContent=text||'';
     el.style.display=text?'block':'none';
-    el.style.color=isError?'#8a5a1a':'var(--faint)';
+    el.style.color=isError?'var(--amber)':'var(--muted-light)';
   }
 
   // Click on the "Deep Audit" CTA: create a Stripe Checkout session for the
@@ -441,21 +664,22 @@
     try{history.replaceState({},document.title,window.location.pathname);}catch(e){}
     if(brandParam){var bEl=document.getElementById('brand');if(bEl)bEl.value=brandParam;}
     var out=document.getElementById('out');
-    out.innerHTML='<div class="card"><div class="stage">Confirming your payment...<div class="bar"><i></i></div></div></div>';
+    out.innerHTML='<div class="card"><div class="paythread"><span class="step active">Confirming your payment…</span></div><div class="bar" style="height:3px;background:rgba(255,255,255,.08);border-radius:2px;max-width:300px;margin:16px auto 0;overflow:hidden;"><i style="display:block;height:100%;width:32%;background:var(--sage-signal);border-radius:2px;animation:slide 1.3s ease-in-out infinite;"></i></div></div>';
     var data,res;
     try{
       res=await fetch('/api/verify-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sessionId})});
       data=await res.json();
     }catch(e){
-      out.innerHTML='<div class="card"><div class="stage" style="text-align:left">Could not confirm your payment right now. If you were charged, refresh in a moment or contact support with your receipt.</div></div>';
+      payError('Could not confirm your payment right now. If you were charged, retry below or email support with your receipt.',function(){resumeVerifyRetry(sessionId,brandParam);});
       return true;
     }
     if(!data.ok){
-      out.innerHTML='<div class="card"><div class="stage" style="text-align:left">We could not verify this payment. If you were charged, contact support with your Stripe receipt.</div></div>';
+      payError('We could not verify this payment. If you were charged, retry below or email support with your Stripe receipt.',function(){resumeVerifyRetry(sessionId,brandParam);});
       return true;
     }
     if(data.consumed){
-      out.innerHTML='<div class="card"><div class="stage" style="text-align:left">This Deep Audit has already been used. Each payment unlocks one deep audit. Start a new Deep Audit to run another.</div></div>';
+      var out2=document.getElementById('out');
+      out2.innerHTML='<div class="card"><div class="stage" style="text-align:left">This Deep Audit has already been used. Each payment unlocks one deep audit. Start a new Deep Audit to run another.</div></div>';
       return true;
     }
     var brand=(data.brand||brandParam||document.getElementById('brand').value.trim());
@@ -463,12 +687,42 @@
     return true;
   }
 
+  // Retry the verify-payment step (re-uses the same session id) without a page
+  // reload, so the paying customer is never stuck at a dead end.
+  function resumeVerifyRetry(sessionId,brandParam){
+    var out=document.getElementById('out');
+    out.innerHTML='<div class="card"><div class="paythread"><span class="step active">Re-confirming your payment…</span></div></div>';
+    fetch('/api/verify-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sessionId})})
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(data&&data.ok&&!data.consumed){var brand=(data.brand||brandParam||document.getElementById('brand').value.trim());runDeepAnalysis(brand,sessionId);}
+        else payError('Still could not verify this payment. Email support with your Stripe receipt and we will run your audit manually.',function(){resumeVerifyRetry(sessionId,brandParam);});
+      })
+      .catch(function(){payError('Could not reach the server. Retry below or email support with your receipt.',function(){resumeVerifyRetry(sessionId,brandParam);});});
+  }
+
+  // Robust paid-flow error: a worked message + a Retry button + a REAL clickable
+  // support email. Never a mute dead end.
+  function payError(msg,retryFn){
+    var out=document.getElementById('out');
+    window.__payRetry=retryFn;
+    out.innerHTML='<div class="card"><div class="stage" style="text-align:left">'+esc(msg)+'</div>'+
+      '<div class="retry-row">'+
+        '<button class="btn-primary" onclick="if(window.__payRetry)window.__payRetry()">Retry</button>'+
+        '<a class="support-link" href="mailto:'+SUPPORT_EMAIL+'">Email support</a>'+
+      '</div></div>';
+  }
+
   // Paid deep flow: infer a wider (5-query) strategy, then run the analysis with
   // the verified paid_session so the server authorizes the deep depth exactly
   // once. Kept separate from the free preview/confirm flow.
   async function runDeepAnalysis(brand,sessionId){
     var out=document.getElementById('out');
-    out.innerHTML='<div class="card"><div class="stage">Running your Deep Audit for <b style="color:var(--sage)">'+esc(brand)+'</b>...<div class="bar"><i></i></div></div></div>';
+    out.innerHTML='<div class="card"><div class="paythread">'+
+      '<span class="step done">Payment confirmed &#10003;</span>'+
+      '<span class="step active">Audit running (30-60s)…</span>'+
+      '<span class="step">Dossier ready</span></div>'+
+      '<div class="bar" style="height:3px;background:rgba(255,255,255,.08);border-radius:2px;max-width:300px;margin:16px auto 0;overflow:hidden;"><i style="display:block;height:100%;width:32%;background:var(--sage-signal);border-radius:2px;animation:slide 1.3s ease-in-out infinite;"></i></div></div>';
     // Step 1: infer a deep (5-query) strategy for the paid brand.
     var infer,ires;
     try{
@@ -493,11 +747,11 @@
       res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       data=await res.json();
     }catch(e){
-      out.innerHTML='<div class="card"><div class="stage" style="text-align:left">Your payment went through but the audit could not run. Refresh in a moment to retry your Deep Audit.</div></div>';
+      payError('Your payment went through but the audit could not run. Retry below or email support and we will run it for you.',function(){runDeepAnalysis(brand,sessionId);});
       return;
     }
     if(data.error){
-      out.innerHTML='<div class="card"><div class="stage">'+esc(typeof data.error==='string'?data.error:(data.message||'Something went wrong.'))+'</div></div>';
+      payError((typeof data.error==='string'?data.error:(data.message||'Something went wrong'))+'. Your payment is safe — retry below or email support.',function(){runDeepAnalysis(brand,sessionId);});
       return;
     }
     render(data);
@@ -517,6 +771,16 @@
     return parts.join(', ')+'.'+tail;
   }
 
+  // Compute the user's own position for the YOU-centred verdict.
+  function buildYou(r,brandName){
+    var you=r.find(function(x){return x.brand.toLowerCase()===String(brandName).toLowerCase();});
+    var present=r.filter(function(x){return x.share_of_voice>0;});
+    var leader=present[0]||null;
+    if(!you)return {found:false,leader:leader,total:r.length};
+    var rank=r.indexOf(you)+1;
+    return {found:true,you:you,rank:rank,total:r.length,sov:you.share_of_voice,leader:leader};
+  }
+
   function buildMatrix(r,brandName){
     // Quadrants: SERP presence (share_of_voice>0) x AI presence (ai_avg_rank!=null)
     var quads={dominant:[],aiOnly:[],serpOnly:[],invisible:[]};
@@ -527,20 +791,20 @@
       else if(inSerp)quads.serpOnly.push(x);
       else quads.invisible.push(x);
     });
-    function names(list){return list.length?list.map(function(x){return esc(x.brand)+(x.brand.toLowerCase()===brandName.toLowerCase()?' <span class="you">you</span>':'');}).join(', '):'<span style="color:var(--faint)">—</span>';}
+    function names(list){return list.length?list.map(function(x){return esc(x.brand)+(x.brand.toLowerCase()===brandName.toLowerCase()?' <span class="you">you</span>':'');}).join(', '):'<span style="color:var(--muted-dark)">—</span>';}
     var you=r.find(function(x){return x.brand.toLowerCase()===brandName.toLowerCase();});
     var youQuad=you?(you.share_of_voice>0&&you.ai_avg_rank!=null?'dominant':you.ai_avg_rank!=null?'aiOnly':you.share_of_voice>0?'serpOnly':'invisible'):null;
-    function cellStyle(key){return youQuad===key?'box-shadow:inset 0 0 0 2px var(--sage);':'';}
-    return '<div style="margin-top:26px;padding-top:20px;border-top:1px dashed var(--line)">'+
+    function cellStyle(key){return youQuad===key?'box-shadow:inset 0 0 0 2px var(--amber);':'';}
+    return '<div style="margin-top:26px;padding-top:20px;border-top:1px dashed var(--hairline-dark)">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+
-      '<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">SERP × AI matrix</div>'+
-      '<button onclick="copyMatrix(this,'+"'"+esc(brandName).replace(/'/g,"\\'")+"'"+')" style="font-family:inherit;font-size:11px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--muted);cursor:pointer">Copy summary</button>'+
+      '<div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark)">SERP × AI matrix</div>'+
+      '<button onclick="copyMatrix(this,'+"'"+esc(brandName).replace(/'/g,"\\'")+"'"+')" style="font-family:var(--mono);font-size:11px;padding:6px 11px;border:1px solid var(--hairline-dark);border-radius:8px;background:transparent;color:var(--muted-dark);cursor:pointer">Copy summary</button>'+
       '</div>'+
       '<div id="matrixGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-        '<div style="'+cellStyle('dominant')+'background:rgba(91,140,126,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--sage-d);margin-bottom:4px">Dominant — SERP + AI</div><div style="font-size:13px;line-height:1.5">'+names(quads.dominant)+'</div></div>'+
-        '<div style="'+cellStyle('aiOnly')+'background:rgba(110,86,150,.08);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:#6e5696;margin-bottom:4px">AI-only</div><div style="font-size:13px;line-height:1.5">'+names(quads.aiOnly)+'</div></div>'+
-        '<div style="'+cellStyle('serpOnly')+'background:#eef0ec;border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:#3a3a34;margin-bottom:4px">SERP-only</div><div style="font-size:13px;line-height:1.5">'+names(quads.serpOnly)+'</div></div>'+
-        '<div style="'+cellStyle('invisible')+'background:#f6f5f0;border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--faint);margin-bottom:4px">Invisible</div><div style="font-size:13px;line-height:1.5">'+names(quads.invisible)+'</div></div>'+
+        '<div style="'+cellStyle('dominant')+'background:rgba(79,209,165,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--sage-signal);margin-bottom:4px">Dominant — SERP + AI</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.dominant)+'</div></div>'+
+        '<div style="'+cellStyle('aiOnly')+'background:rgba(139,111,232,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--violet-ai);margin-bottom:4px">AI-only</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.aiOnly)+'</div></div>'+
+        '<div style="'+cellStyle('serpOnly')+'background:rgba(255,255,255,.05);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--paper-ink);margin-bottom:4px">SERP-only</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.serpOnly)+'</div></div>'+
+        '<div style="'+cellStyle('invisible')+'background:rgba(255,255,255,.03);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--muted-dark);margin-bottom:4px">Invisible</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.invisible)+'</div></div>'+
       '</div></div>';
   }
 
@@ -558,17 +822,23 @@
     var present=r.filter(function(x){return x.share_of_voice>0;});
     // Deep vs free is keyed on d.tier (finally read). A deep audit carries a GEO
     // score, a sourced identity section and a written report; the free tier gets
-    // a blurred teaser instead.
+    // a clean (un-blurred) deliverable preview instead.
     var isDeepTier=(d.tier==='deep');
     var badge=isDeepTier
       ?'<span class="badge live"><span class="lv"></span>Deep Audit — sourced</span>'
-      :(d.cached?'<span class="badge cached">Cached</span>':(d.mode==='live'?'<span class="badge live"><span class="lv"></span>Live analysis</span>':'<span class="badge demo">Sample</span>'));
-    var notice=d.notice?'<div style="background:rgba(200,140,40,.1);border:1px solid rgba(200,140,40,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:#8a5a1a;margin-bottom:16px">'+esc(d.notice)+'</div>':'';
+      :(d.cached?'<span class="badge cached">Cached</span>':(d.mode==='live'?'<span class="badge live"><span class="lv"></span>Live measurement</span>':'<span class="badge demo">Sample</span>'));
+    // Guarantee badge (positive, web-sourced) — replaces any "low confidence".
+    var guarantee='';
+    if(d.identified_as||d.official_url){
+      var gsrc=d.official_url?' <a href="'+esc(d.official_url)+'" target="_blank" rel="noopener">official source</a>':'';
+      guarantee='<div class="guarantee"><span class="chk">&#10003;</span> Identified as <b style="font-weight:600">'+esc(d.identified_as||brandName)+'</b>'+(gsrc?' &middot;'+gsrc:'')+' &middot; verified on the web</div>';
+    }
+    var notice=d.notice?'<div style="background:rgba(217,164,65,.1);border:1px solid rgba(217,164,65,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--amber);margin-bottom:16px">'+esc(d.notice)+'</div>':'';
     var mkt=d.market?' · market <b>'+esc(d.market)+'</b>':'';
-    var sector=d.sector?'<div class="sector">Claude pegged the sector as <b>'+esc(d.sector)+'</b>'+mkt+' — '+r.length+' rivals across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>':'';
+    var sector=d.sector?'<div class="sector">Sector pegged as <b>'+esc(d.sector)+'</b>'+mkt+' — '+r.length+' rivals across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>':'';
 
     if(present.length===0){
-      document.getElementById('out').innerHTML='<div class="card">'+badge+notice+sector+
+      document.getElementById('out').innerHTML='<div class="card">'+badge+guarantee+notice+sector+
         '<div class="empty-state"><div class="big">No one shows up — including '+esc(brandName)+'</div>'+
         '<div class="desc">None of these brands appear for these searches. Either the category is wide open, or the queries are too niche.</div></div>'+proCta()+'</div>';
       return;
@@ -578,21 +848,22 @@
     var bestRank=withRank.length?withRank.reduce(function(a,b){return b.avg_rank<a.avg_rank?b:a;}):null;
     var blind=r.reduce(function(a,b){return parseInt(b.query_coverage)<parseInt(a.query_coverage)?b:a;});
     var insight=buildInsight(r,brandName);
+    var youData=buildYou(r,brandName);
 
     // Check if AI data exists
     var hasAI=r.some(function(x){return x.ai_cells&&Object.keys(x.ai_cells).length>0;});
 
-    // Build heatmap grid
-    var cols='160px repeat('+queries.length+',minmax(70px,1fr))';
+    // ---- Build heatmap: desktop grid (two territories) ----
+    var cols='170px repeat('+queries.length+',minmax(64px,1fr))';
     var head='<div class="hm-corner"></div>'+queries.map(function(q){return '<div class="hm-qh">'+esc(shortQ(q))+'</div>';}).join('');
     var cellIdx=0;var body='';
 
-    // SERP section label
-    if(hasAI) body+='<div class="hm-section">Google SERP <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">— live results via Bright Data</span></div>';
+    body+='<div class="hm-section serp"><span>Search floor &mdash; Google</span></div>';
+    body+='<div class="hm-corner"></div>'+queries.map(function(q){return '<div class="hm-qh">'+esc(shortQ(q))+'</div>';}).join('');
 
     r.forEach(function(x,ri){
       var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
-      body+='<div class="hm-bname" style="color:'+(x.share_of_voice===0?'var(--faint)':'#3a3a34')+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
+      body+='<div class="hm-bname'+(isYou?' you-row':'')+'" style="color:'+(x.share_of_voice===0?'var(--muted-dark)':(isYou?'#fff':'var(--paper-ink)'))+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
       queries.forEach(function(q){
         var cell=(x.cells||{})[q];
         var diag=ri+queries.indexOf(q);
@@ -601,22 +872,25 @@
           var kind=cell.kind||'mention';
           var kindLabel=kind==='citation'?'their own site ranked':'mentioned by another site';
           var tipHtml='<b>'+esc(cell.title||x.brand)+'</b><div class="q">"'+esc(q)+'" · rank '+cell.rank+' · '+kindLabel+'</div>';
-          body+='<div class="cell has" data-d="'+diag+'" style="background:'+c+'" '+
-            'data-link="'+esc(cell.link||'')+'" '+
-            'onmouseenter=\'showTip(event,"'+esc(tipHtml).replace(/"/g,"&quot;")+'")\' onmousemove="moveTip(event)" onmouseleave="hideTip()" '+
-            'onclick="if(this.dataset.link)window.open(this.dataset.link,\'_blank\')">#'+cell.rank+(kind==='citation'?'':'<sup style="font-size:8px;opacity:.75">m</sup>')+'</div>';
+          var tipAttr=esc(tipHtml).replace(/"/g,"&quot;");
+          body+='<div class="cell has'+(isYou?' you-cell':'')+'" data-d="'+diag+'" style="background:'+c+'" '+
+            'data-link="'+esc(cell.link||'')+'" tabindex="0" '+
+            'onmouseenter=\'showTip(event,"'+tipAttr+'")\' onmousemove="moveTip(event)" onmouseleave="hideTip()" '+
+            'onclick=\'tapCell(this,"'+tipAttr+'");if(this.dataset.link)window.open(this.dataset.link,"_blank")\'>#'+cell.rank+(kind==='citation'?'':'<sup style="font-size:8px;opacity:.75">m</sup>')+'</div>';
         } else {
           body+='<div class="cell empty" data-d="'+diag+'">·</div>';
         }
       });
     });
 
-    // AI Engine section
+    // AI Engine section (second territory)
     if(hasAI){
-      body+='<div class="hm-section">AI Recommendation <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">— measured across '+(r[0]&&r[0].ai_cells&&Object.values(r[0].ai_cells)[0]?Object.values(r[0].ai_cells)[0].runs||1:1)+' Claude runs</span></div>';
+      var runsN=(r[0]&&r[0].ai_cells&&Object.values(r[0].ai_cells)[0]?Object.values(r[0].ai_cells)[0].runs||1:1);
+      body+='<div class="hm-section ai"><span>AI floor &mdash; ChatGPT/Claude</span> <span class="sub">across '+runsN+' runs</span></div>';
+      body+='<div class="hm-corner"></div>'+queries.map(function(q){return '<div class="hm-qh">'+esc(shortQ(q))+'</div>';}).join('');
       r.forEach(function(x,ri){
         var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
-        body+='<div class="hm-bname" style="color:'+(x.ai_avg_rank==null?'var(--faint)':'#3a3a34')+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
+        body+='<div class="hm-bname'+(isYou?' you-row':'')+'" style="color:'+(x.ai_avg_rank==null?'var(--muted-dark)':(isYou?'#fff':'var(--paper-ink)'))+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
         queries.forEach(function(q){
           var aiCell=(x.ai_cells||{})[q];
           var diag=ri+queries.indexOf(q)+r.length;
@@ -626,8 +900,10 @@
             var tipHtml='<b>'+esc(x.brand)+'</b><div class="q">AI mentions for "'+esc(q)+'" · avg position '+aiCell.rank+
               (aiCell.consistency!=null?' · consistent in '+aiCell.consistency+'% of runs':'')+
               (isPrimary?' · primary recommendation':' · mentioned in passing')+'</div>';
-            body+='<div class="cell ai has" data-d="'+diag+'" style="background:'+c+(isPrimary?';box-shadow:inset 0 0 0 2px rgba(255,255,255,.55)':'')+'" '+
-              'onmouseenter=\'showTip(event,"'+esc(tipHtml).replace(/"/g,"&quot;")+'")\' onmousemove="moveTip(event)" onmouseleave="hideTip()">#'+aiCell.rank+'</div>';
+            var tipAttr=esc(tipHtml).replace(/"/g,"&quot;");
+            body+='<div class="cell ai has'+(isPrimary?' primary':'')+(isYou?' you-cell':'')+'" data-d="'+diag+'" style="background:'+c+'" tabindex="0" '+
+              'onmouseenter=\'showTip(event,"'+tipAttr+'")\' onmousemove="moveTip(event)" onmouseleave="hideTip()" '+
+              'onclick=\'tapCell(this,"'+tipAttr+'")\'>#'+aiCell.rank+'</div>';
           } else {
             body+='<div class="cell ai empty" data-d="'+diag+'">·</div>';
           }
@@ -635,72 +911,146 @@
       });
     }
 
-    document.getElementById('out').innerHTML='<div class="card">'+badge+notice+sector+
-      '<div class="top"><div><h2>'+esc(leader.brand)+' owns<br>the conversation</h2>'+
-      '<div class="subt">'+r.length+' brands · '+queries.length+' '+(queries.length>1?'queries':'query')+'</div></div>'+
-      '<div class="heron"><div class="n"><span id="heroNum">0</span><span class="p">%</span></div><div class="cap">share of voice</div></div></div>'+
+    // ---- Mobile stacked heatmap (per query, no lateral scroll) ----
+    var mob='<div class="hm-cards">';
+    queries.forEach(function(q){
+      mob+='<div class="hm-qcard"><div class="qt">'+esc(q)+'</div>';
+      mob+='<div class="terr serp">Search floor — Google</div>';
+      r.forEach(function(x){
+        var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
+        var cell=(x.cells||{})[q];
+        if(cell){var c=rankColor(cell.rank);mob+='<div class="hm-brow'+(isYou?' you-row':'')+'"><span class="bn">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</span><span class="rk" style="background:'+c+'">#'+cell.rank+(cell.kind==='citation'?'':'m')+'</span></div>';}
+        else if(isYou){mob+='<div class="hm-brow you-row"><span class="bn">'+esc(x.brand)+'<span class="you">you</span></span><span class="rk absent">absent</span></div>';}
+      });
+      if(hasAI){
+        mob+='<div class="terr ai">AI floor — ChatGPT/Claude</div>';
+        r.forEach(function(x){
+          var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
+          var aiCell=(x.ai_cells||{})[q];
+          if(aiCell){var c=rankColorAI(aiCell.rank);mob+='<div class="hm-brow'+(isYou?' you-row':'')+'"><span class="bn">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+(aiCell.kind==='primary'?' <span style="color:var(--violet-ai);font-size:11px">primary</span>':'')+'</span><span class="rk ai" style="background:'+c+'">#'+aiCell.rank+'</span></div>';}
+          else if(isYou){mob+='<div class="hm-brow you-row"><span class="bn">'+esc(x.brand)+'<span class="you">you</span></span><span class="rk absent">absent</span></div>';}
+        });
+      }
+      mob+='</div>';
+    });
+    mob+='</div>';
+
+    // ---- YOU-centred verdict ----
+    var verdictH2,bizLine='',heronBlock='';
+    if(youData.found){
+      var youBrand=esc(youData.you.brand);
+      if(youData.rank===1){
+        verdictH2='You own the conversation in '+esc(d.sector||'your market')+'.';
+        bizLine='<div class="biz">You lead at <b>#1 of '+youData.total+'</b> with <b>'+youData.sov+'% share of voice</b>. Now defend it before AI shifts the ground.</div>';
+      } else if(youData.sov===0){
+        verdictH2='You are invisible where your buyers ask.';
+        bizLine='<div class="biz"><b>'+youBrand+'</b> does not appear for these buyer queries. '+(youData.leader?'<b>'+esc(youData.leader.brand)+'</b> owns the answers ('+youData.leader.share_of_voice+'%).':'')+' The clearest place to win.</div>';
+      } else {
+        verdictH2='You are #'+youData.rank+' of '+youData.total+' — someone else owns the answer.';
+        bizLine='<div class="biz"><b>'+youBrand+'</b> holds <b>'+youData.sov+'%</b> of the conversation'+(youData.leader?', while <b>'+esc(youData.leader.brand)+'</b> takes <b>'+youData.leader.share_of_voice+'%</b>':'')+'. Room to climb.</div>';
+      }
+      heronBlock='<div class="heronrow">'+
+        '<div class="heron"><div class="n mono"><span id="heroNum">0</span><span class="p">%</span></div><div class="cap">your share of voice</div></div>'+
+        (youData.leader&&youData.leader.brand.toLowerCase()!==youData.you.brand.toLowerCase()?'<div class="heron sec"><div class="n mono">'+youData.leader.share_of_voice+'<span class="p">%</span></div><div class="cap">leader &middot; '+esc(youData.leader.brand)+'</div></div>':'')+
+        '</div>';
+    } else {
+      // Brand not in the ranking (e.g. sample) — fall back to leader framing.
+      verdictH2=esc(leader.brand)+' owns the conversation.';
+      bizLine='<div class="biz">'+r.length+' brands measured across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>';
+      heronBlock='<div class="heronrow"><div class="heron"><div class="n mono"><span id="heroNum">0</span><span class="p">%</span></div><div class="cap">leader &middot; '+esc(leader.brand)+'</div></div></div>';
+    }
+
+    var legend='<div class="hm-legend">Full cell = present, dotted = absent, white ring = AI\'s primary pick, <span style="color:var(--amber)">amber outline</span> = your row. <b>Green</b> = Google, <span class="vi">violet</span> = AI.</div>';
+
+    document.getElementById('out').innerHTML='<div class="card">'+badge+guarantee+notice+sector+
+      '<div class="verdict"><h2>'+verdictH2+'</h2>'+bizLine+heronBlock+'</div>'+
       (insight?'<div class="insight">'+insight+'</div>':'')+
-      '<div class="hm"><div class="hm-grid" style="grid-template-columns:'+cols+'">'+head+body+'</div>'+
-      '<div class="hm-legend">SERP <span class="scale"><i style="background:#c9d8d1"></i><i style="background:#9cbcb0"></i><i style="background:#6b9c8e"></i><i style="background:#3d6b5c"></i></span>'+(hasAI?' · AI <span class="scale"><i style="background:#d4ced8"></i><i style="background:#b4a6c8"></i><i style="background:#947eb4"></i><i style="background:#6e5696"></i></span>':'')+ ' · darker = higher · grey = absent'+(hasAI?' · <sup>m</sup> = mention (not their own site) · solid ring = AI\'s primary pick':'')+'</div></div>'+
+      '<div class="hm"><div class="hm-grid" style="grid-template-columns:'+cols+'">'+body+'</div>'+mob+legend+'</div>'+
       (function(){var aiLeader=null,avgConsist=null;if(hasAI){var aiSorted=r.filter(function(x){return x.ai_avg_rank!=null;}).sort(function(a,b){return a.ai_avg_rank-b.ai_avg_rank;});if(aiSorted.length)aiLeader=aiSorted[0];
       var consistVals=r.map(function(x){return x.ai_consistency;}).filter(function(v){return v!=null;});
       if(consistVals.length)avgConsist=Math.round(consistVals.reduce(function(a,b){return a+b;},0)/consistVals.length);}
       return '<div class="insights">'+
-      '<div><div class="k">Coverage leader</div><div class="v">'+esc(leader.brand)+' · '+esc(leader.query_coverage)+'</div></div>'+
-      '<div><div class="k">Best avg. rank</div><div class="v">'+(bestRank?esc(bestRank.brand)+' · '+bestRank.avg_rank:'—')+'</div></div>'+
-      '<div><div class="k">Blind spot</div><div class="v">'+esc(blind.brand)+' · '+esc(blind.query_coverage)+'</div></div>'+
-      (aiLeader?'<div><div class="k">AI engine leader</div><div class="v">'+esc(aiLeader.brand)+' · avg #'+aiLeader.ai_avg_rank+'</div></div>':'')+
-      (avgConsist!=null?'<div><div class="k">AI consistency</div><div class="v">'+avgConsist+'% <span style="color:var(--faint);font-size:12px">across repeated runs</span></div></div>':'')+
+      '<div><div class="k">Coverage leader</div><div class="v">'+esc(leader.brand)+' · <span class="mono">'+esc(leader.query_coverage)+'</span></div></div>'+
+      '<div><div class="k">Best avg. rank</div><div class="v">'+(bestRank?esc(bestRank.brand)+' · <span class="mono">'+bestRank.avg_rank+'</span>':'—')+'</div></div>'+
+      '<div><div class="k">Blind spot</div><div class="v">'+esc(blind.brand)+' · <span class="mono">'+esc(blind.query_coverage)+'</span></div></div>'+
+      (aiLeader?'<div><div class="k">AI engine leader</div><div class="v">'+esc(aiLeader.brand)+' · <span class="mono">avg #'+aiLeader.ai_avg_rank+'</span></div></div>':'')+
+      (avgConsist!=null?'<div><div class="k">AI consistency</div><div class="v"><span class="mono">'+avgConsist+'%</span> <span style="color:var(--muted-dark);font-size:12px">across runs</span></div></div>':'')+
       '</div>';})()+
       (hasAI?buildMatrix(r,brandName):'')+
-      (isDeepTier?deepSections(d):freeTeaser(d))+
-      proCta()+'</div>';
+      proCta()+'</div>'+
+      (isDeepTier?deepSections(d):freeTeaser(d));
 
-    countUp(document.getElementById('heroNum'),leader.share_of_voice);
+    var hn=document.getElementById('heroNum');
+    if(hn)countUp(hn,youData.found?youData.sov:leader.share_of_voice);
     // diagonal cascade reveal
     var cells=document.querySelectorAll('#out .cell');
-    cells.forEach(function(c){var diag=parseInt(c.getAttribute('data-d'))||0;setTimeout(function(){c.classList.add('in');},120+diag*70+Math.random()*30);});
+    var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+    cells.forEach(function(c){
+      if(reduce){c.classList.add('in');return;}
+      var diag=parseInt(c.getAttribute('data-d'))||0;setTimeout(function(){c.classList.add('in');},120+diag*70+Math.random()*30);
+    });
     // Stash the last deep result so the download button can rebuild a standalone
     // HTML dossier client-side (no server, no PDF lib).
     if(isDeepTier){window.__lastDeep=d;}
   }
 
-  // ---- GEO score gauge (0-100) ----
+  // ---- GEO score gauge (0-100) — SVG arc ----
+  // ONE colour system, derived from the score by threshold, shared by BOTH the
+  // filled arc AND the number, so the instrument never contradicts itself:
+  //   0-40  = alert  (#B5722E, burnt orange — the single warm alert family)
+  //   41-70 = middling (--amber)
+  //   71-100 = strong (--sage-ink, the SERP/health green)
+  // Violet is deliberately NOT used here: it is reserved for the AI-DATA signal.
+  // The score is shown exactly ONCE: the large mono number in the meta column,
+  // with /100 as a small suffix. No number is painted inside the arc.
+  function geoScoreColor(s){return s>=71?'var(--sage-ink)':(s>=41?'var(--amber)':'#B5722E');}
+  function geoScoreLabel(s){return s>=71?'Strong':(s>=41?'Middling':'Weak');}
   function geoScoreBlock(score){
     var s=Math.max(0,Math.min(100,parseInt(score)||0));
-    var col=s>=67?'var(--sage)':(s>=34?'#b8935a':'#c07a4a');
-    var label=s>=67?'Strong':(s>=34?'Middling':'Weak');
-    return '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin:22px 0 6px;padding:18px 20px;background:rgba(91,140,126,.07);border:1px solid var(--line);border-radius:14px;">'+
-      '<div style="font-size:46px;font-weight:600;letter-spacing:-2px;line-height:1;color:'+col+';">'+s+'<span style="font-size:20px;color:var(--faint);">/100</span></div>'+
-      '<div style="flex:1;min-width:180px;">'+
-        '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px;">GEO score · '+label+'</div>'+
-        '<div style="height:8px;background:#eef0ec;border-radius:5px;overflow:hidden;"><div style="height:100%;width:'+s+'%;background:'+col+';border-radius:5px;"></div></div>'+
-        '<div style="font-size:12px;color:var(--muted);margin-top:7px;">SERP share of voice + AI coverage + AI rank quality. Re-measurable any time.</div>'+
+    var col=geoScoreColor(s);
+    var label=geoScoreLabel(s);
+    // 270-degree arc gauge. The filled arc grows with the score (SWEEP*s/100) AND
+    // takes the threshold colour, so arc and number always agree.
+    var R=52,CX=64,CY=64,START=135,SWEEP=270;
+    function pt(ang){var a=(ang-90)*Math.PI/180;return [CX+R*Math.cos(a),CY+R*Math.sin(a)];}
+    function arc(fromAng,toAng){var f=pt(fromAng),t=pt(toAng);var large=(toAng-fromAng)>180?1:0;return 'M'+f[0].toFixed(1)+' '+f[1].toFixed(1)+' A'+R+' '+R+' 0 '+large+' 1 '+t[0].toFixed(1)+' '+t[1].toFixed(1);}
+    var track=arc(START,START+SWEEP);
+    var fillEnd=START+SWEEP*(s/100);
+    var fill=arc(START,fillEnd);
+    return '<div class="gauge">'+
+      '<svg width="128" height="128" viewBox="0 0 128 128" aria-hidden="true">'+
+        '<path d="'+track+'" fill="none" stroke="rgba(14,21,18,.1)" stroke-width="11" stroke-linecap="round"/>'+
+        '<path d="'+fill+'" fill="none" stroke="'+col+'" stroke-width="11" stroke-linecap="round"/>'+
+      '</svg>'+
+      '<div class="meta">'+
+        '<div class="lab">GEO score &middot; '+label+'</div>'+
+        '<div class="num" style="color:'+col+';">'+s+'<span class="o">/100</span></div>'+
+        '<div class="desc">SERP share of voice + AI coverage + AI rank quality. Re-measurable any time.</div>'+
       '</div></div>';
   }
 
   // ---- Deep Audit sections (identity · GEO score · written report · download) ----
+  // Rendered on the LIGHT document surface.
   function deepSections(d){
-    var out='';
+    var out='<div class="doc"><div class="doc-eyebrow">Deep Audit &middot; the deliverable</div>';
     // Identity verification (sourced)
     if(d.identified_as||(d.evidence&&d.evidence.length)){
       var srcUrl=d.official_url||'';
-      var src=srcUrl?'<a href="'+esc(srcUrl)+'" target="_blank" rel="noopener" style="color:var(--sage-d);text-decoration:underline;text-underline-offset:2px;">'+esc(srcUrl.replace(/^https?:\/\//,''))+'</a>':'';
+      var src=srcUrl?'<a href="'+esc(srcUrl)+'" target="_blank" rel="noopener">'+esc(srcUrl.replace(/^https?:\/\//,''))+'</a>':'';
       var evList=(d.evidence||[]).map(function(e){
         var bits=[];
         if(e.site_name)bits.push('<b>'+esc(e.site_name)+'</b>');
         if(e.title)bits.push(esc(e.title));
-        if(e.description)bits.push('<span style="color:var(--muted)">'+esc(e.description)+'</span>');
+        if(e.description)bits.push('<span style="color:var(--muted-light)">'+esc(e.description)+'</span>');
         var s=e.source||e.link||'';
-        var sl=s?' <a href="'+esc(s)+'" target="_blank" rel="noopener" style="color:var(--sage-d)">source</a>':'';
+        var sl=s?' <a href="'+esc(s)+'" target="_blank" rel="noopener">source</a>':'';
         return bits.length?'<li style="margin-bottom:6px;line-height:1.5;">'+bits.join(' · ')+sl+'</li>':'';
       }).join('');
-      out+='<div style="margin-top:26px;padding-top:20px;border-top:1px dashed var(--line)">'+
-        '<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:10px;">Identity verification</div>'+
+      out+='<div class="k" style="margin-bottom:10px;">Identity verification</div>'+
         (d.identified_as?'<div style="font-size:15px;line-height:1.55;color:var(--ink);margin-bottom:8px;">'+esc(d.identified_as)+'</div>':'')+
-        (src?'<div style="font-size:12px;color:var(--muted);margin-bottom:'+(evList?'10px':'0')+'">Official source: '+src+'</div>':'')+
+        (src?'<div style="font-size:12px;color:var(--muted-light);margin-bottom:'+(evList?'10px':'0')+'">Official source: '+src+'</div>':'')+
         (evList?'<ul style="padding-left:18px;font-size:13px;margin-top:6px;">'+evList+'</ul>':'')+
-        '</div>';
+        '<div class="divider"></div>';
     }
     // GEO score
     if(d.geo_score!=null)out+=geoScoreBlock(d.geo_score);
@@ -712,36 +1062,44 @@
         return '<li style="margin-bottom:6px;line-height:1.5;"><b>'+esc(b.query)+'</b>'+(by?' — dominated by '+by:'')+'</li>';
       }).join('');
       var acts=(rep.actions||[]).map(function(a){return '<li style="margin-bottom:7px;line-height:1.55;">'+esc(a)+'</li>';}).join('');
-      out+='<div style="margin-top:26px;padding-top:20px;border-top:1px dashed var(--line)">'+
+      out+='<div class="divider"></div>'+
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'+
-          '<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);">Remediation report</div>'+
-          '<span style="font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:#6e5696;background:rgba(110,86,150,.1);border-radius:5px;padding:2px 6px;">AI-generated recommendations</span>'+
+          '<div class="k">Remediation report</div>'+
+          '<span style="font-family:var(--mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--violet-ink);background:rgba(110,86,150,.1);border-radius:5px;padding:2px 6px;">AI-generated</span>'+
         '</div>'+
         (rep.verdict?'<div class="insight" style="margin-bottom:16px;">'+esc(rep.verdict)+'</div>':'')+
-        (bs?'<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 8px;">Top blind spots</div><ul style="padding-left:18px;font-size:14px;margin-bottom:16px;">'+bs+'</ul>':'')+
-        (acts?'<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 8px;">Action plan</div><ol style="padding-left:20px;font-size:14px;">'+acts+'</ol>':'')+
-        '</div>';
+        (bs?'<div class="k" style="margin:0 0 8px;">Top blind spots</div><ul style="padding-left:18px;font-size:14px;margin-bottom:16px;">'+bs+'</ul>':'')+
+        (acts?'<div class="k" style="margin:0 0 8px;">Action plan</div><ol style="padding-left:20px;font-size:14px;">'+acts+'</ol>':'');
     }
     // Download the standalone HTML dossier
     out+='<div style="margin-top:24px;text-align:center;">'+
-      '<button onclick="downloadDossier()" style="font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;border-radius:12px;padding:12px 22px;border:none;background:var(--sage);color:#fff;">Download the dossier (HTML)</button>'+
-      '</div>';
+      '<button class="dl-btn" onclick="downloadDossier()">Download the dossier (HTML)</button>'+
+      '</div></div>';
     return out;
   }
 
-  // ---- Free tier teaser: blurred verdict/actions under a 79 unlock overlay ----
+  // ---- Free tier deliverable preview: CLEAN (no blur), on the LIGHT surface ----
   function freeTeaser(d){
     var brandName=d.brand||'your brand';
-    return '<div style="margin-top:26px;padding-top:20px;border-top:1px dashed var(--line);position:relative;">'+
-      '<div style="filter:blur(5px);user-select:none;pointer-events:none;" aria-hidden="true">'+
-        '<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:10px;">Remediation report</div>'+
-        '<div class="insight" style="margin-bottom:14px;">'+esc(brandName)+' is losing ground on its highest-intent buyer queries while two named competitors capture the AI recommendation. The written verdict, a defensible GEO score and a concrete 4-6 step action plan are included in the Deep Audit.</div>'+
-        '<ol style="padding-left:20px;font-size:14px;"><li style="margin-bottom:7px;">Publish a comparison page targeting the exact buyer query you are absent from.</li><li style="margin-bottom:7px;">Earn a mention on the third-party listicle your rival already dominates.</li><li style="margin-bottom:7px;">Restructure your homepage so AI assistants can cite you as the primary answer.</li></ol>'+
+    return '<div class="doc">'+
+      '<div class="doc-eyebrow">The deliverable &middot; Deep Audit preview</div>'+
+      '<h3>Your board-ready GEO dossier</h3>'+
+      '<div class="doc-sub">A written verdict, a defensible GEO score and a concrete action plan &mdash; forwardable to your board as a single HTML file.</div>'+
+      geoScoreBlock(d.geo_score!=null?d.geo_score:42)+
+      '<div class="insight">'+esc(brandName)+' is losing ground on its highest-intent buyer queries while two named competitors capture the AI recommendation. The written verdict, a defensible GEO score and a concrete 4-6 step action plan are included in the Deep Audit.</div>'+
+      '<div class="k" style="margin:0 0 8px;">First 3 actions (real, from the data)</div>'+
+      '<ol style="font-size:14px;"><li>Publish a comparison page targeting the exact buyer query you are absent from.</li><li>Earn a mention on the third-party listicle your rival already dominates.</li><li>Restructure your homepage so AI assistants can cite you as the primary answer.</li></ol>'+
+      '<div class="thumb"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="8" x2="16" y2="8" stroke="#8B6FE8" stroke-width="1.6"/><line x1="8" y1="12" x2="16" y2="12" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="16" x2="13" y2="16" stroke="#4FD1A5" stroke-width="1.6"/></svg></div>'+
+        '<div><div class="t">brandpulse-deep-audit-'+esc(brandName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''))+'.html</div><div class="d">Self-contained HTML &middot; two-territory heatmap &middot; GEO gauge &middot; forwardable</div></div></div>'+
+      '<div class="anchor">'+
+        '<div class="col"><div class="lab">Agency GEO audit</div><div class="big">3000-5000&euro;</div><div class="sm">3 weeks &middot; slide deck</div></div>'+
+        '<div class="col hi"><div class="lab">BrandPulse Deep Audit</div><div class="big">79&euro;</div><div class="sm">60 seconds &middot; forwardable to your board</div></div>'+
       '</div>'+
-      '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;background:linear-gradient(to bottom,rgba(251,250,246,.35),rgba(251,250,246,.85));border-radius:12px;padding:20px;">'+
-        '<div style="font-size:17px;font-weight:600;letter-spacing:-.4px;color:var(--ink);">Unlock the full dossier — 79&euro;</div>'+
-        '<div style="font-size:13px;color:var(--muted);max-width:340px;line-height:1.5;">Written verdict, GEO score 0-100, top blind spots, a concrete action plan and a downloadable HTML report.</div>'+
-        '<button onclick="startCheckout()" style="font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;border-radius:12px;padding:11px 22px;border:none;background:var(--ink);color:#fff;">Run the Deep Audit</button>'+
+      '<div class="doc-cta">'+
+        '<button class="go" onclick="startCheckout()">Run the Deep Audit &mdash; 79&euro;</button>'+
+        '<div id="deepAuditMsg" style="font-size:12px;color:var(--muted-light);margin-top:8px;display:none;"></div>'+
+        '<div class="bene">Written verdict &middot; GEO score 0-100 &middot; top blind spots &middot; action plan &middot; downloadable HTML dossier.</div>'+
+        '<div class="stripe"><span class="lock">&#128274;</span> Secure payment by Stripe</div>'+
       '</div>'+
     '</div>';
   }
@@ -769,20 +1127,21 @@
     var actHtml=(rep.actions||[]).map(function(a){return '<li>'+esc2(a)+'</li>';}).join('');
     var geo=d.geo_score!=null?d.geo_score:'—';
     var srcUrl=d.official_url||'';
+    // Dossier re-signed to Signal Room tokens: light document surface, two data colours.
     var doc='<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
       '<title>BrandPulse Deep Audit — '+esc2(brandName)+'</title><style>'+
-      ':root{--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--violet:#6e5696;--ink:#15140f;--line:#e8e6dd;--muted:#7a7870;}'+
-      '*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--paper);line-height:1.55;margin:0;padding:40px 20px;}'+
+      ':root{--sage:#3D6B5C;--sage-signal:#4FD1A5;--surface:#EDEBE4;--card:#FBFAF6;--violet:#6E5696;--ink:#0E1512;--line:#D9D6CC;--muted:#6E6C64;}'+
+      '*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--surface);line-height:1.55;margin:0;padding:40px 20px;}'+
       '.wrap{max-width:820px;margin:0 auto;}'+
-      '.card{background:#fbfaf6;border:1px solid var(--line);border-radius:18px;padding:32px;margin-bottom:22px;}'+
-      '.badge{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:rgba(91,140,126,.14);color:var(--sage-d);padding:5px 11px;border-radius:8px;margin-bottom:14px;}'+
+      '.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:32px;margin-bottom:22px;}'+
+      '.badge{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:rgba(61,107,92,.12);color:var(--sage);padding:5px 11px;border-radius:8px;margin-bottom:14px;}'+
       'h1{font-size:30px;letter-spacing:-1px;margin:0 0 6px;}h2{font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;}'+
       '.meta{font-size:13px;color:var(--muted);margin-bottom:20px;}'+
-      '.geo{font-size:52px;font-weight:700;letter-spacing:-2px;color:var(--sage);}'+
-      '.insight{background:rgba(91,140,126,.08);border-left:3px solid var(--sage);padding:14px 16px;border-radius:0 10px 10px 0;margin:14px 0;}'+
-      'table{border-collapse:collapse;width:100%;font-size:13px;}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);}th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.05em;}'+
-      'tr.you{background:rgba(91,140,126,.08);font-weight:600;}'+
-      'a{color:var(--sage-d);}.ai-note{color:var(--violet);font-size:12px;}ul,ol{padding-left:20px;}li{margin-bottom:6px;}'+
+      '.geo{font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:52px;font-weight:700;letter-spacing:-2px;color:var(--sage);}'+
+      '.insight{background:rgba(61,107,92,.08);border-left:3px solid var(--sage-signal);padding:14px 16px;border-radius:0 10px 10px 0;margin:14px 0;}'+
+      'table{border-collapse:collapse;width:100%;font-size:13px;}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);}th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.05em;}td{font-variant-numeric:tabular-nums;}'+
+      'tr.you{background:rgba(61,107,92,.1);font-weight:600;}'+
+      'a{color:var(--sage);}.ai-note{color:var(--violet);font-size:12px;}ul,ol{padding-left:20px;}li{margin-bottom:6px;}'+
       'footer{text-align:center;font-size:12px;color:var(--muted);margin-top:20px;}@media print{body{background:#fff;padding:0;}.card{border:none;}}'+
       '</style></head><body><div class="wrap">'+
       '<div class="card"><span class="badge">BrandPulse Deep Audit — sourced</span>'+
@@ -808,9 +1167,23 @@
     setTimeout(function(){URL.revokeObjectURL(url);},2000);
   }
 
-  // On load: if we came back from a Stripe payment (?paid=...), resume the
-  // deep audit; otherwise show the sample as before.
-  if(hasPaidParam())resumeDeepAudit();else run(false);
+  // ---- On load: read the URL and route. ----
+  //  ?paid=<id>  -> resume the deep audit (verify + run)
+  //  ?brand=<x>  -> prefill + measure that brand directly (the prospect's mirror)
+  //  otherwise   -> drawn empty state (no auto sample run)
+  (function bootstrap(){
+    var params;try{params=new URLSearchParams(window.location.search);}catch(e){params=null;}
+    // Optional backend pre-warm to mask Render cold-start (fire-and-forget).
+    try{fetch('/api/waitlist',{method:'HEAD'}).catch(function(){});}catch(e){}
+    if(params&&params.get('paid')){resumeDeepAudit();return;}
+    var brandParam=params?(params.get('brand')||'').trim():'';
+    if(brandParam){
+      var bEl=document.getElementById('brand');if(bEl)bEl.value=brandParam;
+      preview();
+      return;
+    }
+    drawEmptyState();
+  })();
 </script>
 </body>
 </html>
