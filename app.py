@@ -231,8 +231,31 @@ def run_query(query, api_key):
 
 
 def brand_in(brand, result):
-    hay = " ".join(str(result.get(k, "")) for k in ("title", "link", "description")).lower()
-    return re.search(r"\b" + re.escape(brand.lower()) + r"\b", hay) is not None
+    # 1) Word-boundary match of the brand name in title/description text.
+    text_hay = " ".join(str(result.get(k, "")) for k in ("title", "description")).lower()
+    if re.search(r"\b" + re.escape(brand.lower()) + r"\b", text_hay) is not None:
+        return True
+    slug = _brand_slug(brand)
+    if len(slug) < 4:
+        return False
+    parsed = urllib.parse.urlparse(str(result.get("link", "")))
+    # 2) Slug in the link HOST — recognizes domains like "montecarlodata.com"
+    #    for a spaced brand name ("Monte Carlo Data") that never appears with
+    #    word boundaries in the link. Substring is safe here: a host is a
+    #    strong identifier and the min-length guard blocks short-slug noise.
+    if slug in parsed.netloc.lower():
+        return True
+    # 3) Slug in the link PATH — recognizes third-party comparison URLs where
+    #    the brand is named in the path. To avoid false positives on generic
+    #    words (e.g. "soda" in "/soda-can-recycling"), only match when the slug
+    #    is EITHER a complete path segment ("g2.com/products/aircall") OR the
+    #    head of a segment immediately followed by a known SEO comparison suffix
+    #    ("zapier.com/blog/notion-alternative", "/weglot-review", "/asana-vs-x").
+    path = parsed.path.lower()
+    seg = re.escape(slug)
+    suffixes = r"alternative|alternatives|review|reviews|vs|pricing|competitors|comparison"
+    pat = r"(?:^|/)" + seg + r"(?:/|$|-(?:" + suffixes + r")(?:$|[/\-_.]))"
+    return re.search(pat, path) is not None
 
 
 def _brand_slug(brand):
