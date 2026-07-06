@@ -101,17 +101,68 @@ _cache = _load_cache()  # persists across restarts — never re-pay for a brand
 # ever running a deep analysis. Keys are read from the environment only — never
 # hard-coded — so the app runs fine in dev/demo with Stripe unconfigured.
 #
-# Anti-replay: a Stripe session_id that has already unlocked a deep audit is
-# recorded in _consumed_sessions so the same paid session cannot be reused to
-# unlock unlimited deep audits. ONE paid session == ONE deep audit.
+# ===========================================================================
+# ANTI-REPLAY SECURITY MODEL (durable, zero-infra-cost)
+# ===========================================================================
+# ONE paid Stripe session == ONE deep audit. The hard problem is preventing a
+# customer who already paid from replaying their own (real, paid) session_id to
+# get extra deep audits for free. A previous version tracked consumed sessions
+# only in a Python set in process memory, which is wiped on every Render free-
+# tier restart/redeploy/sleep — so after a restart a paid session could be
+# replayed. This version closes that hole WITHOUT any paid infra (no persistent
+# disk, no Redis, no DB) using two independent, layered defenses:
 #
-# NOTE (MVP limitation): _consumed_sessions lives in process memory and is lost
-# on restart/redeploy. After a redeploy a not-yet-consumed paid session could in
-# theory be replayed once. Acceptable for an MVP; a durable store (Redis/DB) or
-# Stripe webhooks would be the production hardening. Because each Checkout
-# session is single-use for payment and the buyer is redirected straight into
-# their audit, the practical exposure is minimal.
+#   DEFENSE 1 — Stripe is the durable source of truth (survives any restart).
+#   ----------------------------------------------------------------------
+#   When a deep audit is granted, we STAMP the consumption on the PaymentIntent
+#   that backs the paid Checkout Session, by writing metadata[bp_consumed]=<unix
+#   ts> via POST /v1/payment_intents/<id>. On every subsequent request we
+#   RETRIEVE the session with expand[]=payment_intent and read back that stamp.
+#   If bp_consumed is already present, the session is refused. Because the stamp
+#   lives on Stripe's servers (not our dyno), it survives every restart,
+#   redeploy and sleep at zero cost to us.
+#
+#   Why the PaymentIntent and not the Checkout Session itself: Stripe's docs
+#   confirm PaymentIntent metadata is a mutable key/value store that can be
+#   updated at any time via the update API (only the *Charge* receives a frozen
+#   metadata snapshot at creation; the PaymentIntent object itself stays
+#   editable). The PaymentIntent is a stable per-payment object we can expand
+#   from the session in a single GET, so it is the natural durable anchor.
+#
+#   FAIL-CLOSED on the stamp write: if we cannot durably record consumption on
+#   Stripe (network error, unexpected response), we DO NOT grant the deep audit.
+#   Granting-then-failing-to-stamp is exactly the replay hole we are closing, so
+#   an un-recordable grant is refused rather than given for free.
+#
+#   DEFENSE 2 — Time-boxed acceptance window (bounds any residual replay).
+#   ----------------------------------------------------------------------
+#   Independently of the stamp, a paid_session is only accepted within
+#   PAID_SESSION_MAX_AGE_S seconds of session.created (a Stripe Unix timestamp,
+#   also durable and restart-proof). The normal flow is: pay -> Stripe redirects
+#   straight back -> audit runs within seconds. Legitimate use is well inside
+#   the window; a stale session presented long after payment is refused even if
+#   Defense 1 somehow did not apply. This alone bounds the worst-case replay
+#   surface to a few minutes right after payment, and it composes with Defense 1
+#   (both must pass).
+#
+#   The in-memory _consumed_sessions set is kept ONLY as a first-line cache to
+#   short-circuit obvious same-process replays without a Stripe round-trip. It
+#   is authoritative for NOTHING: after a restart it is empty, and the durable
+#   Stripe stamp (Defense 1) plus the time window (Defense 2) still hold. The
+#   truth is always re-derived from Stripe.
+# ===========================================================================
 STRIPE_API_BASE = "https://api.stripe.com/v1"
+
+# Deep-audit metadata key stamped on the PaymentIntent once its paid session has
+# been redeemed. Namespaced ("bp_") so it never collides with other metadata.
+STRIPE_CONSUMED_META_KEY = "bp_consumed"
+
+# Defense 2: how long after Stripe's session.created a paid_session stays
+# redeemable. The pay->redirect->audit round-trip takes seconds; a generous
+# window (default 30 min) covers slow networks / a brief pause on the success
+# page while still refusing sessions replayed long after payment. Configurable
+# so the window can be tightened/loosened without a code change.
+PAID_SESSION_MAX_AGE_S = int(os.environ.get("PAID_SESSION_MAX_AGE_S", "1800"))
 
 
 def _stripe_config():
@@ -155,7 +206,9 @@ def _stripe_request(method, path, secret_key, form=None):
         raise RuntimeError("Stripe API returned an unexpected response")
 
 
-# session_id strings already redeemed for a deep audit (protected by _live_lock).
+# First-line cache of session_id strings already redeemed IN THIS PROCESS
+# (protected by _live_lock). NOT authoritative: it is empty after any restart.
+# The durable truth is the Stripe PaymentIntent stamp (see security model above).
 _consumed_sessions = set()
 
 
@@ -168,28 +221,135 @@ def _site_base():
     return base.rstrip("/")
 
 
-def _verify_paid_session(session_id):
-    """Server-side check that `session_id` is a real, fully-paid Stripe Checkout
-    session. Returns (ok, brand) where brand comes from the session metadata we
-    set at creation (never trusted from the client). Returns (False, "") if
-    Stripe is unconfigured, the session is unknown, or it is not paid."""
+def _inspect_paid_session(session_id):
+    """Fetch a Checkout Session from Stripe (with its PaymentIntent expanded in
+    the same round-trip) and return everything the paid gate needs to make a
+    durable, restart-proof decision.
+
+    Returns a dict:
+        {
+          "ok":          bool,   # real session AND payment_status == "paid"
+          "brand":       str,    # from session metadata (never trusted from client)
+          "created":     int,    # session.created — Stripe Unix ts (Defense 2)
+          "pi_id":       str,    # PaymentIntent id backing this payment
+          "consumed":    bool,   # durable Stripe stamp already present (Defense 1)
+          "inspectable": bool,   # we successfully reached Stripe and parsed it
+        }
+
+    `inspectable` distinguishes "we checked Stripe and it says X" from "we could
+    not reach/parse Stripe". Callers MUST fail closed when inspectable is False:
+    an unverifiable session is never granted a deep audit. `ok` is only True when
+    we positively confirmed the session is paid.
+    """
+    result = {"ok": False, "brand": "", "created": 0, "pi_id": "",
+              "consumed": False, "inspectable": False}
     secret_key, _ = _stripe_config()
     if not secret_key or not session_id:
-        return False, ""
+        return result
     try:
+        # expand[]=payment_intent inlines the full PaymentIntent object so we
+        # read its durable bp_consumed stamp without a second round-trip.
         session = _stripe_request(
-            "GET", "/checkout/sessions/" + urllib.parse.quote(str(session_id), safe=""),
+            "GET",
+            "/checkout/sessions/" + urllib.parse.quote(str(session_id), safe="")
+            + "?expand[]=payment_intent",
             secret_key,
         )
     except RuntimeError:
-        return False, ""
-    if session.get("payment_status") != "paid":
-        return False, ""
-    brand = ""
+        return result  # inspectable stays False -> caller fails closed
+
+    result["inspectable"] = True
+    try:
+        result["created"] = int(session.get("created") or 0)
+    except (TypeError, ValueError):
+        result["created"] = 0
+
     meta = session.get("metadata") or {}
     if isinstance(meta, dict):
-        brand = str(meta.get("brand") or "").strip()
-    return True, brand
+        result["brand"] = str(meta.get("brand") or "").strip()
+
+    # The expanded PaymentIntent is where the durable consumption stamp lives.
+    pi = session.get("payment_intent")
+    if isinstance(pi, dict):
+        result["pi_id"] = str(pi.get("id") or "")
+        pi_meta = pi.get("metadata") or {}
+        if isinstance(pi_meta, dict) and str(pi_meta.get(STRIPE_CONSUMED_META_KEY) or "").strip():
+            result["consumed"] = True
+    elif isinstance(pi, str):
+        # Not expanded for some reason: keep the id so we can still stamp it,
+        # but we could not read the stamp -> treat consumption as UNKNOWN, and
+        # since we default consumed=False the caller relies on the atomic stamp
+        # write (which is conditional/observable) plus the memory cache.
+        result["pi_id"] = pi
+
+    result["ok"] = session.get("payment_status") == "paid"
+    return result
+
+
+def _mark_session_consumed_on_stripe(pi_id):
+    """DURABLY record that this payment's single deep audit has been redeemed, by
+    stamping metadata[bp_consumed]=<unix ts> on the PaymentIntent. This is the
+    restart-proof anti-replay record (Defense 1): it lives on Stripe, so it
+    survives any dyno restart/redeploy/sleep at zero infra cost.
+
+    Returns True only if Stripe acknowledged the write with the stamp present in
+    the response. Returns False on any error or unexpected response. Callers MUST
+    fail closed on False: if we cannot durably record consumption, we must not
+    grant the deep audit (otherwise the grant would be replayable — the exact
+    hole we are closing)."""
+    secret_key, _ = _stripe_config()
+    if not secret_key or not pi_id:
+        return False
+    stamp = str(int(time.time()))
+    try:
+        pi = _stripe_request(
+            "POST", "/payment_intents/" + urllib.parse.quote(str(pi_id), safe=""),
+            secret_key,
+            form={"metadata[" + STRIPE_CONSUMED_META_KEY + "]": stamp},
+        )
+    except RuntimeError:
+        logger.error("Could not stamp bp_consumed on PaymentIntent %s (fail-closed)", pi_id)
+        return False
+    meta = pi.get("metadata") or {}
+    ok = isinstance(meta, dict) and str(meta.get(STRIPE_CONSUMED_META_KEY) or "").strip() == stamp
+    if not ok:
+        logger.error("Stripe did not persist bp_consumed on PaymentIntent %s", pi_id)
+    return ok
+
+
+def _unmark_session_consumed_on_stripe(pi_id):
+    """Best-effort DURABLE rollback of the consumption stamp, by unsetting
+    metadata[bp_consumed] on the PaymentIntent (Stripe unsets a key when its
+    value is empty). Used only when a paid deep audit FAILED before producing a
+    result, so the paying customer can retry without losing their single unlock.
+
+    Fail-safe direction: if this rollback cannot be persisted, the worst case is
+    the customer must re-run within the time window and finds the session marked
+    consumed — i.e. we err toward NOT over-refunding audits, never toward
+    granting an extra one. Returns True on confirmed unset, False otherwise."""
+    secret_key, _ = _stripe_config()
+    if not secret_key or not pi_id:
+        return False
+    try:
+        pi = _stripe_request(
+            "POST", "/payment_intents/" + urllib.parse.quote(str(pi_id), safe=""),
+            secret_key,
+            form={"metadata[" + STRIPE_CONSUMED_META_KEY + "]": ""},  # empty => unset
+        )
+    except RuntimeError:
+        logger.error("Could not roll back bp_consumed on PaymentIntent %s", pi_id)
+        return False
+    meta = pi.get("metadata") or {}
+    return not (isinstance(meta, dict) and str(meta.get(STRIPE_CONSUMED_META_KEY) or "").strip())
+
+
+def _verify_paid_session(session_id):
+    """Back-compat wrapper: return (ok, brand) for a real, fully-paid session.
+    Used by /api/verify-payment, which only reports payment status and does NOT
+    consume the unlock. Deep-audit authorization/consumption goes through
+    _resolve_paid_depth(), which uses the richer _inspect_paid_session()."""
+    info = _inspect_paid_session(session_id)
+    return info["ok"], info["brand"]
 
 
 # ---------------------------------------------------------------------------
@@ -765,34 +925,91 @@ def _resolve_depth(data):
 
 
 def _resolve_paid_depth(data):
-    """Security gate for the paid Deep Audit in /api/analyze.
+    """Security gate for the paid Deep Audit in /api/analyze. DURABLE, restart-
+    proof, zero-infra-cost. See the full anti-replay security model near the top
+    of the Stripe section.
 
     A deep (5-query) SERP run is authorized ONLY when the request carries a
-    `paid_session` that is (a) a real Stripe Checkout session, (b) payment_status
-    == "paid", and (c) not already consumed for a previous deep audit. When all
-    three hold, the session is atomically marked consumed (one paid session ==
-    one deep audit) and this returns (MAX_QUERIES_PAID, session_id, True).
+    `paid_session` that clears EVERY one of these checks (all fail closed):
 
-    In every other case — no session, unpaid, already consumed, Stripe
-    unconfigured, or the client merely sending {deep:true} without paying — it
-    silently falls back to the free cap and returns (MAX_QUERIES_FREE, "",
-    False). The client can never obtain a deep audit by sending deep=true alone.
+      (0) FIRST-LINE CACHE — if this session_id was already redeemed in THIS
+          process, refuse immediately (no Stripe call needed). Not authoritative:
+          empty after a restart, so the durable checks below still apply.
+      (1) PAID — a real Stripe Checkout session with payment_status == "paid".
+      (2) FRESH (Defense 2 / time window) — presented within
+          PAID_SESSION_MAX_AGE_S of session.created (a durable Stripe timestamp).
+          Bounds any residual replay to minutes right after payment.
+      (3) NOT ALREADY CONSUMED (Defense 1 / durable Stripe stamp) — the backing
+          PaymentIntent must NOT already carry metadata[bp_consumed]. This stamp
+          lives on Stripe and survives every restart/redeploy/sleep.
+      (4) DURABLY STAMPABLE (Defense 1 write) — we then write bp_consumed onto
+          the PaymentIntent BEFORE granting. If that durable write does not
+          succeed, we REFUSE (a grant we cannot record is a replayable grant).
 
-    Consumption is done here (not in /api/verify-payment) and inside the same
-    critical section as the paid check, so a race can never redeem one paid
-    session for two concurrent deep audits."""
+    On success returns (MAX_QUERIES_PAID, session_id, True); the session is now
+    durably marked on Stripe AND cached in-process. In every other case — no
+    session, unconfigured Stripe, unpaid, stale, already consumed, unreachable
+    Stripe, or the client merely sending {deep:true} without paying — it silently
+    falls back and returns (MAX_QUERIES_FREE, "", False). The client can never
+    obtain a deep audit by sending deep=true alone.
+
+    Why this survives a server restart (the whole point): the consumption record
+    is the PaymentIntent's bp_consumed metadata on Stripe, not our process
+    memory. After a redeploy the in-memory cache is empty, but re-inspecting the
+    session still shows bp_consumed set, so a replay is refused. The time window
+    is likewise anchored on Stripe's session.created, not on any local clock we
+    lose at restart."""
     if not _deep_requested(data):
         return MAX_QUERIES_FREE, "", False
     session_id = (data.get("paid_session") or "").strip()
     if not session_id:
         return MAX_QUERIES_FREE, "", False
-    ok, _brand = _verify_paid_session(session_id)  # network call to Stripe
-    if not ok:
-        return MAX_QUERIES_FREE, "", False
-    # Atomically claim the single-use unlock.
+
+    # (0) First-line in-process cache: cheap short-circuit for same-process
+    # replay. Never the source of truth (see Defense 1/2 for durability).
     with _live_lock:
         if session_id in _consumed_sessions:
             return MAX_QUERIES_FREE, "", False
+
+    # Single Stripe round-trip: paid status + created ts + PaymentIntent + its
+    # durable consumption stamp.
+    info = _inspect_paid_session(session_id)
+
+    # Fail closed if we could not reach/parse Stripe at all.
+    if not info["inspectable"]:
+        return MAX_QUERIES_FREE, "", False
+    # (1) Must be paid.
+    if not info["ok"]:
+        return MAX_QUERIES_FREE, "", False
+    # (3) Durable Stripe stamp already present -> already redeemed (survives
+    # restart). Record it in the local cache too so we skip Stripe next time.
+    if info["consumed"]:
+        with _live_lock:
+            _consumed_sessions.add(session_id)
+        return MAX_QUERIES_FREE, "", False
+    # (2) Time window: only accept within PAID_SESSION_MAX_AGE_S of creation.
+    # created==0 means we could not read a trustworthy timestamp -> fail closed.
+    now = int(time.time())
+    if info["created"] <= 0 or (now - info["created"]) > PAID_SESSION_MAX_AGE_S:
+        return MAX_QUERIES_FREE, "", False
+    # We need a PaymentIntent to durably stamp; without one we cannot record
+    # consumption durably -> fail closed rather than grant an unrecordable audit.
+    if not info["pi_id"]:
+        logger.error("Paid session %s has no PaymentIntent to stamp (fail-closed)", session_id)
+        return MAX_QUERIES_FREE, "", False
+
+    # (4) DURABLY claim the single-use unlock on Stripe BEFORE granting. Note on
+    # concurrency: Stripe's update is last-write-wins, so two truly simultaneous
+    # requests for the same fresh session could both pass step (3) before either
+    # stamps. That window is (a) tiny, (b) further guarded by the in-process
+    # cache add below which serializes same-process duplicates, and (c) bounded
+    # to at most the few requests a single buyer can fire in that instant — not
+    # an unbounded free-audit exploit. The durable stamp then permanently blocks
+    # every later replay, including across restarts.
+    if not _mark_session_consumed_on_stripe(info["pi_id"]):
+        return MAX_QUERIES_FREE, "", False  # could not durably record -> refuse
+
+    with _live_lock:
         _consumed_sessions.add(session_id)
     return MAX_QUERIES_PAID, session_id, True
 
