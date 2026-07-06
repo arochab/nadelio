@@ -10,6 +10,11 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Model for the single identity-inference call per audit. Sonnet 5 is a
+      # stronger identifier / disambiguator for obscure bare brand names than the
+      # Haiku used for the high-volume AI-visibility calls. Override if needed.
+      - key: INFER_MODEL
+        value: "claude-sonnet-5"
       - key: MAX_LIVE_RUNS
         value: "25"
       - key: LIVE_RUNS_PER_IP

@@ -25,12 +25,15 @@ SERP_ENDPOINT = "https://api.brightdata.com/request"
 ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"  # cheapest model — minimal cost
 # Model used ONLY for the identity-inference step (infer_strategy). Kept distinct
-# from ANTHROPIC_MODEL so the identification call can be bumped to a stronger
-# model independently — but web-anchored evidence (see _recon) usually makes
-# Haiku enough, so it defaults to the same cheap model. Override via env if a
-# stronger identifier is ever needed. The 3 AI-visibility calls always use
-# ANTHROPIC_MODEL (Haiku).
-INFER_MODEL = os.environ.get("INFER_MODEL", ANTHROPIC_MODEL)
+# from ANTHROPIC_MODEL so the identification call can be a stronger model without
+# raising cost on the high-volume AI-visibility calls. Entity identification and
+# disambiguation of obscure bare names (e.g. an unknown French SME sharing a name
+# with a famous US company) benefit from a more capable model, so this defaults to
+# Sonnet 5 — meaningfully better than Haiku at brand knowledge / disambiguation, at
+# a reasonable cost since it runs at most once per audit. Override via env
+# INFER_MODEL if needed. The 3 AI-visibility calls always use ANTHROPIC_MODEL
+# (Haiku) to keep the per-audit volume cheap.
+INFER_MODEL = os.environ.get("INFER_MODEL", "claude-sonnet-5")
 
 MAX_LIVE_RUNS = int(os.environ.get("MAX_LIVE_RUNS", "15"))
 LIVE_RUNS_PER_IP = int(os.environ.get("LIVE_RUNS_PER_IP", "3"))
@@ -516,7 +519,11 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
         "Identity output: set \"identified_as\" to ONE factual sentence describing what this "
         "company actually is (include its domain if you know it, e.g. \"Yoyaku is a French techno "
         "record label and vinyl shop, yoyaku.io\"). Set \"confidence\" to \"high\" only if you are "
-        "genuinely sure which company this is; otherwise \"low\".\n\n"
+        "genuinely sure which company this is; otherwise \"low\".\n"
+        "CRITICAL: If NO web evidence is provided below, you MUST return confidence \"low\" — you "
+        "cannot be certain of an obscure brand from its name alone, and a famous namesake must "
+        "never be assumed to be the company in question. A bare, unfamiliar name with no evidence "
+        "is always \"low\".\n\n"
         "Brand: " + brand
     )
     if evidence:
@@ -526,9 +533,11 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
             ev_text = str(evidence)[:2000]
         prompt += (
             "\n\nHere is what the web actually says about this brand (fetched from its site "
-            "and/or search results). Identify the REAL company FROM THIS EVIDENCE; do NOT guess "
-            "from the name alone. If the evidence clearly identifies the company, set confidence "
-            "to \"high\":\n" + ev_text
+            "and/or search results). This web evidence OVERRIDES your prior knowledge: if it "
+            "conflicts with a company you already know by this name, TRUST THE EVIDENCE, not your "
+            "memory. Identify the company described in THIS evidence, not a famous namesake you "
+            "recall. Do NOT guess from the name alone. If the evidence clearly identifies the "
+            "company, set confidence to \"high\":\n" + ev_text
         )
     if forced:
         prompt += (
@@ -753,10 +762,24 @@ def _recon(brand, serp_key):
 
     Returns {"evidence": [...], "official_url": str}. Fail-open: on ANY error the
     evidence is whatever was gathered so far (possibly empty) and official_url is
-    "" — never raises, never blocks the audit."""
+    "" — never raises, never blocks the audit.
+
+    CACHE-POISONING GUARD (needed for Correction D): the free /api/infer preview
+    calls this with serp_key=None on a bare name and gets an EMPTY result. If that
+    empty result were cached and served back, the later quota-gated /api/analyze —
+    which DOES pass a real serp_key — would hit the empty cache entry and skip the
+    SERP, silently defeating the web anchoring. So: never SERVE a cached empty
+    result when a serp_key is now available (retry with the SERP), and never STORE
+    an empty result produced without a serp_key (a no-SERP miss must not block a
+    later real recon). Non-empty results (real evidence) are always cached and
+    reused so the same brand is never re-paid."""
     key = (brand or "").strip().lower()
     if key and key in _recon_cache:
-        return _recon_cache[key]
+        cached = _recon_cache[key]
+        # Serve the cache unless it is an empty result AND we could now do better
+        # with a real SERP key (i.e. the empty entry came from a no-SERP preview).
+        if cached.get("evidence") or not serp_key:
+            return cached
 
     result = {"evidence": [], "official_url": ""}
     try:
@@ -813,7 +836,10 @@ def _recon(brand, serp_key):
     except Exception:
         logger.exception("recon failed for brand=%r (fail-open)", brand)
 
-    if key and len(_recon_cache) < _RECON_CACHE_MAX:
+    # Cache real evidence always; cache an empty result ONLY if a serp_key was
+    # available (a genuine "nothing found even with SERP" miss). An empty result
+    # from a no-SERP call is NOT cached, so it can't block a later real recon.
+    if key and len(_recon_cache) < _RECON_CACHE_MAX and (result["evidence"] or serp_key):
         _recon_cache[key] = result
     return result
 
@@ -1342,7 +1368,7 @@ def api_verify_payment():
     return jsonify({"ok": True, "brand": brand, "consumed": already})
 
 
-def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE):
+def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE, has_evidence=True):
     """Shared sanitation for a raw infer_strategy() result: strip stray
     characters from competitor names, cap list sizes, and make sure the
     queried brand itself is present as the first competitor.
@@ -1353,7 +1379,17 @@ def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE):
     which market/language an audit actually ran in. identified_as/confidence are
     the web-anchored identity verdict (empty / "low" if absent). `max_queries`
     caps the query list (2 free, 5 deep); it defaults to the free cap so existing
-    callers are unchanged."""
+    callers are unchanged.
+
+    CORRECTION A (deterministic, zero-cost anti-hallucination guard): `confidence`
+    can never be "high" unless real web evidence backed the inference. When
+    `has_evidence` is False (no evidence was fetched/injected), confidence is
+    FORCED to "low" here, regardless of what the LLM claimed. This is the hard tie
+    between the returned confidence and the existence of web proof: a bare obscure
+    name with no evidence can no longer come back "high" on the strength of the
+    model's memory (which may surface a famous homonym). "low" then triggers the
+    existing UI confirmation guard-rail. Callers pass has_evidence=True when the
+    strategy comes from confirmed/custom client data (already human-vetted)."""
     cap = MAX_QUERIES_PAID if int(max_queries or MAX_QUERIES_FREE) >= MAX_QUERIES_PAID else MAX_QUERIES_FREE
     competitors = [re.sub(r'[^\w\s\-\.\&]', '', c.strip())[:MAX_BRAND_LEN]
                    for c in strat.get("competitors", []) if c.strip()][:MAX_BRANDS]
@@ -1364,7 +1400,9 @@ def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE):
     query_language = str(strat.get("query_language", "") or "").strip()[:10]
     identified_as = str(strat.get("identified_as", "") or "").strip()[:400]
     confidence = str(strat.get("confidence", "") or "").strip().lower()
-    confidence = "high" if confidence == "high" else "low"
+    # High confidence REQUIRES web evidence — otherwise it is unfounded (the model
+    # may be recalling a famous namesake, not identifying THIS brand). Force low.
+    confidence = "high" if (confidence == "high" and has_evidence) else "low"
     return competitors, queries, market, query_language, identified_as, confidence
 
 
@@ -1581,8 +1619,12 @@ def api_infer():
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
 
+    # CORRECTION A: confidence can only be "high" if real web evidence was fetched.
+    # On this free preview endpoint a bare obscure name yields empty evidence (no
+    # SERP — see cost note above), so it is forced to "low" -> UI confirmation card.
     competitors, queries, inferred_market, query_language, identified_as, confidence = \
-        _sanitize_strategy(brand, strat, max_queries)
+        _sanitize_strategy(brand, strat, max_queries,
+                           has_evidence=bool(recon.get("evidence")))
     if not competitors or not queries:
         return jsonify({"error": "Could not infer competitors for this brand."}), 502
 
@@ -1708,14 +1750,33 @@ def api_analyze():
     # free analyses). `slot_consumed` distinguishes the one path that must keep it.
     slot_consumed = False
     try:
-        # For a paid deep audit we run web recon FIRST so the identity is anchored
-        # on the web (and available for the written report / verification section).
-        # Recon is fail-open and only fetches free domain pages unless we already
-        # hold a serp_key (we do on this paid path). On the free path we skip it.
+        # CORRECTION D — web recon on EVERY live analysis (paid AND free), not just
+        # the paid path. We run recon FIRST so the identity is anchored on the web
+        # and not guessed from the name. Crucially we pass the REAL serp_key (never
+        # None), so _recon's SERP branch fires on a bare obscure name (e.g. a small
+        # French SME sharing a name with a famous US company) and fetches the true
+        # official site instead of letting the LLM fall back to a homonym in memory.
+        #
+        # COST: this is bounded. A live analysis is quota-gated (3 audits/day/IP +
+        # the MAX_LIVE_RUNS global ceiling), and _recon is memoized in _recon_cache
+        # (keyed on brand.lower()) so the same brand is never re-paid. That is +1
+        # SERP call (~$0.0015) per distinct brand analyzed. We deliberately do NOT
+        # do this on /api/infer (the free preview is not quota-gated, so a SERP
+        # there would be an unbounded paid cost); there a bare obscure name stays
+        # "low" (Correction A) -> UI confirmation card. Web identification is paid
+        # for and performed HERE, at analysis time, where the quota bounds it.
+        # Recon is fail-open: on any error the evidence is empty and inference
+        # degrades to the old name-only behavior rather than blocking the audit.
+        # Run recon when it feeds a fresh inference (any non-custom live run —
+        # Correction D covers the free path here) OR when it feeds the paid deep
+        # audit's written report / evidence panel (paid runs always did recon,
+        # even when resumed from a confirmed custom strategy — preserve that).
         recon = {"evidence": [], "official_url": ""}
-        if paid_ok:
+        if not use_custom_strategy or paid_ok:
             recon = _recon(data.get("official_url") or brand, serp_key)
         if use_custom_strategy:
+            # Confirmed/custom strategy already came from a human-vetted /api/infer
+            # preview, so its confidence is trusted as-is (has_evidence=True).
             competitors, queries, market_out, query_language, identified_as, confidence = _sanitize_strategy(brand, {
                 "competitors": raw_competitors,
                 "queries": raw_queries,
@@ -1723,12 +1784,15 @@ def api_analyze():
                 "query_language": data.get("query_language") or "",
                 "identified_as": data.get("identified_as") or "",
                 "confidence": data.get("confidence") or "",
-            }, max_queries)
+            }, max_queries, has_evidence=True)
             sector = (data.get("sector") or "").strip() or "(confirmed by user)"
         else:
             strat = infer_strategy(brand, llm_key, hint, market=market or None,
                                    max_queries=max_queries, evidence=recon["evidence"] or None)
-            competitors, queries, market_out, query_language, identified_as, confidence = _sanitize_strategy(brand, strat, max_queries)
+            # CORRECTION A: recalibrate confidence on the REAL evidence gathered
+            # above. No evidence recovered -> confidence forced to "low".
+            competitors, queries, market_out, query_language, identified_as, confidence = _sanitize_strategy(
+                brand, strat, max_queries, has_evidence=bool(recon.get("evidence")))
             sector = strat.get("sector", "")
         if not competitors or not queries:
             return jsonify(dict(SAMPLE, notice="Could not infer competitors - showing sample analysis."))
@@ -1760,8 +1824,16 @@ def api_analyze():
                                         recon.get("evidence", []), brand, llm_key)
             if report is not None:
                 n_llm_calls += 1  # +1 remediation call
-        # LLM calls + SERP queries
-        cost = round(LLM_COST_PER_CALL * n_llm_calls + SERP_COST_PER_QUERY * len(queries), 5)
+        # LLM calls + SERP queries. Recon adds at most one SERP call for a bare
+        # (non-domain) brand name whenever recon actually ran (see the recon gate
+        # above) — count it so the reported cost stays honest. Recon on a domain/URL
+        # is a free page fetch (no SERP), and a cached recon hit re-pays nothing,
+        # but we bill the worst case here.
+        recon_ran = (not use_custom_strategy) or paid_ok
+        n_recon_serp = 1 if (recon_ran and not _looks_like_domain(
+            data.get("official_url") or brand)) else 0
+        cost = round(LLM_COST_PER_CALL * n_llm_calls
+                     + SERP_COST_PER_QUERY * (len(queries) + n_recon_serp), 5)
         result = {
             "brand": brand,
             "sector": sector,
