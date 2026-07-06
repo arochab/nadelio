@@ -1222,9 +1222,33 @@ def _notify_waitlist_webhook(email):
         logger.exception("Waitlist webhook notification failed for %s", email)
 
 
+def _read_json():
+    """Parse the request body as JSON, decoding it as UTF-8 explicitly.
+
+    Flask's request.get_json(force=True) can silently return None on a body
+    that carries raw UTF-8 bytes (e.g. an accented brand name like
+    "Intermarche" with an e-acute) when the client's Content-Type omits a
+    charset — which then reads as an empty brand and a bogus "Type a brand
+    name" 400. Reading the raw bytes and decoding UTF-8 ourselves fixes
+    accented input for every endpoint. Falls back to Flask's parser, then to
+    an empty dict, so a malformed body never raises."""
+    try:
+        raw = request.get_data(cache=True)
+        if raw:
+            parsed = json.loads(raw.decode("utf-8"))
+            if isinstance(parsed, dict):
+                return parsed
+    except Exception:
+        pass
+    try:
+        return request.get_json(force=True, silent=True) or {}
+    except Exception:
+        return {}
+
+
 @app.route("/api/waitlist", methods=["POST"])
 def api_waitlist():
-    data = request.get_json(force=True, silent=True) or {}
+    data = _read_json()
     email = (data.get("email") or "").strip().lower()
     if not email or "@" not in email or len(email) > 200:
         return jsonify({"error": "Invalid email"}), 400
@@ -1249,7 +1273,7 @@ def api_checkout():
     if not secret_key or not price_id:
         return jsonify({"error": "payments not configured"}), 502
 
-    data = request.get_json(force=True, silent=True) or {}
+    data = _read_json()
     brand = (data.get("brand") or "").strip()
     hint = (data.get("hint") or "").strip()
     market = (data.get("market") or "").strip()
@@ -1303,7 +1327,7 @@ def api_verify_payment():
     if not secret_key or not price_id:
         return jsonify({"error": "payments not configured"}), 502
 
-    data = request.get_json(force=True, silent=True) or {}
+    data = _read_json()
     session_id = (data.get("session_id") or "").strip()
     if not session_id:
         return jsonify({"ok": False, "error": "Missing session_id"}), 400
@@ -1467,7 +1491,7 @@ def api_infer():
     Does NOT touch the live-run quota counters — a single Haiku call costs
     about $0.0001, and gating it behind the same daily quota as a full
     analysis would defeat the point of letting users cheaply refine a hint."""
-    data = request.get_json(force=True, silent=True) or {}
+    data = _read_json()
     brand = (data.get("brand") or "").strip()
     hint = (data.get("hint") or "").strip()
     official = (data.get("official_url") or "").strip()  # user-supplied source of truth
@@ -1579,7 +1603,7 @@ def api_infer():
 @app.route("/api/analyze", methods=["POST"])
 def api_analyze():
     global _live_runs, _live_runs_date
-    data = request.get_json(force=True, silent=True) or {}
+    data = _read_json()
     live = bool(data.get("live"))
     brand = (data.get("brand") or "").strip()
     hint = (data.get("hint") or "").strip()
