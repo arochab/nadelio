@@ -24,6 +24,13 @@ ZONE = "serpleadresearch"
 SERP_ENDPOINT = "https://api.brightdata.com/request"
 ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"  # cheapest model — minimal cost
+# Model used ONLY for the identity-inference step (infer_strategy). Kept distinct
+# from ANTHROPIC_MODEL so the identification call can be bumped to a stronger
+# model independently — but web-anchored evidence (see _recon) usually makes
+# Haiku enough, so it defaults to the same cheap model. Override via env if a
+# stronger identifier is ever needed. The 3 AI-visibility calls always use
+# ANTHROPIC_MODEL (Haiku).
+INFER_MODEL = os.environ.get("INFER_MODEL", ANTHROPIC_MODEL)
 
 MAX_LIVE_RUNS = int(os.environ.get("MAX_LIVE_RUNS", "15"))
 LIVE_RUNS_PER_IP = int(os.environ.get("LIVE_RUNS_PER_IP", "3"))
@@ -476,7 +483,7 @@ _MARKET_PRESETS = {
 }
 
 
-def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERIES_FREE):
+def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERIES_FREE, evidence=None):
     n = MAX_QUERIES_PAID if int(max_queries or MAX_QUERIES_FREE) >= MAX_QUERIES_PAID else MAX_QUERIES_FREE
     forced = _MARKET_PRESETS.get((market or "").strip().lower()) if market else None
     prompt = (
@@ -484,7 +491,9 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
         "infer its market and return STRICT JSON with this exact shape and nothing else:\n"
         '{"sector":"short sector label","market":"primary market label",'
         '"query_language":"ISO 639-1 code","competitors":["BrandA","BrandB","BrandC","BrandD"],'
-        '"queries":["buyer-intent query 1","query 2"]}\n'
+        '"queries":["buyer-intent query 1","query 2"],'
+        '"identified_as":"one sentence saying what this company really is, with its domain if known",'
+        '"confidence":"high or low"}\n'
         "Rules: include the given brand as the FIRST competitor. List 4-5 real, well-known direct competitors. "
         "Queries must be the searches a real buyer would type when shopping in this category "
         "(e.g. 'best CRM for startups', 'salesforce alternative'). "
@@ -501,11 +510,26 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
         "English queries.\n\n"
         "Disambiguation: brand names are often shared by unrelated companies (e.g. a fintech "
         "and a consumer app with the same name). Identify the REAL company this name most likely "
-        "refers to. If the name is ambiguous and no context is given, prefer the B2B/SaaS "
-        "interpretation over a consumer one, since this tool is used for competitive intelligence "
-        "in software markets.\n\n"
+        "refers to. Do NOT assume it is a B2B or SaaS company: it may be a record label, a shop, "
+        "a restaurant, a media outlet, a consumer product — anything. Judge from the evidence and "
+        "context, not from a category prior.\n\n"
+        "Identity output: set \"identified_as\" to ONE factual sentence describing what this "
+        "company actually is (include its domain if you know it, e.g. \"Yoyaku is a French techno "
+        "record label and vinyl shop, yoyaku.io\"). Set \"confidence\" to \"high\" only if you are "
+        "genuinely sure which company this is; otherwise \"low\".\n\n"
         "Brand: " + brand
     )
+    if evidence:
+        try:
+            ev_text = json.dumps(evidence, ensure_ascii=False)[:2000]
+        except (TypeError, ValueError):
+            ev_text = str(evidence)[:2000]
+        prompt += (
+            "\n\nHere is what the web actually says about this brand (fetched from its site "
+            "and/or search results). Identify the REAL company FROM THIS EVIDENCE; do NOT guess "
+            "from the name alone. If the evidence clearly identifies the company, set confidence "
+            "to \"high\":\n" + ev_text
+        )
     if forced:
         prompt += (
             "\n\nThe user has EXPLICITLY selected the target market: " + forced + ". "
@@ -518,8 +542,8 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
             "company, especially if the name is ambiguous): " + hint.strip()
         )
     body = json.dumps({
-        "model": ANTHROPIC_MODEL,
-        "max_tokens": 400,
+        "model": INFER_MODEL,
+        "max_tokens": 500,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
     req = urllib.request.Request(
@@ -544,6 +568,255 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
         logger.error("Claude returned invalid JSON: %s", m.group(0)[:300])
         raise RuntimeError("Claude did not return valid JSON for this brand")
     return parsed
+
+# ---------------------------------------------------------------------------
+# Step 1b: Web-first recon (identity anchoring) + SSRF guard
+# ---------------------------------------------------------------------------
+# The identity bug ("Yoyaku is a B2B SaaS") came from inferring a company from
+# its NAME alone. _recon gathers real web evidence FIRST, so infer_strategy can
+# anchor on what the web actually says. It is fail-open: any error yields empty
+# evidence and the pipeline degrades to the old name-only behavior rather than
+# blocking the audit.
+#
+# SSRF: the URL field is user-supplied, so every fetch is guarded — http/https
+# only, DNS-resolved, private/loopback/link-local IPs refused, redirects
+# re-validated the same way, short timeout, capped body size.
+# ---------------------------------------------------------------------------
+_RECON_UA = "Mozilla/5.0 (compatible; BrandPulseBot/1.0; +https://brandpulse-app.onrender.com)"
+_RECON_TIMEOUT = 6
+_RECON_MAXBYTES = 200_000
+_DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?)+$", re.I)
+_TLD_RE = re.compile(r"\.[a-z]{2,}$", re.I)
+
+# Recon cache keyed on brand.lower(), and a light per-IP rate-limit for the
+# non-quota-gated /api/infer endpoint (spam guard, not a billing gate).
+_recon_cache = {}
+_RECON_CACHE_MAX = 500
+_infer_hits = {}  # {ip: [minute_bucket_int, count]}
+_INFER_RATE_PER_MIN = int(os.environ.get("INFER_RATE_PER_MIN", "20"))
+
+
+def _looks_like_domain(brand):
+    """True if `brand` looks like a bare domain or URL (has a dot + a 2+ letter
+    TLD). Accepts 'yoyaku.io', 'https://yoyaku.io/path', 'www.yoyaku.io'."""
+    if not brand:
+        return False
+    s = brand.strip()
+    # Strip scheme + path so we test the host only.
+    if "://" in s:
+        try:
+            s = urllib.parse.urlparse(s).netloc or s
+        except ValueError:
+            return False
+    s = s.split("/")[0].strip().rstrip(".")
+    if " " in s or "@" in s or not s:
+        return False
+    return bool(_DOMAIN_RE.match(s)) and bool(_TLD_RE.search(s))
+
+
+def _is_public_host(host):
+    """Resolve `host` and return True only if EVERY resolved address is a
+    public, routable IP. Refuses private / loopback / link-local / reserved /
+    multicast addresses — the core SSRF defense."""
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError, OSError):
+        return False
+    import ipaddress
+    for info in infos:
+        addr = info[4][0]
+        # Strip a scope id if present (e.g. fe80::1%eth0).
+        addr = addr.split("%")[0]
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            return False
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            return False
+    return True
+
+
+def _safe_url(raw):
+    """Normalize a user-supplied brand/URL into a safe http(s) URL, or return
+    None if it fails the SSRF policy. No fetch happens here."""
+    if not raw:
+        return None
+    s = raw.strip()
+    if "://" not in s:
+        s = "https://" + s
+    try:
+        p = urllib.parse.urlparse(s)
+    except ValueError:
+        return None
+    if p.scheme not in ("http", "https"):
+        return None
+    host = p.hostname
+    if not host or not _is_public_host(host):
+        return None
+    return s
+
+
+def _fetch_page_meta(url):
+    """Fetch a page under the SSRF policy and extract lightweight identity signals
+    by regex (title, meta description, og:site_name, og:description, first h1).
+    NO heavy parser. Manual redirect following (max 3), re-validating each hop's
+    host against the SSRF policy so a redirect cannot pivot to an internal IP.
+    Returns a dict of found fields (may be empty). Never raises."""
+    safe = _safe_url(url)
+    if not safe:
+        return {}
+    current = safe
+    try:
+        html = None
+        final_url = current
+        for _ in range(4):  # initial + up to 3 redirects
+            host = urllib.parse.urlparse(current).hostname
+            if not host or not _is_public_host(host):
+                return {}
+            req = urllib.request.Request(
+                current,
+                headers={"User-Agent": _RECON_UA, "Accept": "text/html,*/*;q=0.8"},
+                method="GET",
+            )
+            try:
+                # No auto-redirect: we validate each hop ourselves.
+                opener = urllib.request.build_opener(_NoRedirect)
+                resp = opener.open(req, timeout=_RECON_TIMEOUT)
+            except urllib.error.HTTPError as he:
+                if he.code in (301, 302, 303, 307, 308):
+                    loc = he.headers.get("Location")
+                    if not loc:
+                        return {}
+                    current = urllib.parse.urljoin(current, loc)
+                    nxt = _safe_url(current)
+                    if not nxt:
+                        return {}
+                    current = nxt
+                    continue
+                return {}
+            with resp:
+                final_url = current
+                raw = resp.read(_RECON_MAXBYTES)
+                html = raw.decode("utf-8", errors="replace")
+                break
+        if html is None:
+            return {}
+    except (urllib.error.URLError, socket.timeout, ValueError, OSError):
+        return {}
+
+    def _grab(pattern):
+        m = re.search(pattern, html, re.I | re.S)
+        return re.sub(r"\s+", " ", m.group(1)).strip()[:300] if m else ""
+
+    meta = {}
+    title = _grab(r"<title[^>]*>(.*?)</title>")
+    if title:
+        meta["title"] = title
+    desc = _grab(r'<meta[^>]+name=["\']description["\'][^>]+content=["\'](.*?)["\']') \
+        or _grab(r'<meta[^>]+content=["\'](.*?)["\'][^>]+name=["\']description["\']')
+    if desc:
+        meta["description"] = desc
+    site = _grab(r'<meta[^>]+property=["\']og:site_name["\'][^>]+content=["\'](.*?)["\']')
+    if site:
+        meta["og_site_name"] = site
+    ogd = _grab(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\'](.*?)["\']')
+    if ogd:
+        meta["og_description"] = ogd
+    h1 = _grab(r"<h1[^>]*>(.*?)</h1>")
+    h1 = re.sub(r"<[^>]+>", "", h1).strip() if h1 else ""
+    if h1:
+        meta["h1"] = h1
+    if meta:
+        meta["url"] = final_url
+    return meta
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Disable urllib's automatic redirect following so _fetch_page_meta can
+    validate each hop's host against the SSRF policy before following it."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _recon(brand, serp_key):
+    """Gather real web evidence about `brand` BEFORE inference, so identity is
+    anchored on the web and not guessed from the name.
+
+    (a) If `brand` looks like a domain/URL -> fetch its page meta (free, no SERP).
+    (b) Else, ONLY if serp_key is provided (caller decides whether the paid SERP
+        path is authorized) -> run_query(brand), take the top-3 organic results
+        as evidence, and fetch meta of the first host whose domain contains the
+        brand slug (its likely official site).
+
+    Returns {"evidence": [...], "official_url": str}. Fail-open: on ANY error the
+    evidence is whatever was gathered so far (possibly empty) and official_url is
+    "" — never raises, never blocks the audit."""
+    key = (brand or "").strip().lower()
+    if key and key in _recon_cache:
+        return _recon_cache[key]
+
+    result = {"evidence": [], "official_url": ""}
+    try:
+        if _looks_like_domain(brand):
+            meta = _fetch_page_meta(brand)
+            if meta:
+                result["official_url"] = meta.get("url", "")
+                ev = {}
+                if meta.get("og_site_name"):
+                    ev["site_name"] = meta["og_site_name"]
+                if meta.get("title"):
+                    ev["title"] = meta["title"]
+                desc = meta.get("description") or meta.get("og_description") or ""
+                if desc:
+                    ev["description"] = desc
+                if meta.get("h1"):
+                    ev["h1"] = meta["h1"]
+                if ev:
+                    ev["source"] = meta.get("url", "")
+                    result["evidence"].append(ev)
+        elif serp_key:
+            try:
+                organic = run_query(brand, serp_key)
+            except Exception:
+                organic = []
+            slug = _brand_slug(brand)
+            official = ""
+            for r in organic[:3]:
+                result["evidence"].append({
+                    "title": str(r.get("title", ""))[:200],
+                    "link": str(r.get("link", ""))[:300],
+                    "description": str(r.get("description", ""))[:300],
+                })
+                if not official and slug and len(slug) >= 4:
+                    host = urllib.parse.urlparse(str(r.get("link", ""))).netloc.lower()
+                    if slug in host.replace("-", "").replace(".", ""):
+                        official = str(r.get("link", ""))
+            if official:
+                meta = _fetch_page_meta(official)
+                if meta:
+                    result["official_url"] = meta.get("url", official)
+                    ev = {"source": meta.get("url", official)}
+                    if meta.get("og_site_name"):
+                        ev["site_name"] = meta["og_site_name"]
+                    if meta.get("title"):
+                        ev["title"] = meta["title"]
+                    d = meta.get("description") or meta.get("og_description") or ""
+                    if d:
+                        ev["description"] = d
+                    if len(ev) > 1:
+                        result["evidence"].append(ev)
+                else:
+                    result["official_url"] = official
+    except Exception:
+        logger.exception("recon failed for brand=%r (fail-open)", brand)
+
+    if key and len(_recon_cache) < _RECON_CACHE_MAX:
+        _recon_cache[key] = result
+    return result
+
 
 # ---------------------------------------------------------------------------
 # Step 2: Bright Data SERP
@@ -770,6 +1043,127 @@ def check_ai_visibility(brands, queries, api_key):
 
 
 # ---------------------------------------------------------------------------
+# Step 4 (paid Deep Audit only): GEO score + written remediation
+# ---------------------------------------------------------------------------
+def _geo_score(ranking, queries, brand):
+    """In-process 0-100 GEO score for `brand`, computed ONLY from data already in
+    `ranking` (share of voice + AI coverage + AI average rank). ZERO API calls.
+
+    Three equally-weighted components, each 0-100, then averaged:
+      - SERP share of voice (share_of_voice, already a %).
+      - AI coverage (fraction of queries where the brand appears in AI answers).
+      - AI rank quality (avg AI rank mapped: #1 -> 100, fading to 0 by rank ~10).
+    A defensible, re-measurable number — not a claim, just arithmetic."""
+    you = next((r for r in ranking if r["brand"].lower() == str(brand).lower()), None)
+    if not you or not queries:
+        return 0
+    sov = float(you.get("share_of_voice") or 0)
+    sov_c = max(0.0, min(100.0, sov))
+
+    cov_str = str(you.get("ai_coverage") or "0/0")
+    try:
+        num = int(cov_str.split("/")[0])
+    except (ValueError, IndexError):
+        num = 0
+    cov_c = max(0.0, min(100.0, 100.0 * num / len(queries)))
+
+    ai_rank = you.get("ai_avg_rank")
+    if ai_rank is None:
+        rank_c = 0.0
+    else:
+        rank_c = max(0.0, min(100.0, (10.0 - float(ai_rank)) / 9.0 * 100.0))
+
+    return int(round((sov_c + cov_c + rank_c) / 3.0))
+
+
+def _build_remediation(ranking, queries, identified_as, evidence, brand, llm_key):
+    """ONE paid-only LLM call. Produces a written verdict + blind spots + a
+    concrete action plan, anchored STRICTLY on the already-computed ranking and
+    the real query/competitor names (the model is told NOT to invent any).
+
+    Blind spots are pre-computed IN PYTHON from the ranking (queries where the
+    brand is absent but a named competitor is present) and handed to the model,
+    so the surfaced gaps are factual. Returns
+    {verdict, blind_spots:[...], actions:[...]} or None on any failure (the deep
+    audit still renders its heatmap + score without the written report)."""
+    you = next((r for r in ranking if r["brand"].lower() == str(brand).lower()), None)
+    if not you:
+        return None
+
+    you_cells = you.get("cells") or {}
+    you_ai = you.get("ai_cells") or {}
+    # Factual blind spots: queries where the brand is absent (SERP + AI) but at
+    # least one OTHER named competitor shows up.
+    blind = []
+    for q in queries:
+        brand_here = q in you_cells or q in you_ai
+        if brand_here:
+            continue
+        rivals = []
+        for r in ranking:
+            if r["brand"].lower() == str(brand).lower():
+                continue
+            if q in (r.get("cells") or {}) or q in (r.get("ai_cells") or {}):
+                rivals.append(r["brand"])
+        if rivals:
+            blind.append({"query": q, "dominated_by": rivals[:3]})
+    blind = blind[:3]
+
+    comp_names = [r["brand"] for r in ranking]
+    prompt = (
+        "You are a GEO (generative engine optimization) consultant writing a short, factual "
+        "remediation section for a brand visibility audit. Use ONLY the data given below. Do NOT "
+        "invent competitors, queries, or metrics that are not listed. Return STRICT JSON only:\n"
+        '{"verdict":"2-3 sentence honest assessment of this brand visibility",'
+        '"actions":["concrete action 1","action 2","action 3","action 4"]}\n\n'
+        "Brand: " + str(brand) + "\n"
+        "What this brand is: " + (identified_as or "(not identified)") + "\n"
+        "Buyer queries analyzed: " + json.dumps(queries, ensure_ascii=False) + "\n"
+        "Brands tracked (competitors): " + json.dumps(comp_names, ensure_ascii=False) + "\n"
+        "This brand SERP share of voice: " + str(you.get("share_of_voice")) + "%\n"
+        "This brand SERP coverage: " + str(you.get("query_coverage")) + "\n"
+        "This brand AI coverage: " + str(you.get("ai_coverage")) + "\n"
+        "Blind spots (queries where this brand is ABSENT but a named competitor ranks): "
+        + json.dumps(blind, ensure_ascii=False) + "\n\n"
+        "Write 4-6 concrete, specific actions the brand can take to improve its visibility for "
+        "the EXACT queries above (reference the real query text and the real competitors named). "
+        "Keep every action grounded in the data; no generic filler."
+    )
+    body = json.dumps({
+        "model": INFER_MODEL,
+        "max_tokens": 700,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        ANTHROPIC_ENDPOINT, data=body,
+        headers={
+            "x-api-key": llm_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        data = _urlopen_json_with_retry(req, timeout=40, what="Claude API (remediation)")
+    except Exception:
+        logger.exception("remediation call failed")
+        return None
+    text = "".join(b.get("text", "") for b in data.get("content", []))
+    m = re.search(r"\{.*\}", text, re.S)
+    if m is None:
+        return None
+    try:
+        parsed = json.loads(m.group(0))
+    except (json.JSONDecodeError, ValueError):
+        return None
+    verdict = str(parsed.get("verdict", "") or "").strip()[:800]
+    actions = [str(a).strip()[:300] for a in parsed.get("actions", []) if str(a).strip()][:6]
+    if not verdict and not actions:
+        return None
+    return {"verdict": verdict, "blind_spots": blind, "actions": actions}
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 @app.route("/")
@@ -929,11 +1323,13 @@ def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE):
     characters from competitor names, cap list sizes, and make sure the
     queried brand itself is present as the first competitor.
 
-    Returns (competitors, queries, market, query_language). The market and
-    query_language fields are preserved from the raw strategy (empty strings
-    if the model omitted them) so the frontend can show which market/language
-    an audit actually ran in. `max_queries` caps the query list (2 free, 5
-    deep); it defaults to the free cap so existing callers are unchanged."""
+    Returns (competitors, queries, market, query_language, identified_as,
+    confidence). The market and query_language fields are preserved from the raw
+    strategy (empty strings if the model omitted them) so the frontend can show
+    which market/language an audit actually ran in. identified_as/confidence are
+    the web-anchored identity verdict (empty / "low" if absent). `max_queries`
+    caps the query list (2 free, 5 deep); it defaults to the free cap so existing
+    callers are unchanged."""
     cap = MAX_QUERIES_PAID if int(max_queries or MAX_QUERIES_FREE) >= MAX_QUERIES_PAID else MAX_QUERIES_FREE
     competitors = [re.sub(r'[^\w\s\-\.\&]', '', c.strip())[:MAX_BRAND_LEN]
                    for c in strat.get("competitors", []) if c.strip()][:MAX_BRANDS]
@@ -942,7 +1338,10 @@ def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE):
         competitors = [brand] + competitors
     market = str(strat.get("market", "") or "").strip()[:60]
     query_language = str(strat.get("query_language", "") or "").strip()[:10]
-    return competitors, queries, market, query_language
+    identified_as = str(strat.get("identified_as", "") or "").strip()[:400]
+    confidence = str(strat.get("confidence", "") or "").strip().lower()
+    confidence = "high" if confidence == "high" else "low"
+    return competitors, queries, market, query_language, identified_as, confidence
 
 
 def _deep_requested(data):
@@ -982,12 +1381,17 @@ def _resolve_paid_depth(data):
           the PaymentIntent BEFORE granting. If that durable write does not
           succeed, we REFUSE (a grant we cannot record is a replayable grant).
 
-    On success returns (MAX_QUERIES_PAID, session_id, True); the session is now
-    durably marked on Stripe AND cached in-process. In every other case — no
-    session, unconfigured Stripe, unpaid, stale, already consumed, unreachable
-    Stripe, or the client merely sending {deep:true} without paying — it silently
-    falls back and returns (MAX_QUERIES_FREE, "", False). The client can never
-    obtain a deep audit by sending deep=true alone.
+    On success returns (MAX_QUERIES_PAID, session_id, pi_id, True); the session is
+    now durably marked on Stripe AND cached in-process. `pi_id` is the backing
+    PaymentIntent that carries the durable bp_consumed stamp we just wrote — the
+    caller keeps it so it can roll that stamp back via
+    _unmark_session_consumed_on_stripe() if the paid audit then fails before
+    producing a result. In every other case — no session, unconfigured Stripe,
+    unpaid, stale, already consumed, unreachable Stripe, or the client merely
+    sending {deep:true} without paying — it silently falls back and returns
+    (MAX_QUERIES_FREE, "", "", False). The empty pi_id in the fallback case is
+    deliberate: no stamp was written, so there is nothing to roll back. The
+    client can never obtain a deep audit by sending deep=true alone.
 
     Why this survives a server restart (the whole point): the consumption record
     is the PaymentIntent's bp_consumed metadata on Stripe, not our process
@@ -996,16 +1400,16 @@ def _resolve_paid_depth(data):
     is likewise anchored on Stripe's session.created, not on any local clock we
     lose at restart."""
     if not _deep_requested(data):
-        return MAX_QUERIES_FREE, "", False
+        return MAX_QUERIES_FREE, "", "", False
     session_id = (data.get("paid_session") or "").strip()
     if not session_id:
-        return MAX_QUERIES_FREE, "", False
+        return MAX_QUERIES_FREE, "", "", False
 
     # (0) First-line in-process cache: cheap short-circuit for same-process
     # replay. Never the source of truth (see Defense 1/2 for durability).
     with _live_lock:
         if session_id in _consumed_sessions:
-            return MAX_QUERIES_FREE, "", False
+            return MAX_QUERIES_FREE, "", "", False
 
     # Single Stripe round-trip: paid status + created ts + PaymentIntent + its
     # durable consumption stamp.
@@ -1013,26 +1417,26 @@ def _resolve_paid_depth(data):
 
     # Fail closed if we could not reach/parse Stripe at all.
     if not info["inspectable"]:
-        return MAX_QUERIES_FREE, "", False
+        return MAX_QUERIES_FREE, "", "", False
     # (1) Must be paid.
     if not info["ok"]:
-        return MAX_QUERIES_FREE, "", False
+        return MAX_QUERIES_FREE, "", "", False
     # (3) Durable Stripe stamp already present -> already redeemed (survives
     # restart). Record it in the local cache too so we skip Stripe next time.
     if info["consumed"]:
         with _live_lock:
             _consumed_sessions.add(session_id)
-        return MAX_QUERIES_FREE, "", False
+        return MAX_QUERIES_FREE, "", "", False
     # (2) Time window: only accept within PAID_SESSION_MAX_AGE_S of creation.
     # created==0 means we could not read a trustworthy timestamp -> fail closed.
     now = int(time.time())
     if info["created"] <= 0 or (now - info["created"]) > PAID_SESSION_MAX_AGE_S:
-        return MAX_QUERIES_FREE, "", False
+        return MAX_QUERIES_FREE, "", "", False
     # We need a PaymentIntent to durably stamp; without one we cannot record
     # consumption durably -> fail closed rather than grant an unrecordable audit.
     if not info["pi_id"]:
         logger.error("Paid session %s has no PaymentIntent to stamp (fail-closed)", session_id)
-        return MAX_QUERIES_FREE, "", False
+        return MAX_QUERIES_FREE, "", "", False
 
     # (4) DURABLY claim the single-use unlock on Stripe BEFORE granting. Note on
     # concurrency: Stripe's update is last-write-wins, so two truly simultaneous
@@ -1043,11 +1447,16 @@ def _resolve_paid_depth(data):
     # an unbounded free-audit exploit. The durable stamp then permanently blocks
     # every later replay, including across restarts.
     if not _mark_session_consumed_on_stripe(info["pi_id"]):
-        return MAX_QUERIES_FREE, "", False  # could not durably record -> refuse
+        return MAX_QUERIES_FREE, "", "", False  # could not durably record -> refuse
 
     with _live_lock:
         _consumed_sessions.add(session_id)
-    return MAX_QUERIES_PAID, session_id, True
+    # Return the pi_id alongside the session so the caller can durably ROLL BACK
+    # the bp_consumed stamp we just wrote if the paid audit then fails before
+    # producing a result. It is only ever non-empty here, i.e. once the stamp is
+    # actually on Stripe — so the caller never tries to unmark a stamp that was
+    # never set.
+    return MAX_QUERIES_PAID, session_id, info["pi_id"], True
 
 
 @app.route("/api/infer", methods=["POST"])
@@ -1061,24 +1470,95 @@ def api_infer():
     data = request.get_json(force=True, silent=True) or {}
     brand = (data.get("brand") or "").strip()
     hint = (data.get("hint") or "").strip()
+    official = (data.get("official_url") or "").strip()  # user-supplied source of truth
     market = (data.get("market") or "").strip()  # optional forced market ("fr", "us"…)
+    force_web = bool(data.get("force_web"))       # "Not this? Refine" -> re-read the web
     max_queries = _resolve_depth(data)            # 2 (free) or 5 (deep)
 
     if not brand:
         return jsonify({"error": "Type a brand name."}), 400
     if len(brand) > MAX_BRAND_LEN:
         return jsonify({"error": "Brand name is too long (max " + str(MAX_BRAND_LEN) + " chars)."}), 400
+    if official and len(official) > 300:
+        return jsonify({"error": "The website URL is too long."}), 400
+
+    # Light per-IP rate-limit: /api/infer is intentionally NOT quota-gated (it
+    # must stay cheap for hint refinement), but it must not be spammable.
+    ip = _client_ip()
+    minute = int(time.time() // 60)
+    with _live_lock:
+        entry = _infer_hits.get(ip)
+        if not entry or entry[0] != minute:
+            # Drop stale buckets to avoid unbounded growth.
+            for stale in [k for k, v in _infer_hits.items() if v[0] != minute]:
+                del _infer_hits[stale]
+            _infer_hits[ip] = [minute, 1]
+        elif entry[1] >= _INFER_RATE_PER_MIN:
+            return jsonify({"error": "Too many requests — slow down a moment."}), 429
+        else:
+            entry[1] += 1
 
     llm_key = os.environ.get("ANTHROPIC_API_KEY")
     if not llm_key:
         return jsonify({"error": "Server missing an API key - cannot run inference."}), 502
 
+    # COST GARDE: /api/infer is not quota-gated, so it must not trigger a paid
+    # SERP recon on the free path. Recon fetches are gratuit ONLY for domains
+    # (urllib) — so we pass serp_key to _recon ONLY when the recon target is a
+    # domain/URL (the explicit official_url, or a brand that itself looks like a
+    # domain). For a plain free brand name we pass serp_key=None: _recon then
+    # returns empty evidence and inference falls back to LLM-only knowledge.
+    #
+    # BUG-3 (common-word names like "Figures"/"Mention"/"Pivot" typed with no
+    # domain and no hint): a light SERP recon would anchor the guess, BUT this
+    # endpoint is only per-IP rate-limited (not quota-gated), and every SERP query
+    # is a real, unbounded paid cost. Deliberately NOT firing a free SERP recon
+    # here is a cost-safety choice: pure common-word names fall back to LLM-only
+    # inference, which returns empty/low-confidence evidence. The UI guard-rail
+    # (index.html: empty evidence -> lowConfidence=true) then forces the URL/hint
+    # field open and a mandatory Yes/No confirmation before any analysis or
+    # payment — so the user is never billed on a silently-wrong diagnosis. Users
+    # who need web anchoring on such a name supply an official_url or hint, which
+    # IS reconned (domain fetch is free; a hint sharpens the LLM identification).
+    # If a future paid/deep or quota-gated path wants SERP anchoring on bare
+    # names, do it THERE (bounded by payment/quota), never on this free endpoint.
+    serp_key = os.environ.get("BRIGHTDATA_API_KEY")
+    recon_target = official or brand
+    recon_allowed_key = serp_key if _looks_like_domain(recon_target) else None
+    # An explicit official_url is the single source of truth: fetch THAT domain
+    # only, bypassing the guess entirely.
+    if official:
+        if force_web:
+            _recon_cache.pop((brand or "").strip().lower(), None)
+        recon = {"evidence": [], "official_url": ""}
+        meta = _fetch_page_meta(official)
+        if meta:
+            recon["official_url"] = meta.get("url", official)
+            ev = {"source": meta.get("url", official)}
+            if meta.get("og_site_name"):
+                ev["site_name"] = meta["og_site_name"]
+            if meta.get("title"):
+                ev["title"] = meta["title"]
+            d = meta.get("description") or meta.get("og_description") or ""
+            if d:
+                ev["description"] = d
+            if meta.get("h1"):
+                ev["h1"] = meta["h1"]
+            if len(ev) > 1:
+                recon["evidence"].append(ev)
+    else:
+        if force_web:
+            _recon_cache.pop((brand or "").strip().lower(), None)
+        recon = _recon(recon_target, recon_allowed_key)
+
     try:
-        strat = infer_strategy(brand, llm_key, hint, market=market or None, max_queries=max_queries)
+        strat = infer_strategy(brand, llm_key, hint, market=market or None,
+                               max_queries=max_queries, evidence=recon["evidence"] or None)
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
 
-    competitors, queries, inferred_market, query_language = _sanitize_strategy(brand, strat, max_queries)
+    competitors, queries, inferred_market, query_language, identified_as, confidence = \
+        _sanitize_strategy(brand, strat, max_queries)
     if not competitors or not queries:
         return jsonify({"error": "Could not infer competitors for this brand."}), 502
 
@@ -1089,6 +1569,10 @@ def api_infer():
         "query_language": query_language,
         "competitors": competitors,
         "queries": queries,
+        "identified_as": identified_as,
+        "confidence": confidence,
+        "official_url": recon.get("official_url", ""),
+        "evidence": recon.get("evidence", []),
     })
 
 
@@ -1129,7 +1613,7 @@ def api_analyze():
     # back to the free 2-query cap. When paid_ok is True the session has been
     # atomically claimed (single-use); we roll that claim back on hard failure
     # in the except-block so a paying customer is never charged for nothing.
-    max_queries, paid_session, paid_ok = _resolve_paid_depth(data)
+    max_queries, paid_session, paid_pi_id, paid_ok = _resolve_paid_depth(data)
 
     ip = _client_ip()
     today = _today_utc()
@@ -1189,18 +1673,38 @@ def api_analyze():
                 _ip_runs[ip][1] = max(0, _ip_runs[ip][1] - 1)
         return jsonify(dict(_cache[cache_key], cached=True))
 
+    # BUG-2 FIX: a FREE live run legitimately consumes one daily slot ONLY when it
+    # actually produces a real analysis. The +=1 above provisionally claimed the
+    # slot; we keep it (do NOT release in `finally`) only once we reach the
+    # successful return below. Every other exit from the try/finally — a
+    # "could not infer" SAMPLE fallback, or an exception — did NOT deliver an
+    # analysis, so it releases the slot. Previously the `finally` released the
+    # slot on ALL non-paid exits including the success return, which cancelled the
+    # +=1 and made the free daily quota never accumulate (effectively unlimited
+    # free analyses). `slot_consumed` distinguishes the one path that must keep it.
+    slot_consumed = False
     try:
+        # For a paid deep audit we run web recon FIRST so the identity is anchored
+        # on the web (and available for the written report / verification section).
+        # Recon is fail-open and only fetches free domain pages unless we already
+        # hold a serp_key (we do on this paid path). On the free path we skip it.
+        recon = {"evidence": [], "official_url": ""}
+        if paid_ok:
+            recon = _recon(data.get("official_url") or brand, serp_key)
         if use_custom_strategy:
-            competitors, queries, market_out, query_language = _sanitize_strategy(brand, {
+            competitors, queries, market_out, query_language, identified_as, confidence = _sanitize_strategy(brand, {
                 "competitors": raw_competitors,
                 "queries": raw_queries,
                 "market": data.get("market_label") or market,
                 "query_language": data.get("query_language") or "",
+                "identified_as": data.get("identified_as") or "",
+                "confidence": data.get("confidence") or "",
             }, max_queries)
             sector = (data.get("sector") or "").strip() or "(confirmed by user)"
         else:
-            strat = infer_strategy(brand, llm_key, hint, market=market or None, max_queries=max_queries)
-            competitors, queries, market_out, query_language = _sanitize_strategy(brand, strat, max_queries)
+            strat = infer_strategy(brand, llm_key, hint, market=market or None,
+                                   max_queries=max_queries, evidence=recon["evidence"] or None)
+            competitors, queries, market_out, query_language, identified_as, confidence = _sanitize_strategy(brand, strat, max_queries)
             sector = strat.get("sector", "")
         if not competitors or not queries:
             return jsonify(dict(SAMPLE, notice="Could not infer competitors - showing sample analysis."))
@@ -1220,8 +1724,20 @@ def api_analyze():
             entry["ai_avg_rank"] = round(sum(ai_ranks) / len(ai_ranks), 1) if ai_ranks else None
             ai_consist = [ai_vis[q][b]["consistency"] for q in queries if q in ai_vis and b in ai_vis[q]]
             entry["ai_consistency"] = round(sum(ai_consist) / len(ai_consist)) if ai_consist else None
-        # 1 LLM call (strategy) + AI_RUNS LLM calls (AI visibility) + SERP queries
-        cost = round(LLM_COST_PER_CALL * (1 + AI_RUNS) + SERP_COST_PER_QUERY * len(queries), 5)
+        # Paid Deep Audit deliverable: a defensible GEO score (in-process, zero
+        # API) and ONE written remediation LLM call. Both are gated inside paid_ok
+        # so the free tier never pays for or receives them.
+        geo = None
+        report = None
+        n_llm_calls = 1 + AI_RUNS  # strategy + AI visibility
+        if paid_ok:
+            geo = _geo_score(ranking, queries, brand)
+            report = _build_remediation(ranking, queries, identified_as,
+                                        recon.get("evidence", []), brand, llm_key)
+            if report is not None:
+                n_llm_calls += 1  # +1 remediation call
+        # LLM calls + SERP queries
+        cost = round(LLM_COST_PER_CALL * n_llm_calls + SERP_COST_PER_QUERY * len(queries), 5)
         result = {
             "brand": brand,
             "sector": sector,
@@ -1231,8 +1747,18 @@ def api_analyze():
             "ranking": ranking,
             "mode": "live",
             "tier": "deep" if paid_ok else "free",
+            "identified_as": identified_as,
+            "confidence": confidence,
             "cost": cost,
         }
+        # Deep-audit-only fields: never present on a free result, so the frontend
+        # can key its whole "deep vs free" rendering on d.tier / their presence.
+        if paid_ok:
+            result["geo_score"] = geo
+            result["evidence"] = recon.get("evidence", [])
+            result["official_url"] = recon.get("official_url", "")
+            if report is not None:
+                result["report"] = report
         # A paid deep run is never written to the shared brand cache (see the
         # cache-read note above): a later free run of the same brand must not be
         # served a 5-query deep result, and vice versa.
@@ -1241,22 +1767,64 @@ def api_analyze():
                 if len(_cache) < MAX_CACHE_ENTRIES:
                     _cache[cache_key] = result
                     _save_cache(_cache)
+        # This free run delivered a real analysis: it legitimately consumes its
+        # daily slot, so the `finally` must NOT release it (see BUG-2 FIX above).
+        slot_consumed = True
         return jsonify(result)
     except Exception as e:
         logger.exception("Live analysis failed for brand='%s'", brand)
         # A paid deep audit that failed before producing a result should NOT
         # burn the customer's single-use unlock — release the claimed session so
-        # they can retry. (Replay safety is preserved: only an un-produced run
-        # rolls back, and the claim/rollback are both under _live_lock.)
+        # they can retry.
+        #
+        # Two layers must be released, in order:
+        #   1) the DURABLE Stripe stamp (bp_consumed on the PaymentIntent), which
+        #      is the restart-proof source of truth. If we only cleared the memory
+        #      cache, the stamp would stay on Stripe and every retry would re-read
+        #      it as "already consumed" -> the paying customer, having just seen a
+        #      FAILED audit, would be permanently downgraded to a free (2-query)
+        #      run and could NEVER obtain the deep audit they paid for. Removing
+        #      the durable stamp is what actually lets them retry.
+        #   2) the in-process cache, a same-process short-circuit only.
+        # paid_pi_id is non-empty ONLY when _resolve_paid_depth actually wrote the
+        # stamp in THIS run, so we never try to unmark a stamp that was never set.
+        # (Replay safety is preserved: only an un-produced run rolls back.)
+        if paid_ok and paid_pi_id:
+            try:
+                if not _unmark_session_consumed_on_stripe(paid_pi_id):
+                    # Rollback did not persist on Stripe. We err toward NOT
+                    # over-granting audits (see _unmark docstring): the customer
+                    # may need to retry within the time window, but is never
+                    # silently robbed without a trace — this is logged loudly so
+                    # support can manually unset bp_consumed / refund if needed.
+                    logger.error(
+                        "PAID AUDIT ROLLBACK FAILED: could not clear bp_consumed on "
+                        "PaymentIntent %s after a failed paid audit (session=%s). "
+                        "Customer may be blocked from retrying — manual review needed.",
+                        paid_pi_id, paid_session,
+                    )
+            except Exception:
+                logger.exception(
+                    "PAID AUDIT ROLLBACK ERROR: unexpected error unmarking bp_consumed "
+                    "on PaymentIntent %s (session=%s) — manual review needed.",
+                    paid_pi_id, paid_session,
+                )
         if paid_ok and paid_session:
             with _live_lock:
                 _consumed_sessions.discard(paid_session)
         # Return a safe, generic message — full error is logged server-side
         return jsonify(dict(SAMPLE, notice="Live analysis failed — showing sample."))
     finally:
-        # Only the FREE quota consumes/releases the daily counters. A paid deep
-        # run never incremented them, so it must not decrement them here.
-        if not paid_ok:
+        # Daily-quota accounting (FREE runs only — a paid deep run never
+        # incremented the counters, so it must never touch them here).
+        #
+        # BUG-2 FIX: release the provisionally-claimed slot ONLY when this free run
+        # did NOT deliver a real analysis (slot_consumed stays False on the
+        # "could not infer" SAMPLE fallback and on the exception path). A free run
+        # that DID produce an analysis sets slot_consumed=True and keeps its slot,
+        # so the 3/day/IP quota actually accumulates. (Cache hits return before
+        # this try/finally and rerelease their slot on their own dedicated path.)
+        if not paid_ok and not slot_consumed:
             with _live_lock:
                 _live_runs -= 1
                 if ip in _ip_runs and _ip_runs[ip][0] == today:
