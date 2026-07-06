@@ -136,11 +136,19 @@
     <button id="goBtn" onclick="run(true)">Analyze →</button>
   </div>
   <div style="text-align:center;margin-top:10px;">
-    <a id="hintToggle" href="javascript:void(0)" onclick="toggleHint()" style="font-size:12px;color:var(--faint);text-decoration:underline;text-underline-offset:2px;">Ambiguous name? Specify the brand</a>
+    <a id="hintToggle" href="javascript:void(0)" onclick="toggleHint()" style="font-size:12px;color:var(--faint);text-decoration:underline;text-underline-offset:2px;">Ambiguous name or wrong market? Refine it</a>
   </div>
   <div id="hintRow" style="display:none;max-width:520px;margin:10px auto 0;gap:10px;">
     <input id="hint" type="text" placeholder="Website or short description, e.g. payflows.io or 'AP automation for finance teams'" style="width:100%;font-family:inherit;font-size:13px;color:var(--ink);background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:12px;padding:11px 14px;outline:none;transition:border-color .2s;" onkeydown="if(event.key==='Enter')preview()"/>
-    <div style="text-align:center;margin-top:8px;">
+    <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+      <label for="market" style="font-size:12px;color:var(--faint);">Market</label>
+      <select id="market" style="font-family:inherit;font-size:13px;color:var(--ink);background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none;cursor:pointer;">
+        <option value="">Auto</option>
+        <option value="fr">France</option>
+        <option value="us">US / Global</option>
+        <option value="dach">DACH</option>
+        <option value="uk">UK</option>
+      </select>
       <button id="previewBtn" onclick="preview()" style="font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;border-radius:10px;padding:8px 18px;border:1px solid var(--line);background:#fff;color:var(--ink);">Preview sector &amp; competitors</button>
     </div>
   </div>
@@ -157,6 +165,11 @@
     <span><span class="s">3</span> AI recommendation check</span>
     <span><span class="s">4</span> Dual heatmap</span>
   </div>
+  <div style="text-align:center;margin-top:12px;">
+    <label style="font-size:11px;color:var(--faint);cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+      <input id="deep" type="checkbox" style="accent-color:var(--sage);cursor:pointer;"/> Deep audit (5 queries)
+    </label>
+  </div>
 
   <div id="out"></div>
   <footer>Built by <a href="https://github.com/arochab">Adam Chabbi</a> · <a href="/compare">why BrandPulse?</a> · <a href="https://buymeacoffee.com/arochab" target="_blank" rel="noopener" class="coffee">☕</a></footer>
@@ -166,6 +179,10 @@
   var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c];});};
   function useChip(b){document.getElementById('brand').value=b;run(true);}
   function shortQ(q){return q.length>22?q.slice(0,20)+'…':q;}
+  // Optional market/depth controls. Safe defaults (empty market = auto,
+  // deep unchecked = 2 queries) keep the public flow identical.
+  function getMarket(){var el=document.getElementById('market');return el?el.value.trim():'';}
+  function isDeep(){var el=document.getElementById('deep');return !!(el&&el.checked);}
   // rank -> sage intensity (darker = better rank) — SERP green
   function rankColor(rank){if(rank==null)return '#eef0ec';var t=Math.max(0,Math.min(1,(10-rank)/9));
     var stops=[[201,216,209],[156,188,176],[107,156,142],[61,107,92]];
@@ -195,25 +212,22 @@
   async function run(live){
     var out=document.getElementById('out'),btn=document.getElementById('goBtn');
     var brand=document.getElementById('brand').value.trim();
-    if(live&&!brand){document.getElementById('brand').focus();return;}
-    // If the user opened the hint field and typed something, go through the
-    // preview step first so they can confirm sector/competitors before the
-    // costly SERP + AI calls run. Without a hint, behavior is unchanged.
-    var hintEl=document.getElementById('hint');
-    var hint=hintEl?hintEl.value.trim():'';
-    if(live&&hint){preview();return;}
-    btn.disabled=true;
-    out.innerHTML='<div class="card"><div class="stage">'+(live?('Claude is analyzing <b style="color:var(--sage)">'+esc(brand)+'</b> — finding competitors &amp; buyer queries…'):'Loading sample…')+'<div class="bar"><i></i></div></div></div>';
-    var data,res;
-    try{res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:live,brand:brand})});data=await res.json();}
-    catch(e){out.innerHTML='<div class="card"><div class="stage">Could not reach the server. If this is your first visit, the server may be waking up — try again in 30 seconds.</div></div>';btn.disabled=false;return;}
-    if(res.status===429&&(data.error==='quota_ip'||data.error==='quota_global')){
-      out.innerHTML='<div class="card"><div class="stage" style="background:rgba(200,140,40,.1);border:1px solid rgba(200,140,40,.3);border-radius:12px;padding:18px;color:#8a5a1a;text-align:left">'+esc(data.message||'Live analysis limit reached.')+'</div>'+
-        '<div class="pro-cta"><button onclick="run(false)" style="background:var(--ink)">See sample instead</button></div>'+proCta()+'</div>';
-      btn.disabled=false;return;
+    // Demo / sample mode is unchanged: fetch the precomputed SAMPLE directly.
+    if(!live){
+      btn.disabled=true;
+      out.innerHTML='<div class="card"><div class="stage">Loading sample…<div class="bar"><i></i></div></div></div>';
+      var sd,sr;
+      try{sr=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false,brand:brand})});sd=await sr.json();}
+      catch(e){out.innerHTML='<div class="card"><div class="stage">Could not reach the server. If this is your first visit, the server may be waking up — try again in 30 seconds.</div></div>';btn.disabled=false;return;}
+      if(sd.error){out.innerHTML='<div class="card"><div class="stage">'+esc(typeof sd.error==='string'?sd.error:(sd.message||'Something went wrong.'))+'</div></div>';btn.disabled=false;return;}
+      render(sd);btn.disabled=false;return;
     }
-    if(data.error){out.innerHTML='<div class="card"><div class="stage">'+esc(typeof data.error==='string'?data.error:(data.message||'Something went wrong.'))+'</div></div>';btn.disabled=false;return;}
-    render(data);btn.disabled=false;
+    if(!brand){document.getElementById('brand').focus();return;}
+    // Live mode always runs a free /api/infer preview first and shows a light
+    // confirmation card, so an ambiguous name (or wrong market) never triggers
+    // a silent, potentially-wrong paid analysis. The actual SERP + AI calls
+    // only fire once the user confirms via confirmAnalyze().
+    preview();
   }
 
   async function preview(){
@@ -222,11 +236,12 @@
     if(!brand){document.getElementById('brand').focus();return;}
     var hintEl=document.getElementById('hint');
     var hint=hintEl?hintEl.value.trim():'';
+    var market=getMarket(),deep=isDeep();
     btn.disabled=true;if(pbtn)pbtn.disabled=true;
     out.innerHTML='<div class="card"><div class="stage">Claude is identifying <b style="color:var(--sage)">'+esc(brand)+'</b>…<div class="bar"><i></i></div></div></div>';
     var data,res;
     try{
-      res=await fetch('/api/infer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:brand,hint:hint})});
+      res=await fetch('/api/infer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:brand,hint:hint,market:market,deep:deep})});
       data=await res.json();
     }catch(e){
       out.innerHTML='<div class="card"><div class="stage">Could not reach the server. Try again in a moment.</div></div>';
@@ -243,29 +258,48 @@
   function renderPreview(data){
     var out=document.getElementById('out');
     var competitors=data.competitors||[],queries=data.queries||[];
+    var market=data.market||'',lang=data.query_language||'';
     var compList=competitors.map(function(c){return '<span class="chip" style="cursor:default;background:rgba(91,140,126,.1);">'+esc(c)+'</span>';}).join(' ');
     var queryList=queries.map(function(q){return '<li>'+esc(q)+'</li>';}).join('');
+    // Light confirmation line: sector · market · query count. Shown for every
+    // live run so the user always sees what is about to be analyzed.
+    var marketBit=market?' · market <b>'+esc(market)+'</b>':'';
+    var summary='Analyzing <b>'+esc(data.brand)+'</b> in <b>'+esc(data.sector||'an unclear sector')+'</b>'+marketBit+
+      ' · <b>'+queries.length+'</b> buyer '+(queries.length>1?'queries':'query')+'.';
     out.innerHTML='<div class="card">'+
       '<div class="badge demo">Preview — not analyzed yet</div>'+
-      '<div class="sector">Claude thinks this is <b>'+esc(data.brand)+'</b> in <b>'+esc(data.sector||'an unclear sector')+'</b>.</div>'+
+      '<div class="sector">'+summary+'</div>'+
       '<div style="margin:14px 0;"><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;">Competitors</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+compList+'</div></div>'+
-      '<div style="margin:14px 0;"><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;">Buyer queries</div>'+
+      '<div style="margin:14px 0;"><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;">Buyer queries'+(lang?' <span style="text-transform:none;letter-spacing:0;color:var(--muted)">('+esc(lang)+')</span>':'')+'</div>'+
       '<ul style="padding-left:18px;font-size:14px;line-height:1.7;">'+queryList+'</ul></div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;">'+
       '<button onclick="confirmAnalyze()" style="font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;border-radius:12px;padding:12px 22px;border:none;background:var(--ink);color:#fff;">Run the analysis →</button>'+
-      '<button onclick="document.getElementById(\'hint\').focus()" style="font-family:inherit;font-size:13px;cursor:pointer;border-radius:12px;padding:12px 18px;border:1px solid var(--line);background:#fff;color:var(--ink);">Not right? Edit the hint above and preview again</button>'+
+      '<button onclick="refinePreview()" style="font-family:inherit;font-size:13px;cursor:pointer;border-radius:12px;padding:12px 18px;border:1px solid var(--line);background:#fff;color:var(--ink);">Not this? Refine brand / market</button>'+
       '</div></div>';
     out.dataset.previewBrand=data.brand;
     out.dataset.previewSector=data.sector||'';
+    out.dataset.previewMarket=market;
+    out.dataset.previewLang=lang;
     out.dataset.previewCompetitors=JSON.stringify(competitors);
     out.dataset.previewQueries=JSON.stringify(queries);
+  }
+
+  // "Not this?" — reveal the hint + market controls so the user can correct
+  // the disambiguation, then focus the hint field. Re-previewing (or Analyze)
+  // will pick up the new hint/market.
+  function refinePreview(){
+    var row=document.getElementById('hintRow');
+    if(row&&row.style.display==='none'){row.style.display='flex';row.style.flexDirection='column';}
+    var h=document.getElementById('hint');if(h)h.focus();
   }
 
   async function confirmAnalyze(){
     var out=document.getElementById('out'),btn=document.getElementById('goBtn');
     var brand=out.dataset.previewBrand||document.getElementById('brand').value.trim();
     var sector=out.dataset.previewSector||'';
+    var marketLabel=out.dataset.previewMarket||'';
+    var queryLanguage=out.dataset.previewLang||'';
     var competitors=[],queries=[];
     try{competitors=JSON.parse(out.dataset.previewCompetitors||'[]');}catch(e){}
     try{queries=JSON.parse(out.dataset.previewQueries||'[]');}catch(e){}
@@ -273,7 +307,10 @@
     out.innerHTML='<div class="card"><div class="stage">Running live SERP &amp; AI checks for <b style="color:var(--sage)">'+esc(brand)+'</b>…<div class="bar"><i></i></div></div></div>';
     var data,res;
     try{
-      res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:true,brand:brand,sector:sector,competitors:competitors,queries:queries})});
+      // competitors + queries are pre-validated from the preview, so /api/analyze
+      // skips inference. market_label / query_language ride along only for
+      // display; deep keeps the run at the same depth the preview used.
+      res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:true,brand:brand,sector:sector,competitors:competitors,queries:queries,market_label:marketLabel,query_language:queryLanguage,deep:isDeep()})});
       data=await res.json();
     }catch(e){
       out.innerHTML='<div class="card"><div class="stage">Could not reach the server. Try again in a moment.</div></div>';
@@ -355,7 +392,8 @@
     var present=r.filter(function(x){return x.share_of_voice>0;});
     var badge=d.cached?'<span class="badge cached">Cached</span>':(d.mode==='live'?'<span class="badge live"><span class="lv"></span>Live analysis</span>':'<span class="badge demo">Sample</span>');
     var notice=d.notice?'<div style="background:rgba(200,140,40,.1);border:1px solid rgba(200,140,40,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:#8a5a1a;margin-bottom:16px">'+esc(d.notice)+'</div>':'';
-    var sector=d.sector?'<div class="sector">Claude pegged the sector as <b>'+esc(d.sector)+'</b> — '+r.length+' rivals across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>':'';
+    var mkt=d.market?' · market <b>'+esc(d.market)+'</b>':'';
+    var sector=d.sector?'<div class="sector">Claude pegged the sector as <b>'+esc(d.sector)+'</b>'+mkt+' — '+r.length+' rivals across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>':'';
 
     if(present.length===0){
       document.getElementById('out').innerHTML='<div class="card">'+badge+notice+sector+

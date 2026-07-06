@@ -25,7 +25,13 @@ ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"  # cheapest model — minimal cost
 MAX_LIVE_RUNS = int(os.environ.get("MAX_LIVE_RUNS", "15"))
 LIVE_RUNS_PER_IP = int(os.environ.get("LIVE_RUNS_PER_IP", "3"))
 MAX_BRANDS = 6
-MAX_QUERIES = 2            # absolute minimum SERP calls — lowest cost
+# Query depth. Free/demo runs stay at the cheapest possible sample (2 SERP
+# calls); a "deep" run (future paid tier) widens the sample to 5 for a less
+# noisy, more defensible read. MAX_QUERIES is kept as a backward-compatible
+# alias equal to the free default so any older reference keeps working.
+MAX_QUERIES_FREE = 2       # absolute minimum SERP calls — lowest cost (public default)
+MAX_QUERIES_PAID = 5       # deep audit — wider, less noisy sample (paid tier)
+MAX_QUERIES = MAX_QUERIES_FREE  # legacy alias — do not raise without checking cost model
 MAX_BRAND_LEN = 100        # reject absurdly long brand names
 MAX_CACHE_ENTRIES = 500    # cap in-memory + on-disk cache size
 
@@ -141,15 +147,42 @@ SAMPLE = {
 # ---------------------------------------------------------------------------
 # Step 1: Claude infers sector, competitors, queries from a single brand
 # ---------------------------------------------------------------------------
-def infer_strategy(brand, api_key, hint=None):
+# Human-readable labels for the market presets the caller can force. Anything
+# not in this map (or None) means "let the model infer the market".
+_MARKET_PRESETS = {
+    "fr": "France (French-speaking market)",
+    "france": "France (French-speaking market)",
+    "de": "DACH (German-speaking: Germany, Austria, Switzerland)",
+    "dach": "DACH (German-speaking: Germany, Austria, Switzerland)",
+    "uk": "United Kingdom (English)",
+    "us": "US / Global (English)",
+    "global": "US / Global (English)",
+}
+
+
+def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERIES_FREE):
+    n = MAX_QUERIES_PAID if int(max_queries or MAX_QUERIES_FREE) >= MAX_QUERIES_PAID else MAX_QUERIES_FREE
+    forced = _MARKET_PRESETS.get((market or "").strip().lower()) if market else None
     prompt = (
         "You are a competitive-intelligence analyst. Given a single brand or company name, "
         "infer its market and return STRICT JSON with this exact shape and nothing else:\n"
-        '{"sector":"short sector label","competitors":["BrandA","BrandB","BrandC","BrandD"],'
-        '"queries":["buyer-intent query 1","query 2","query 3"]}\n'
+        '{"sector":"short sector label","market":"primary market label",'
+        '"query_language":"ISO 639-1 code","competitors":["BrandA","BrandB","BrandC","BrandD"],'
+        '"queries":["buyer-intent query 1","query 2"]}\n'
         "Rules: include the given brand as the FIRST competitor. List 4-5 real, well-known direct competitors. "
         "Queries must be the searches a real buyer would type when shopping in this category "
-        "(e.g. 'best CRM for startups', 'salesforce alternative'). Exactly 2 queries.\n\n"
+        "(e.g. 'best CRM for startups', 'salesforce alternative'). "
+        "Exactly " + str(n) + " queries.\n\n"
+        "MARKET & LANGUAGE (important): determine the brand's PRIMARY market and the language "
+        "its buyers actually search in, then write ALL queries in THAT language. Infer the market "
+        "from the brand name, from any hint (e.g. a country TLD like .fr / .de signals a "
+        "French / German market), and from your own knowledge of the company. Do NOT default to "
+        "the US / English market for a brand whose buyers are elsewhere: a French SaaS should get "
+        "French queries, a German one German queries. Set \"market\" to a short human label "
+        "(e.g. \"US / Global EN\", \"France FR\", \"DACH DE\", \"UK EN\") and \"query_language\" to "
+        "the matching ISO 639-1 code (e.g. \"en\", \"fr\", \"de\"). For a clearly global or "
+        "US-centric brand (e.g. Notion, Stripe), keep the market English / Global and write "
+        "English queries.\n\n"
         "Disambiguation: brand names are often shared by unrelated companies (e.g. a fintech "
         "and a consumer app with the same name). Identify the REAL company this name most likely "
         "refers to. If the name is ambiguous and no context is given, prefer the B2B/SaaS "
@@ -157,6 +190,12 @@ def infer_strategy(brand, api_key, hint=None):
         "in software markets.\n\n"
         "Brand: " + brand
     )
+    if forced:
+        prompt += (
+            "\n\nThe user has EXPLICITLY selected the target market: " + forced + ". "
+            "Treat this as authoritative: set \"market\" and \"query_language\" to match it and "
+            "write every query in that market's language, even if the brand is best known elsewhere."
+        )
     if hint and hint.strip():
         prompt += (
             "\n\nAdditional context to disambiguate the brand (use this to identify the CORRECT "
@@ -507,16 +546,33 @@ def api_waitlist():
     return jsonify({"ok": True})
 
 
-def _sanitize_strategy(brand, strat):
+def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE):
     """Shared sanitation for a raw infer_strategy() result: strip stray
     characters from competitor names, cap list sizes, and make sure the
-    queried brand itself is present as the first competitor."""
+    queried brand itself is present as the first competitor.
+
+    Returns (competitors, queries, market, query_language). The market and
+    query_language fields are preserved from the raw strategy (empty strings
+    if the model omitted them) so the frontend can show which market/language
+    an audit actually ran in. `max_queries` caps the query list (2 free, 5
+    deep); it defaults to the free cap so existing callers are unchanged."""
+    cap = MAX_QUERIES_PAID if int(max_queries or MAX_QUERIES_FREE) >= MAX_QUERIES_PAID else MAX_QUERIES_FREE
     competitors = [re.sub(r'[^\w\s\-\.\&]', '', c.strip())[:MAX_BRAND_LEN]
                    for c in strat.get("competitors", []) if c.strip()][:MAX_BRANDS]
-    queries = [q.strip() for q in strat.get("queries", []) if q.strip()][:MAX_QUERIES]
+    queries = [q.strip() for q in strat.get("queries", []) if q.strip()][:cap]
     if brand not in competitors:
         competitors = [brand] + competitors
-    return competitors, queries
+    market = str(strat.get("market", "") or "").strip()[:60]
+    query_language = str(strat.get("query_language", "") or "").strip()[:10]
+    return competitors, queries, market, query_language
+
+
+def _resolve_depth(data):
+    """Read an optional depth flag from a request body and return the query
+    cap to use. Accepts either `deep` (bool-ish) or `tier` ("paid"/"free").
+    Defaults to the free cap so the public flow is unchanged."""
+    deep = bool(data.get("deep")) or str(data.get("tier", "")).strip().lower() == "paid"
+    return MAX_QUERIES_PAID if deep else MAX_QUERIES_FREE
 
 
 @app.route("/api/infer", methods=["POST"])
@@ -530,6 +586,8 @@ def api_infer():
     data = request.get_json(force=True, silent=True) or {}
     brand = (data.get("brand") or "").strip()
     hint = (data.get("hint") or "").strip()
+    market = (data.get("market") or "").strip()  # optional forced market ("fr", "us"…)
+    max_queries = _resolve_depth(data)            # 2 (free) or 5 (deep)
 
     if not brand:
         return jsonify({"error": "Type a brand name."}), 400
@@ -541,17 +599,19 @@ def api_infer():
         return jsonify({"error": "Server missing an API key - cannot run inference."}), 502
 
     try:
-        strat = infer_strategy(brand, llm_key, hint)
+        strat = infer_strategy(brand, llm_key, hint, market=market or None, max_queries=max_queries)
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
 
-    competitors, queries = _sanitize_strategy(brand, strat)
+    competitors, queries, inferred_market, query_language = _sanitize_strategy(brand, strat, max_queries)
     if not competitors or not queries:
         return jsonify({"error": "Could not infer competitors for this brand."}), 502
 
     return jsonify({
         "brand": brand,
         "sector": strat.get("sector", ""),
+        "market": inferred_market,
+        "query_language": query_language,
         "competitors": competitors,
         "queries": queries,
     })
@@ -564,6 +624,8 @@ def api_analyze():
     live = bool(data.get("live"))
     brand = (data.get("brand") or "").strip()
     hint = (data.get("hint") or "").strip()
+    market = (data.get("market") or "").strip()  # optional forced market
+    max_queries = _resolve_depth(data)            # 2 (free) or 5 (deep)
 
     if not live:
         return jsonify(SAMPLE)
@@ -636,14 +698,16 @@ def api_analyze():
 
     try:
         if use_custom_strategy:
-            competitors, queries = _sanitize_strategy(brand, {
+            competitors, queries, market_out, query_language = _sanitize_strategy(brand, {
                 "competitors": raw_competitors,
                 "queries": raw_queries,
-            })
+                "market": data.get("market_label") or market,
+                "query_language": data.get("query_language") or "",
+            }, max_queries)
             sector = (data.get("sector") or "").strip() or "(confirmed by user)"
         else:
-            strat = infer_strategy(brand, llm_key, hint)
-            competitors, queries = _sanitize_strategy(brand, strat)
+            strat = infer_strategy(brand, llm_key, hint, market=market or None, max_queries=max_queries)
+            competitors, queries, market_out, query_language = _sanitize_strategy(brand, strat, max_queries)
             sector = strat.get("sector", "")
         if not competitors or not queries:
             return jsonify(dict(SAMPLE, notice="Could not infer competitors - showing sample analysis."))
@@ -668,6 +732,8 @@ def api_analyze():
         result = {
             "brand": brand,
             "sector": sector,
+            "market": market_out,
+            "query_language": query_language,
             "queries": queries,
             "ranking": ranking,
             "mode": "live",
