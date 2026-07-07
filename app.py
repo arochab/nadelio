@@ -1507,6 +1507,13 @@ def methodology():
     return resp
 
 
+@app.route("/roadmap", strict_slashes=False)
+def roadmap():
+    resp = send_from_directory("web", "roadmap.html")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 # ---------------------------------------------------------------------------
 # Waitlist (Pro launch email capture)
 # ---------------------------------------------------------------------------
