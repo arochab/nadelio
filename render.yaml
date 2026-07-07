@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ai-visibility-checker
+    name: nadelio
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -9,6 +9,11 @@ services:
       - key: BRIGHTDATA_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
+        sync: false
+      # Public site URL. Single source of truth for every canonical / OG / share
+      # / user-agent URL. Set to https://nadelio.com once the custom domain is
+      # verified live on Render; until then leave unset to keep the Render URL.
+      - key: SITE_URL
         sync: false
       # Model for the single identity-inference call per audit. Sonnet 5 is a
       # stronger identifier / disambiguator for obscure bare brand names than the
@@ -19,9 +24,27 @@ services:
         value: "25"
       - key: LIVE_RUNS_PER_IP
         value: "3"
-      - key: AI_RUNS
+      # AI-visibility run counts. The number of runs drives both cost (one Haiku
+      # call per run) and the width of the bounded score's confidence interval.
+      # Free gets an honest but wider interval; the paid Deep Audit buys a tighter
+      # one. MAX is a hard ceiling protecting unit economics.
+      - key: FREE_AI_RUNS
         value: "3"
+      - key: DEEP_AI_RUNS
+        value: "8"
+      - key: MAX_AI_RUNS
+        value: "15"
       - key: WAITLIST_WEBHOOK_URL
+        sync: false
+      # Durable audit history (the longitudinal moat) on Cloudflare D1. All three
+      # must be set in the Render dashboard for logging to activate; if any is
+      # missing the history logger is a safe no-op and audits are unaffected. The
+      # token MUST be scoped to D1:Edit only (never DNS/Zone).
+      - key: CF_ACCOUNT_ID
+        sync: false
+      - key: CF_D1_DB_ID
+        sync: false
+      - key: CF_D1_TOKEN
         sync: false
       # Stripe Checkout (Deep Audit paywall). Both must be set in the Render
       # dashboard for payments to work; if either is missing the payment
