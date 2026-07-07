@@ -486,6 +486,64 @@ _MARKET_PRESETS = {
 }
 
 
+def _extract_json_object(text):
+    """Pull the first valid JSON object out of an LLM reply, tolerant of the
+    ways a chattier model (e.g. Sonnet vs Haiku) wraps it: a ```json fenced
+    block, a sentence of preamble, or trailing prose. Returns the parsed dict
+    or None.
+
+    The old approach (a greedy \\{.*\\} regex fed straight to json.loads) broke
+    whenever the reply had prose containing braces or a markdown fence, which
+    surfaced to the user as "Claude did not return valid JSON" and a failed
+    audit. Here we strip fences, try a direct parse, then walk the string to
+    find the first brace-balanced object and parse that."""
+    if not text:
+        return None
+    s = text.strip()
+    # Strip a leading ```json / ``` fence and its closing fence if present.
+    s = re.sub(r"^```[a-zA-Z]*\s*", "", s)
+    s = re.sub(r"\s*```$", "", s).strip()
+    # Fast path: the whole thing is already a JSON object.
+    try:
+        obj = json.loads(s)
+        if isinstance(obj, dict):
+            return obj
+    except (json.JSONDecodeError, ValueError):
+        pass
+    # Walk to the first brace-balanced {...} (string-aware) and parse it.
+    start = s.find("{")
+    while start != -1:
+        depth = 0
+        in_str = False
+        esc = False
+        for i in range(start, len(s)):
+            c = s[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            else:
+                if c == '"':
+                    in_str = True
+                elif c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = s[start:i + 1]
+                        try:
+                            obj = json.loads(candidate)
+                            if isinstance(obj, dict):
+                                return obj
+                        except (json.JSONDecodeError, ValueError):
+                            break  # try the next opening brace
+        start = s.find("{", start + 1)
+    return None
+
+
 def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERIES_FREE, evidence=None):
     n = MAX_QUERIES_PAID if int(max_queries or MAX_QUERIES_FREE) >= MAX_QUERIES_PAID else MAX_QUERIES_FREE
     forced = _MARKET_PRESETS.get((market or "").strip().lower()) if market else None
@@ -567,14 +625,9 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
     data = _urlopen_json_with_retry(req, timeout=40, what="Claude API")
 
     text = "".join(b.get("text", "") for b in data.get("content", []))
-    m = re.search(r"\{.*\}", text, re.S)
-    if m is None:
-        logger.error("Claude returned no JSON in: %s", text[:300])
-        raise RuntimeError("Claude did not return valid JSON for this brand")
-    try:
-        parsed = json.loads(m.group(0))
-    except (json.JSONDecodeError, ValueError):
-        logger.error("Claude returned invalid JSON: %s", m.group(0)[:300])
+    parsed = _extract_json_object(text)
+    if parsed is None:
+        logger.error("Claude returned no parseable JSON in: %s", text[:300])
         raise RuntimeError("Claude did not return valid JSON for this brand")
     return parsed
 
@@ -998,12 +1051,8 @@ def _run_ai_visibility_once(brands, queries, api_key):
         return {}  # graceful degradation — SERP data still works (after retries)
 
     text = "".join(b.get("text", "") for b in data.get("content", []))
-    m = re.search(r"\{.*\}", text, re.S)
-    if m is None:
-        return {}
-    try:
-        parsed = json.loads(m.group(0))
-    except (json.JSONDecodeError, ValueError):
+    parsed = _extract_json_object(text)
+    if parsed is None:
         return {}
 
     ai_map = {}
@@ -1175,12 +1224,8 @@ def _build_remediation(ranking, queries, identified_as, evidence, brand, llm_key
         logger.exception("remediation call failed")
         return None
     text = "".join(b.get("text", "") for b in data.get("content", []))
-    m = re.search(r"\{.*\}", text, re.S)
-    if m is None:
-        return None
-    try:
-        parsed = json.loads(m.group(0))
-    except (json.JSONDecodeError, ValueError):
+    parsed = _extract_json_object(text)
+    if parsed is None:
         return None
     verdict = str(parsed.get("verdict", "") or "").strip()[:800]
     actions = [str(a).strip()[:300] for a in parsed.get("actions", []) if str(a).strip()][:6]
@@ -1628,6 +1673,11 @@ def api_infer():
     if not competitors or not queries:
         return jsonify({"error": "Could not infer competitors for this brand."}), 502
 
+    # Hoist the first evidence item's clean display fields to the top level so the
+    # front-end resolver card can show a proper site name / description without
+    # digging into evidence[0]. Purely additive: both fields are already produced
+    # by _fetch_page_meta / _recon; the front-end still works if they are empty.
+    _first_ev = (recon.get("evidence") or [{}])[0]
     return jsonify({
         "brand": brand,
         "sector": strat.get("sector", ""),
@@ -1639,6 +1689,8 @@ def api_infer():
         "confidence": confidence,
         "official_url": recon.get("official_url", ""),
         "evidence": recon.get("evidence", []),
+        "og_site_name": _first_ev.get("site_name", ""),
+        "display_desc": _first_ev.get("description", ""),
     })
 
 
