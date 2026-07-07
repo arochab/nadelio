@@ -553,10 +553,14 @@
     .hero-r{order:2;}
     .doc{grid-template-columns:1fr;}
     .doc-side{order:-1;}
+    .work-inner{grid-template-columns:1fr;gap:20px;}
+    .work-inner > *{grid-column:auto;}
   }
   @media(max-width:640px){
     .work-inner{padding:28px 16px 36px;}
     h1{font-size:clamp(26px,8vw,32px);}
+    .lede{max-width:100%;font-size:15px;}
+    .trustline{flex-wrap:wrap;font-size:12px;row-gap:6px;}
     .bar-input{flex-direction:column;}
     .verdict h2{font-size:22px;}
     .dial .n{font-size:44px;}
