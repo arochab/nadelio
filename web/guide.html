@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nadelio, the field guide</title>
+<meta name="description" content="Why AI visibility can be measured, and how Nadelio measures it honestly. A short guide for the people who decide, not the people who code.">
+<meta name="robots" content="noindex">
+<style>
+  /* ---- Nadelio field guide. Print-first (A4), screen-graceful. ---------- */
+  /* Type: a characterful optical serif for display (Georgia-led premium serif
+     stack), a quiet grotesque for running text, a mono for the instrument
+     readings. The plus-or-minus sign is the signature mark of the whole piece,
+     because the bounded measurement is the whole product. */
+  :root{
+    --ink:#0E1512;            /* instrument black, biased green not neutral */
+    --ink-soft:#26312B;
+    --paper:#EDEBE4;          /* warm surface with a green bias, chosen not default */
+    --card:#FBFAF6;
+    --rule:#D6D2C6;
+    --rule-soft:#E4E0D6;
+    --muted:#6E6C64;
+    --faint:#918E84;
+    --sage:#3D6B5C;           /* the SERP / Google territory */
+    --sage-signal:#3E9E7C;
+    --violet:#6E5696;         /* the AI territory */
+    --violet-soft:#8B6FE8;
+    --amber:#B98726;
+    --serif:"Hoefler Text","Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:"Avenir Next","Segoe UI",-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;
+    --mono:"SF Mono","JetBrains Mono",ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{background:#c9c6bd;color:var(--ink);font-family:var(--sans);line-height:1.6;
+       font-feature-settings:"kern" 1,"liga" 1;-webkit-font-smoothing:antialiased;}
+
+  /* Each .page is one A4 sheet, laid out as a column: header rail at the top,
+     content that grows, footer pinned to the bottom of the SHEET (not the
+     content). Fixed height so the footer never rides up into the content and a
+     long section can never spill past the sheet edge. */
+  .page{width:210mm;height:297mm;background:var(--paper);margin:24px auto;
+        padding:24mm 24mm 16mm;position:relative;overflow:hidden;
+        display:flex;flex-direction:column;
+        box-shadow:0 8px 40px -12px rgba(20,30,25,.45);}
+  /* A whisper of paper tooth. Kept very light so the exported PDF stays small
+     (a dense turbulence texture bloats a print PDF badly). */
+  .page::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+        background:
+          radial-gradient(120% 80% at 100% 0%, rgba(62,158,124,.028), transparent 55%),
+          radial-gradient(100% 70% at 0% 100%, rgba(110,86,150,.022), transparent 55%);}
+  .page>*{position:relative;z-index:1;}
+
+  /* Running header / footer, quiet instrument labels. */
+  .rail{display:flex;justify-content:space-between;align-items:baseline;
+        font-family:var(--mono);font-size:8.5pt;letter-spacing:.14em;
+        text-transform:uppercase;color:var(--faint);
+        padding-bottom:9mm;margin-bottom:11mm;border-bottom:1px solid var(--rule);}
+  .rail .mono-mark{display:inline-flex;align-items:center;gap:7px;color:var(--sage);}
+  .rail .mono-mark b{font-weight:700;letter-spacing:.02em;color:var(--ink);
+        font-family:var(--sans);text-transform:none;font-size:10pt;}
+  .foot{flex:0 0 auto;margin-top:auto;padding-top:5mm;display:flex;
+        justify-content:space-between;align-items:baseline;
+        font-family:var(--mono);font-size:8pt;letter-spacing:.12em;
+        text-transform:uppercase;color:var(--faint);
+        border-top:1px solid var(--rule-soft);}
+
+  /* ---------- COVER ---------- */
+  .cover{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
+  .cover .mark{font-family:var(--mono);font-size:9pt;letter-spacing:.34em;
+        text-transform:uppercase;color:var(--sage);margin-bottom:auto;}
+  .cover .plusmark{font-family:var(--serif);font-size:150pt;line-height:.8;
+        color:var(--ink);font-weight:500;margin:0 0 6mm -4px;}
+  .cover .plusmark .pm{color:var(--sage);}
+  .cover h1{font-family:var(--serif);font-weight:500;font-size:40pt;line-height:1.02;
+        letter-spacing:-.5px;text-wrap:balance;max-width:15ch;margin-bottom:8mm;}
+  .cover h1 em{font-style:italic;color:var(--sage);}
+  .cover .sub{font-size:13pt;line-height:1.5;color:var(--ink-soft);max-width:44ch;
+        margin-bottom:14mm;}
+  .cover .meta{display:flex;gap:0;border-top:1px solid var(--rule);}
+  .cover .meta div{flex:1;padding:6mm 0 0;border-right:1px solid var(--rule);
+        padding-right:8mm;}
+  .cover .meta div:last-child{border-right:none;}
+  .cover .meta .k{font-family:var(--mono);font-size:8pt;letter-spacing:.14em;
+        text-transform:uppercase;color:var(--faint);margin-bottom:4px;}
+  .cover .meta .v{font-size:10.5pt;color:var(--ink);line-height:1.4;}
+
+  /* ---------- SECTION SCAFFOLD ---------- */
+  .lead{display:grid;grid-template-columns:14mm 1fr;gap:0 8mm;margin-bottom:12mm;}
+  .lead .num{font-family:var(--mono);font-size:10pt;color:var(--sage);
+        padding-top:5px;letter-spacing:.02em;}
+  .lead h2{font-family:var(--serif);font-weight:500;font-size:25pt;line-height:1.08;
+        letter-spacing:-.3px;text-wrap:balance;max-width:20ch;}
+  .lead .dek{grid-column:2;font-size:12.5pt;color:var(--ink-soft);max-width:56ch;
+        margin-top:5mm;line-height:1.55;}
+  .body{display:grid;grid-template-columns:14mm 1fr;gap:0 8mm;}
+  .body>*{grid-column:2;}
+  .body p{font-size:11pt;line-height:1.68;color:var(--ink-soft);max-width:64ch;
+        margin-bottom:5mm;}
+  .body p strong{color:var(--ink);font-weight:600;}
+  .body p.small{font-size:9.5pt;color:var(--muted);}
+  .kicker{grid-column:2;font-family:var(--mono);font-size:8.5pt;letter-spacing:.14em;
+        text-transform:uppercase;color:var(--sage);margin:2mm 0 4mm;}
+
+  /* The signature reading: a bounded score rendered as an instrument. */
+  .reading{display:flex;align-items:flex-end;gap:16px;margin:4mm 0 6mm;
+        padding:7mm 8mm;background:var(--card);border:1px solid var(--rule);
+        border-radius:2mm;}
+  .reading .n{font-family:var(--mono);font-size:38pt;font-weight:600;line-height:.9;
+        letter-spacing:-1px;font-variant-numeric:tabular-nums;}
+  .reading .n .pm{font-size:19pt;color:var(--muted);font-weight:500;}
+  .reading .n .slash{font-size:15pt;color:var(--faint);}
+  .reading .tag{font-family:var(--mono);font-size:8.5pt;font-weight:700;
+        letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;border-radius:5px;
+        margin-bottom:6px;}
+  .tag.stable{color:#2f7d63;background:rgba(62,158,124,.14);}
+  .tag.volatile{color:#a4552f;background:rgba(164,85,47,.13);}
+  .reading .cap{font-size:9.5pt;color:var(--muted);line-height:1.4;margin-bottom:4px;}
+
+  /* Two-territory idea: SERP vs AI side by side. */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:6mm;margin:5mm 0 6mm;}
+  .terr{padding:6mm;border-radius:2mm;border:1px solid var(--rule);background:var(--card);}
+  .terr .h{display:flex;align-items:center;gap:8px;font-family:var(--mono);
+        font-size:8.5pt;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4mm;}
+  .terr .dot{width:9px;height:9px;border-radius:50%;}
+  .terr.serp .dot{background:var(--sage-signal);} .terr.serp .h{color:var(--sage);}
+  .terr.ai .dot{background:var(--violet-soft);} .terr.ai .h{color:var(--violet);}
+  .terr p{font-size:10pt;line-height:1.55;color:var(--ink-soft);margin:0;max-width:none;}
+
+  /* MECE step ladder. */
+  .steps{counter-reset:st;margin:3mm 0 5mm;}
+  .steps .s{display:grid;grid-template-columns:9mm 1fr;gap:0 6mm;padding:5mm 0;
+        border-top:1px solid var(--rule-soft);}
+  .steps .s:first-child{border-top:none;}
+  .steps .s .i{counter-increment:st;font-family:var(--mono);font-size:9pt;
+        color:var(--sage);padding-top:2px;}
+  .steps .s .i::before{content:counter(st,decimal-leading-zero);}
+  .steps .s h4{font-size:11pt;font-weight:600;color:var(--ink);margin-bottom:2px;}
+  .steps .s p{font-size:10pt;color:var(--ink-soft);margin:0;line-height:1.5;max-width:60ch;}
+
+  /* The one-sentence pull quote, the thesis of the piece. */
+  .thesis{grid-column:1 / -1;margin:8mm 0;padding:0 0 0 8mm;
+        border-left:2px solid var(--sage);}
+  .thesis p{font-family:var(--serif);font-style:italic;font-size:18pt;line-height:1.32;
+        color:var(--ink);max-width:34ch;font-weight:500;}
+  .thesis .attr{font-family:var(--mono);font-size:8.5pt;letter-spacing:.12em;
+        text-transform:uppercase;color:var(--faint);margin-top:5mm;font-style:normal;}
+
+  /* Comparison: what a bare number hides. */
+  .versus{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:4mm 0 5mm;
+        border:1px solid var(--rule);border-radius:2mm;overflow:hidden;}
+  .versus>div{padding:6mm;}
+  .versus .them{background:var(--card);border-right:1px solid var(--rule);}
+  .versus .us{background:rgba(62,158,124,.055);}
+  .versus .lbl{font-family:var(--mono);font-size:8pt;letter-spacing:.12em;
+        text-transform:uppercase;color:var(--faint);margin-bottom:4mm;}
+  .versus .big{font-family:var(--mono);font-size:26pt;font-weight:600;line-height:1;
+        font-variant-numeric:tabular-nums;margin-bottom:3mm;}
+  .versus .us .big .pm{font-size:14pt;color:var(--muted);}
+  .versus .note{font-size:9.5pt;color:var(--ink-soft);line-height:1.45;max-width:30ch;}
+  .versus .them .note{color:var(--muted);}
+
+  /* When-to-use table, MECE decision aid. */
+  .use{width:100%;border-collapse:collapse;margin:3mm 0 5mm;font-size:10pt;}
+  .use th{text-align:left;font-family:var(--mono);font-size:8pt;letter-spacing:.1em;
+        text-transform:uppercase;color:var(--faint);font-weight:500;
+        padding:0 0 3mm;border-bottom:1px solid var(--rule);}
+  .use td{padding:3.5mm 0;border-bottom:1px solid var(--rule-soft);
+        color:var(--ink-soft);vertical-align:top;line-height:1.45;}
+  .use td:first-child{color:var(--ink);font-weight:600;width:34%;padding-right:6mm;}
+
+  .closing{display:grid;grid-template-columns:14mm 1fr;gap:0 8mm;}
+  .closing .num{font-family:var(--mono);font-size:10pt;color:var(--sage);padding-top:5px;}
+  .closing h2{font-family:var(--serif);font-weight:500;font-size:25pt;line-height:1.08;
+        max-width:18ch;margin-bottom:6mm;}
+  .closing .cta{grid-column:2;display:flex;align-items:center;gap:10mm;
+        margin-top:6mm;padding-top:6mm;border-top:1px solid var(--rule);}
+  .closing .cta .url{font-family:var(--mono);font-size:13pt;color:var(--sage);letter-spacing:.01em;}
+  .closing .cta .say{font-size:10.5pt;color:var(--muted);max-width:34ch;}
+
+  /* Print: one sheet per page, real A4, no desk backdrop. */
+  @media print{
+    @page{size:A4;margin:0;}
+    body{background:#fff;}
+    .page{margin:0;box-shadow:none;width:auto;min-height:auto;
+          height:297mm;page-break-after:always;}
+    .page:last-child{page-break-after:auto;}
+  }
+  @media screen and (max-width:760px){
+    .page{width:auto;padding:32px 22px 60px;min-height:0;}
+    .cover .plusmark{font-size:96pt;}
+    .cover h1{font-size:30pt;}
+    .lead,.body,.closing{grid-template-columns:1fr;}
+    .lead .num,.closing .num{display:none;}
+    .lead .dek,.body>*,.kicker,.thesis,.closing .cta{grid-column:1;}
+    .split,.versus{grid-template-columns:1fr;}
+    .foot{position:static;margin-top:40px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= PAGE 1: COVER ================= -->
+<section class="page">
+  <div class="cover">
+    <div class="mark">Nadelio &nbsp;/&nbsp; Field guide</div>
+    <div class="plusmark">42<span class="pm">&plusmn;6</span></div>
+    <h1>The number your buyers trust, <em>measured honestly.</em></h1>
+    <p class="sub">A short guide to what AI visibility is, why it now decides who gets recommended, and how Nadelio measures it without pretending. Written for the people who decide, not the people who code.</p>
+    <div class="meta">
+      <div><div class="k">For</div><div class="v">Marketing and growth leaders</div></div>
+      <div><div class="k">Reading time</div><div class="v">Six minutes</div></div>
+      <div><div class="k">Where</div><div class="v">nadelio.com</div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Nadelio field guide</span><span>01</span></div>
+</section>
+
+<!-- ================= PAGE 2: THE SHIFT + WHAT WE MEASURE ================= -->
+<section class="page">
+  <div class="rail">
+    <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
+    <span>The shift, and what we measure</span>
+  </div>
+
+  <div class="lead">
+    <div class="num">01</div>
+    <h2>Your buyers stopped scrolling. They started asking.</h2>
+    <p class="dek">When a customer wants "the best tool for X", more of them now ask an AI assistant instead of scanning ten blue links. The assistant answers with a short list of names. If yours is not on it, you were never in the room, and you will never see the click you lost.</p>
+  </div>
+
+  <div class="body">
+    <p>This is the quiet part of the shift. Search used to show everyone and let the buyer choose. AI answers choose first, then show a few. Being on page one of Google and being named by an assistant are now two different races, and a brand can be winning one while losing the other.</p>
+    <p>Most companies cannot see this happening. They watch their Google rank, feel safe, and never notice that the assistant recommends a competitor for the exact question their best customers ask. <strong>Nadelio makes both races visible on one screen.</strong></p>
+
+    <div class="kicker">What Nadelio actually looks at</div>
+    <div class="split">
+      <div class="terr serp">
+        <div class="h"><span class="dot"></span> Google</div>
+        <p>We run the real buyer questions against live Google, in the right country and language, and record where every brand ranks.</p>
+      </div>
+      <div class="terr ai">
+        <div class="h"><span class="dot"></span> AI answers</div>
+        <p>We put the same questions to an AI assistant and record which brands it recommends, in what order, and whether yours is the main answer or an afterthought.</p>
+      </div>
+    </div>
+    <p class="small">One brand name is all we need to start. Nadelio identifies your competitive set, writes the questions a real buyer would ask, and measures both territories. No setup, no account, about ten seconds.</p>
+  </div>
+
+  <div class="foot"><span>The shift</span><span>02</span></div>
+</section>
+
+<!-- ================= PAGE 3: WHY ONE NUMBER LIES + THE READING ================= -->
+<section class="page">
+  <div class="rail">
+    <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
+    <span>Why the interval is the whole point</span>
+  </div>
+
+  <div class="lead">
+    <div class="num">02</div>
+    <h2>A single number is a coin flip wearing a suit.</h2>
+    <p class="dek">Ask an assistant the same question ten times and you will not get the same answer ten times. The models are built to vary. So a tool that asks once and prints a score is reporting a coin flip as if it were a fact.</p>
+  </div>
+
+  <div class="body">
+    <p>This is where the whole category quietly fails. Every dashboard hands you a confident number. Almost none of them tell you how much that number would move if they measured again. In a controlled test, a reported visibility of <strong>10.8%</strong> corresponded to a true value of <strong>1.9%</strong>. Nine points of illusion, because nobody bounded the noise.</p>
+
+    <p>Nadelio measures several times and reports the spread, not just the average. You get the score <strong>with its margin</strong>, and one honest word for how much to trust it.</p>
+
+    <div class="reading">
+      <div>
+        <div class="cap">Your GEO visibility score</div>
+        <div class="n">42<span class="pm">&plusmn;6</span><span class="slash">/100</span></div>
+      </div>
+      <div class="tag stable">Stable</div>
+    </div>
+
+    <div class="thesis">
+      <p>A score without its interval is marketing. A score with its interval is a measurement.</p>
+      <div class="attr">The Nadelio principle</div>
+    </div>
+
+    <div class="kicker">The same lead, read two ways</div>
+    <div class="versus">
+      <div class="them">
+        <div class="lbl">A bare-number tool says</div>
+        <div class="big">48 &gt; 44</div>
+        <div class="note">"Your rival is ahead." A clean story, told from a single noisy sample.</div>
+      </div>
+      <div class="us">
+        <div class="lbl">Nadelio says</div>
+        <div class="big">48<span class="pm">&plusmn;11</span></div>
+        <div class="note">The intervals overlap. The rival is not really ahead. The gap is noise, and you just avoided a bad decision.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><span>Why one number lies</span><span>03</span></div>
+</section>
+
+<!-- ================= PAGE 4: HOW TO READ IT + WHEN TO USE ================= -->
+<section class="page">
+  <div class="rail">
+    <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
+    <span>Reading the result, and when to reach for it</span>
+  </div>
+
+  <div class="lead">
+    <div class="num">03</div>
+    <h2>Four things to look at, in order.</h2>
+    <p class="dek">You do not need to understand the statistics. You need to read four signals, and Nadelio puts them where your eye lands first.</p>
+  </div>
+
+  <div class="body">
+    <div class="steps">
+      <div class="s"><div class="i"></div><div><h4>The score, with its margin</h4><p>How visible you are, out of 100, and how much that number could move. The margin is not a detail. It is the difference between a fact and a guess.</p></div></div>
+      <div class="s"><div class="i"></div><div><h4>The verdict word</h4><p>Stable means you can present it to your board. Volatile means the model is inconsistent here, so treat it as a direction, not a fact.</p></div></div>
+      <div class="s"><div class="i"></div><div><h4>The two territories</h4><p>Where you stand on Google versus in AI answers. Strong on one and invisible on the other is the most common, and most expensive, blind spot.</p></div></div>
+      <div class="s"><div class="i"></div><div><h4>The lead that is real</h4><p>When compared to a rival, Nadelio tells you whether a gap holds up or dissolves into noise. That one line prevents a lot of wasted budget.</p></div></div>
+    </div>
+
+    <p>Read together, these four answer the questions that actually get asked in a leadership meeting: are we visible where buyers now decide, is a competitor genuinely ahead, did our last move work, and can this figure survive scrutiny. The free read gives an honest, wider margin. The Deep Audit measures more, narrows the margin, and returns a written verdict, a prioritized plan, and a dossier you can forward.</p>
+  </div>
+
+  <div class="foot"><span>Reading the result</span><span>04</span></div>
+</section>
+
+<!-- ================= PAGE 5: TRUST + CLOSE ================= -->
+<section class="page">
+  <div class="rail">
+    <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
+    <span>What we will not pretend</span>
+  </div>
+
+  <div class="lead">
+    <div class="num">04</div>
+    <h2>The honesty is the product.</h2>
+    <p class="dek">Anyone can print a confident number. The harder, rarer thing is to tell you when the number cannot be trusted. That is the line Nadelio holds, on purpose.</p>
+  </div>
+
+  <div class="body">
+    <div class="steps">
+      <div class="s"><div class="i"></div><div><h4>We audit the right company</h4><p>Before measuring, Nadelio reads your real website. If a name is ambiguous, we confirm it with you instead of confidently measuring the wrong business.</p></div></div>
+      <div class="s"><div class="i"></div><div><h4>We never bound a single sample</h4><p>With one measurement, we say so plainly rather than inventing a false precision. A margin you can trust is worth more than a number you cannot.</p></div></div>
+      <div class="s"><div class="i"></div><div><h4>A wide margin is information, not a flaw</h4><p>When the interval is wide, that is the honest signal that the model is unstable on your brand. Knowing that is something you can act on.</p></div></div>
+    </div>
+
+    <p>The models will keep changing. New assistants will arrive. That is exactly why a bounded, repeatable measurement matters more than a one time snapshot: it is the one reading that stays meaningful as the ground moves under it.</p>
+  </div>
+
+  <div class="closing">
+    <div class="num">&plusmn;</div>
+    <div>
+      <h2>Measure your brand the way a board should see it.</h2>
+    </div>
+    <div class="cta">
+      <span class="url">nadelio.com</span>
+      <span class="say">One brand name. Ten seconds. A number you can actually stand behind.</span>
+    </div>
+  </div>
+
+  <div class="foot"><span>Nadelio, the AI visibility score you can show your board</span><span>05</span></div>
+</section>
+
+</body>
+</html>
