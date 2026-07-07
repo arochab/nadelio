@@ -1,5 +1,6 @@
 import base64
 import datetime
+import html as _html
 import json
 import logging
 import math
@@ -2278,6 +2279,181 @@ def api_analyze():
                 _live_runs -= 1
                 if ip in _ip_runs and _ip_runs[ip][0] == today:
                     _ip_runs[ip][1] = max(0, _ip_runs[ip][1] - 1)
+
+
+# ---------------------------------------------------------------------------
+# Public, server-rendered brand pages (the SEO / GEO flywheel).
+#
+# Every cached audit is also a public page at /brand/<key>, rendered as plain
+# HTML with no JS required, so it is indexable by search engines AND citable by
+# AI assistants. The tool that measures AI visibility becomes itself the canonical
+# example of AI visibility: when someone asks "how visible is <brand> in AI",
+# these pages are the answer. Each page shows the bounded score (never a bare
+# number, same rule as the app) and links back to a live audit.
+#
+# Data source is the in-process cache (marks recently audited). It is deliberately
+# read-only and defensive: an unknown key returns 404, never invents data. When
+# the durable D1 store is wired for reads, this can source from there so pages
+# survive a cold start; the render function already takes a plain result dict.
+# ---------------------------------------------------------------------------
+def _brand_key(name):
+    """URL-safe key for a brand, matching the cache key convention (lowercased)."""
+    return re.sub(r"[^a-z0-9]+", "-", str(name).lower()).strip("-")
+
+
+def _verdict_ui(v):
+    """(label, css-ish color word) for a bounded verdict, for the public page."""
+    return {
+        "STABLE": ("Stable", "#2f7d63"),
+        "MODERE": ("Moderate", "#b5722e"),
+        "VOLATIL": ("Volatile", "#a4552f"),
+        "SINGLE_RUN": ("Single run", "#6f6d64"),
+    }.get(v, ("", "#6f6d64"))
+
+
+def _render_brand_page(result):
+    """Server-rendered, dependency-free HTML for one brand's AI-visibility read.
+    Takes a cached audit result dict. No f-strings with user data unescaped: every
+    brand/sector/query value goes through _html.escape."""
+    e = _html.escape
+    brand = str(result.get("brand", "")).strip()
+    sector = str(result.get("sector", "")).strip()
+    market = str(result.get("market", "")).strip()
+    ranking = result.get("ranking") or []
+    geo = result.get("geo") or {}
+    point = geo.get("point")
+    hw = geo.get("half_width")
+    verdict = geo.get("verdict")
+    vlabel, vcolor = _verdict_ui(verdict)
+    you = next((r for r in ranking if r.get("brand", "").lower() == brand.lower()), None)
+
+    score_line = ""
+    if point is not None:
+        pm = (' <span style="font-size:22px;color:#6f6d64">&plusmn;' + str(hw) + "</span>") if hw is not None else ""
+        badge = ('<span style="display:inline-block;margin-left:10px;font:700 11px ui-monospace,monospace;'
+                 'letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:6px;'
+                 'color:' + vcolor + ';background:rgba(120,120,120,.1)">' + e(vlabel) + "</span>") if vlabel else ""
+        score_line = ('<div style="font:600 56px ui-monospace,monospace;color:#15140f;letter-spacing:-2px;margin:6px 0 2px">'
+                      + str(point) + pm + '<span style="font-size:22px;color:#918f84">/100</span></div>'
+                      + '<div style="margin:8px 0 0">' + badge + "</div>")
+
+    # Competitive table (SERP + AI), server-rendered so it is indexable.
+    rows = ""
+    for r in ranking[:8]:
+        is_you = r.get("brand", "").lower() == brand.lower()
+        rows += ("<tr" + (' style="background:rgba(91,140,126,.08);font-weight:600"' if is_you else "") + ">"
+                 + "<td>" + e(str(r.get("brand", ""))) + (" (this brand)" if is_you else "") + "</td>"
+                 + "<td>" + e(str(r.get("query_coverage", r.get("share_of_voice", "")) or "")) + "</td>"
+                 + "<td>" + (str(r.get("share_of_voice")) + "%" if r.get("share_of_voice") is not None else "&mdash;") + "</td>"
+                 + "<td>" + e(str(r.get("ai_coverage", "") or "")) + "</td>"
+                 + "<td>" + (str(r.get("ai_avg_rank")) if r.get("ai_avg_rank") is not None else "&mdash;") + "</td>"
+                 + "</tr>")
+
+    ctx = (sector or "its market")
+    market_bit = (" in " + e(market)) if market else ""
+    title = e(brand) + " AI visibility, GEO score and competitive read"
+    desc = ("How visible is " + brand + " in AI answers and Google" + (" in " + market if market else "")
+            + "? A bounded GEO visibility score and the competitive set, measured by Nadelio.")
+    canonical = SITE_URL + "/brand/" + _brand_key(brand)
+
+    return ("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+            "<title>" + title + "</title>"
+            "<meta name=\"description\" content=\"" + e(desc) + "\">"
+            "<link rel=\"canonical\" href=\"" + e(canonical) + "\">"
+            "<meta property=\"og:title\" content=\"" + title + "\">"
+            "<meta property=\"og:description\" content=\"" + e(desc) + "\">"
+            "<meta property=\"og:url\" content=\"" + e(canonical) + "\">"
+            "<meta name=\"theme-color\" content=\"#f4f2ec\">"
+            "<link rel=\"icon\" href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>N</text></svg>\">"
+            "<style>*{margin:0;padding:0;box-sizing:border-box}"
+            "body{font-family:'Inter','Segoe UI',-apple-system,sans-serif;color:#15140f;background:#f4f2ec;line-height:1.6;padding:56px 22px 90px}"
+            ".wrap{max-width:680px;margin:0 auto}"
+            "a{color:#5b8c7e;text-decoration:none}a:hover{opacity:.7}"
+            ".back{font-size:13px;display:inline-block;margin-bottom:28px}"
+            ".eyebrow{font:600 11px ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:#3d6b5c;margin-bottom:12px}"
+            "h1{font-size:32px;font-weight:600;letter-spacing:-1px;line-height:1.1;margin-bottom:14px}"
+            ".lede{font-size:16px;color:#6f6d64;margin-bottom:26px;max-width:60ch}"
+            ".card{background:#fbfaf6;border:1px solid #e8e6dd;border-radius:18px;padding:28px;margin-bottom:22px}"
+            "h2{font:600 13px 'Inter';letter-spacing:.05em;text-transform:uppercase;color:#3d6b5c;margin-bottom:14px}"
+            "table{width:100%;border-collapse:collapse;font-size:14px}"
+            "th{text-align:left;font:600 11px 'Inter';letter-spacing:.05em;text-transform:uppercase;color:#918f84;padding:0 10px 10px}"
+            "td{padding:10px;border-top:1px solid #e8e6dd;font-variant-numeric:tabular-nums}"
+            ".cta{display:inline-block;background:#15140f;color:#fff;font-weight:500;padding:14px 26px;border-radius:12px;margin-top:8px}"
+            "footer{margin-top:40px;padding-top:18px;border-top:1px solid #e8e6dd;font-size:12px;color:#918f84}"
+            ".twrap{overflow-x:auto}</style></head><body><div class=\"wrap\">"
+            "<a class=\"back\" href=\"/\">&larr; Nadelio</a>"
+            "<div class=\"eyebrow\">AI visibility read</div>"
+            "<h1>" + e(brand) + " in AI answers and Google</h1>"
+            "<p class=\"lede\">How visible " + e(brand) + " is across " + e(ctx) + market_bit
+            + ", measured on Google and on AI assistants. The GEO score is reported with its "
+            "confidence interval, so you can tell signal from noise.</p>"
+            + ("<div class=\"card\"><h2>GEO visibility score</h2>" + score_line
+               + "<p style=\"font-size:13px;color:#6f6d64;margin-top:12px\">A bounded score: the point estimate "
+               "with its 95% confidence interval. <a href=\"/methodology\">How we measure</a>.</p></div>"
+               if score_line else "")
+            + ("<div class=\"card\"><h2>Competitive set</h2><div class=\"twrap\"><table>"
+               "<thead><tr><th>Brand</th><th>SERP coverage</th><th>Share of voice</th>"
+               "<th>AI coverage</th><th>AI avg rank</th></tr></thead><tbody>" + rows
+               + "</tbody></table></div></div>" if rows else "")
+            + "<a class=\"cta\" href=\"/\">Measure " + e(brand) + " live</a>"
+            "<footer>Measured by Nadelio, the AI visibility score you can show your board. "
+            "<a href=\"/methodology\">Methodology</a>. <a href=\"/roadmap\">Roadmap</a>.</footer>"
+            "</div></body></html>")
+
+
+@app.route("/brand/<key>", strict_slashes=False)
+def brand_page(key):
+    # Match the requested key against cached brands (cache keys are brand.lower()).
+    wanted = _brand_key(key)
+    for cache_key, result in list(_cache.items()):
+        if _brand_key(cache_key) == wanted or _brand_key(result.get("brand", "")) == wanted:
+            resp = app.make_response(_render_brand_page(result))
+            resp.headers["Content-Type"] = "text/html; charset=utf-8"
+            resp.headers["Cache-Control"] = "public, max-age=3600"
+            return resp
+    # Unknown brand: never fabricate. Point them at a live audit.
+    resp = app.make_response(
+        "<!DOCTYPE html><meta charset=utf-8><title>Not measured yet, Nadelio</title>"
+        "<body style=\"font-family:'Inter',sans-serif;background:#f4f2ec;color:#15140f;"
+        "max-width:560px;margin:80px auto;padding:0 22px;line-height:1.6\">"
+        "<a href=\"/\" style=\"color:#5b8c7e;text-decoration:none;font-size:13px\">&larr; Nadelio</a>"
+        "<h1 style=\"font-size:28px;font-weight:600;margin:20px 0 12px\">Not measured yet</h1>"
+        "<p style=\"color:#6f6d64\">No one has run an AI visibility audit for "
+        "“" + _html.escape(key) + "” yet. Run it live in about ten seconds, no signup.</p>"
+        "<a href=\"/\" style=\"display:inline-block;margin-top:18px;background:#15140f;color:#fff;"
+        "padding:13px 24px;border-radius:12px;text-decoration:none\">Measure it now</a></body>")
+    resp.status_code = 404
+    return resp
+
+
+@app.route("/sitemap.xml")
+def sitemap():
+    """Sitemap of the static pages plus every cached brand page, so search engines
+    discover the growing set of brand reads."""
+    urls = [SITE_URL + p for p in ("/", "/compare", "/methodology", "/roadmap")]
+    seen = set()
+    for cache_key, result in list(_cache.items()):
+        k = _brand_key(result.get("brand", "") or cache_key)
+        if k and k not in seen:
+            seen.add(k)
+            urls.append(SITE_URL + "/brand/" + k)
+    body = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"
+            + "".join("<url><loc>" + _html.escape(u) + "</loc></url>" for u in urls)
+            + "</urlset>")
+    resp = app.make_response(body)
+    resp.headers["Content-Type"] = "application/xml; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+@app.route("/robots.txt")
+def robots():
+    body = "User-agent: *\nAllow: /\nSitemap: " + SITE_URL + "/sitemap.xml\n"
+    resp = app.make_response(body)
+    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+    return resp
 
 
 if __name__ == "__main__":
