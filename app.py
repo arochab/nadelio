@@ -2131,6 +2131,19 @@ def api_analyze():
         # bare number is never displayed anywhere. Zero extra API cost (reuses the
         # runs already made). The written remediation report stays paid-only.
         geo = _geo_bounded(ranking, queries, brand, ai_runs)
+        # Rival's bounded score, for the side-by-side "you STABLE vs rival VOLATIL"
+        # comparison: pick the top-ranked brand that is NOT the audited one, and
+        # compute the same bounded score from the same runs. This is the killer
+        # demo, a claimed lead that is not real once the intervals overlap. Cheap
+        # (reuses the runs) and only added when a distinct rival exists.
+        geo_rival = None
+        rival = next((r for r in ranking
+                      if r.get("brand", "").lower() != str(brand).lower()), None)
+        if rival is not None:
+            gr = _geo_bounded(ranking, queries, rival["brand"], ai_runs)
+            if gr is not None:
+                gr["brand"] = rival["brand"]
+                geo_rival = gr
         report = None
         n_llm_calls = 1 + len(ai_runs)  # strategy + the AI-visibility runs actually made
         if paid_ok:
@@ -2168,6 +2181,8 @@ def api_analyze():
         if geo is not None:
             result["geo"] = geo
             result["geo_score"] = geo.get("point")
+        if geo_rival is not None:
+            result["geo_rival"] = geo_rival
         # Deep-audit-only fields: never present on a free result, so the frontend
         # can key its whole "deep vs free" rendering on d.tier / their presence.
         if paid_ok:

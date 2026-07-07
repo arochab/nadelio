@@ -283,6 +283,20 @@
   .vbadge.modere{color:var(--amber);background:rgba(214,158,74,.14);}
   .vbadge.volatil{color:#E08A5C;background:rgba(224,138,92,.14);}
   .vbadge.single{color:var(--muted-dark);background:var(--ground-2);}
+  /* Bounded side-by-side comparison (you vs rival). The whole point is the one
+     sentence at the bottom, which a rival without variance data cannot produce. */
+  .cmp-bounded{background:var(--ground-3);border:1px solid var(--hairline-dark);border-radius:14px;padding:18px 20px;margin-top:18px;}
+  .cmp-bounded .cmp-cap{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:14px;}
+  .cmp-grid{display:flex;align-items:center;gap:16px;}
+  .cmp-side{flex:1;min-width:0;}
+  .cmp-name{font-size:13px;font-weight:600;color:var(--paper-ink);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cmp-num{font-family:var(--mono);font-size:34px;font-weight:600;color:var(--paper-ink);line-height:1;letter-spacing:-.02em;}
+  .cmp-num .cmp-pm{font-size:15px;color:var(--muted-dark);font-weight:600;margin-left:2px;}
+  .cmp-side .vbadge{margin-top:8px;}
+  .cmp-vs{font-family:var(--mono);font-size:12px;color:var(--muted-dark);text-transform:uppercase;letter-spacing:.08em;flex-shrink:0;}
+  .cmp-verdict{margin-top:16px;padding:12px 14px;border-radius:10px;font-size:13.5px;line-height:1.5;border-left:3px solid;}
+  .cmp-verdict.stable{background:rgba(79,209,165,.08);border-left-color:var(--sage-signal);color:var(--paper-ink);}
+  .cmp-verdict.modere{background:rgba(214,158,74,.09);border-left-color:var(--amber);color:var(--paper-ink);}
 
   .insight{font-size:14px;line-height:1.65;color:var(--paper-ink);background:rgba(79,209,165,.06);
     border-left:3px solid var(--sage-signal);padding:13px 16px;border-radius:0 10px 10px 0;margin-bottom:22px;}
@@ -1508,8 +1522,13 @@
       (avgConsist!=null?'<div><div class="k">AI consistency</div><div class="v"><span class="mono">'+avgConsist+'%</span> <span style="color:var(--muted-dark);font-size:12px">across runs</span></div></div>':'')+
       '</div>';})();
 
+    // Bounded head-to-head: only when the audited brand was found and the backend
+    // returned both bounded scores. This is the sentence a rival cannot produce.
+    var cmpBlock=(youData.found&&d.geo&&d.geo_rival)
+      ?boundedCompare(d.geo,d.geo_rival,youData.you.brand,d.geo_rival.brand):'';
     var readCard='<div class="card">'+badge+guarantee+notice+sector+
       '<div class="readhead"><div class="verdict"><h2>'+verdictH2+'</h2>'+bizLine+vsent+'</div>'+dialBlock+'</div>'+
+      cmpBlock+
       (insight?'<div class="insight">'+insight+'</div>':'')+
       '<div class="hm hm-scope"><span class="radar" id="hmRadar" aria-hidden="true"></span><div class="hm-grid" style="grid-template-columns:'+cols+'">'+body+'</div>'+mob+legend+'</div>'+
       insightsBlock+
@@ -1576,6 +1595,40 @@
   function verdictBadge(geo){
     if(!geo||!geo.verdict)return '';
     return '<div class="vbadge '+verdictClass(geo.verdict)+'">'+esc(verdictLabel(geo.verdict))+'</div>';
+  }
+
+  // The killer side-by-side: you vs the rival, each with its interval, plus the
+  // one sentence a rival WITHOUT variance can never say. If the two intervals
+  // overlap, a claimed lead is not statistically real (it is noise); if they are
+  // disjoint, the lead holds even in the worst case. Computed entirely in the
+  // browser from the two bounded objects, zero extra call. Returns '' when we
+  // lack both bounded scores or a valid interval on either side.
+  function boundedCompare(you, rival, youName, rivalName){
+    if(!you||!rival||you.half_width==null||rival.half_width==null)return '';
+    var overlap=(you.low<=rival.high)&&(rival.low<=you.high);
+    var youAhead=you.point>=rival.point;
+    var lead=youAhead?you:rival, behind=youAhead?rival:you;
+    var leadName=youAhead?youName:rivalName, behindName=youAhead?rivalName:youName;
+    var sentence, tone;
+    if(overlap){
+      sentence='The gap is not real: the two intervals overlap, so '+esc(leadName)+'’s lead over '+esc(behindName)+' is within the noise.';
+      tone='modere';
+    } else {
+      sentence='Real lead: '+esc(leadName)+' stays ahead of '+esc(behindName)+' even in the worst case. The gap is not noise.';
+      tone='stable';
+    }
+    function col(g,name){
+      return '<div class="cmp-side">'+
+        '<div class="cmp-name">'+esc(name)+'</div>'+
+        '<div class="cmp-num mono">'+g.point+'<span class="cmp-pm">&plusmn;'+g.half_width+'</span></div>'+
+        '<div class="vbadge '+verdictClass(g.verdict)+'">'+esc(verdictLabel(g.verdict))+'</div>'+
+      '</div>';
+    }
+    return '<div class="cmp-bounded">'+
+      '<div class="cmp-cap">Is the lead real, or noise?</div>'+
+      '<div class="cmp-grid">'+col(you,youName)+'<div class="cmp-vs">vs</div>'+col(rival,rivalName)+'</div>'+
+      '<div class="cmp-verdict '+tone+'">'+sentence+'</div>'+
+    '</div>';
   }
   function geoScoreBlock(score){
     var s=Math.max(0,Math.min(100,parseInt(score)||0));
