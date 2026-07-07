@@ -1764,6 +1764,12 @@
     var bsHtml=(rep.blind_spots||[]).map(function(b){var by=(b.dominated_by||[]).map(esc2).join(', ');return '<li><b>'+esc2(b.query)+'</b>'+(by?', dominated by '+by:'')+'</li>';}).join('');
     var actHtml=(rep.actions||[]).map(function(a){return '<li>'+esc2(a)+'</li>';}).join('');
     var geo=d.geo_score!=null?d.geo_score:'-';
+    // Bounded score for the board-ready dossier: show the interval and verdict
+    // when available, so the number the client forwards carries its confidence.
+    var geoObj=d.geo||null;
+    var geoPm=(geoObj&&geoObj.half_width!=null)?' <span style="font-size:24px;color:var(--muted)">&plusmn;'+geoObj.half_width+'</span>':'';
+    var geoVerdict=(geoObj&&geoObj.verdict)?(function(){var vl={STABLE:'Stable',MODERE:'Moderate',VOLATIL:'Volatile',SINGLE_RUN:'Single run'}[geoObj.verdict]||'';return vl?' <span style="font-family:ui-monospace,monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--sage)">'+vl+'</span>':'';})():'';
+    var geoNote=(geoObj&&geoObj.half_width!=null)?('Reported with its 95% confidence interval over '+geoObj.n+' AI measurements. A score you can present without overstating it.'):'Composite of SERP share of voice, AI coverage and AI rank quality. Re-measurable any time.';
     var srcUrl=d.official_url||'';
     var doc='<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
       '<title>Nadelio Deep Audit, '+esc2(brandName)+'</title><style>'+
@@ -1786,8 +1792,8 @@
       '<div class="meta">Generated '+esc2(when)+(d.market?', market '+esc2(d.market):'')+', '+queries.length+' buyer queries, '+r.length+' brands tracked.</div>'+
       (d.identified_as?'<h2>Identity verification</h2><p>'+esc2(d.identified_as)+'</p>'+(srcUrl?'<p class="meta">Official source: <a href="'+esc2(srcUrl)+'">'+esc2(srcUrl)+'</a></p>':''):'')+
       (evHtml?'<ul>'+evHtml+'</ul>':'')+'</div>'+
-      '<div class="card"><h2>GEO score</h2><div class="geo">'+geo+'<span style="font-size:22px;color:var(--muted)">/100</span></div>'+
-      '<p class="meta">Composite of SERP share of voice, AI coverage and AI rank quality. Re-measurable any time.</p></div>'+
+      '<div class="card"><h2>GEO score</h2><div class="geo">'+geo+geoPm+'<span style="font-size:22px;color:var(--muted)">/100</span></div>'+geoVerdict+
+      '<p class="meta" style="margin-top:10px">'+geoNote+'</p></div>'+
       '<div class="card"><h2>SERP and AI visibility</h2><table><thead><tr><th>Brand</th><th>SERP coverage</th><th>Avg rank</th><th>Share of voice</th><th>AI coverage</th><th>AI avg rank</th></tr></thead><tbody>'+rows()+'</tbody></table></div>'+
       ((rep.verdict||bsHtml||actHtml)?'<div class="card"><h2>Remediation report</h2><p class="ai-note">AI-generated recommendations, grounded in the data above.</p>'+
         (rep.verdict?'<div class="insight">'+esc2(rep.verdict)+'</div>':'')+
