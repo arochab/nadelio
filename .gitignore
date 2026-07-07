@@ -1,6 +1,12 @@
 # Never commit secrets
 .env
 *.key
+# Credential screenshots / dumps accidentally saved in the project dir
+*token*.png
+*token*.txt
+*secret*.png
+*secret*.txt
+*credential*
 
 # Generated output files
 results.json
