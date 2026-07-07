@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nadelio roadmap, what is shipped and what is next</title>
+<meta name="description" content="What Nadelio has shipped, what is in progress, and where it is heading. A measurement instrument for AI visibility, built in the open.">
+<link rel="canonical" href="https://nadelio.com/roadmap">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nadelio.com/roadmap">
+<meta property="og:title" content="Nadelio roadmap">
+<meta property="og:description" content="What is shipped, what is in progress, where it is heading.">
+<meta property="og:image" content="https://nadelio.com/demo-nadelio.gif">
+<meta name="theme-color" content="#f4f2ec">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>N</text></svg>">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{--ink:#15140f;--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--card:#fbfaf6;--line:#e8e6dd;--muted:#6f6d64;--faint:#918f84;--amber:#b5722e;}
+  html,body{height:100%;}
+  body{font-family:"Inter","Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.6;position:relative;overflow-x:hidden;background:var(--paper);}
+  .aurora{position:fixed;inset:0;z-index:-2;background:var(--paper);overflow:hidden;}
+  .aurora::before{content:"";position:absolute;width:55vw;height:55vw;border-radius:50%;filter:blur(90px);opacity:.42;background:radial-gradient(circle,#cfe0d7,transparent 65%);top:-16vw;left:-12vw;}
+  .grain{position:fixed;inset:0;z-index:-1;opacity:.03;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .wrap{max-width:680px;margin:0 auto;padding:56px 22px 96px;}
+  .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--sage);text-decoration:none;margin-bottom:34px;transition:opacity .15s;}
+  .back:hover{opacity:.65;}
+  .eyebrow{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--sage-d);margin-bottom:16px;}
+  h1{font-size:38px;font-weight:600;letter-spacing:-1.2px;line-height:1.08;margin-bottom:16px;max-width:16ch;}
+  .lede{font-size:17px;color:var(--muted);margin-bottom:8px;max-width:56ch;}
+  .col{margin-top:44px;}
+  .col-head{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .col-head h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
+  .col-head .badge{font-family:ui-monospace,monospace;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px;}
+  .shipped .badge{color:#2f7d63;background:rgba(79,160,120,.14);}
+  .shipped h2{color:#2f7d63;}
+  .progress .badge{color:var(--amber);background:rgba(181,114,46,.13);}
+  .progress h2{color:var(--amber);}
+  .next .badge{color:var(--muted);background:var(--card);border:1px solid var(--line);}
+  .next h2{color:var(--muted);}
+  .col-sub{font-size:13.5px;color:var(--faint);margin-bottom:18px;max-width:56ch;}
+  .items{list-style:none;}
+  .items li{position:relative;padding:14px 0 14px 30px;border-top:1px solid var(--line);font-size:15px;color:#2c2a24;max-width:60ch;}
+  .items li:first-child{border-top:none;}
+  .items li strong{font-weight:600;display:block;margin-bottom:2px;}
+  .items li span{color:var(--muted);font-size:14px;}
+  /* Shipped: filled check. In progress: half. Next: hollow. */
+  .items li::before{content:"";position:absolute;left:0;top:19px;width:12px;height:12px;border-radius:50%;}
+  .shipped .items li::before{background:var(--sage);box-shadow:0 0 0 3px rgba(91,140,126,.14);}
+  .progress .items li::before{background:var(--amber);box-shadow:0 0 0 3px rgba(181,114,46,.13);animation:pulse 2.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(181,114,46,.13);}50%{box-shadow:0 0 0 6px rgba(181,114,46,0);}}
+  .next .items li::before{background:transparent;border:2px solid var(--line);top:17px;}
+  .note{margin-top:40px;font-size:13.5px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;max-width:60ch;}
+  .cta{margin-top:40px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+  .cta a.go{font-size:15px;font-weight:500;text-decoration:none;border-radius:12px;padding:14px 26px;background:var(--ink);color:#fff;transition:transform .12s,opacity .2s;}
+  .cta a.go:hover{opacity:.9;}
+  .cta a.go:active{transform:scale(.97);}
+  .cta a.alt{font-size:14px;color:var(--sage);text-decoration:none;}
+  .cta a.alt:hover{opacity:.7;}
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--faint);}
+  footer a{color:var(--sage);text-decoration:none;}
+  @media(max-width:540px){.wrap{padding:40px 18px 72px;}h1{font-size:30px;}.lede{font-size:16px;}}
+</style>
+</head>
+<body>
+<div class="aurora"></div><div class="grain"></div>
+<div class="wrap">
+  <a href="/" class="back"><span aria-hidden="true">&larr;</span> Back to Nadelio</a>
+
+  <div class="eyebrow">Roadmap</div>
+  <h1>What is shipped, and where this is heading.</h1>
+  <p class="lede">Nadelio is a measurement instrument for AI visibility, built in the open. Here is what already works, what is landing next, and the direction, without the vaporware.</p>
+
+  <div class="col shipped">
+    <div class="col-head"><h2>Shipped</h2><span class="badge">Live now</span></div>
+    <p class="col-sub">Working today, on every audit, free.</p>
+    <ul class="items">
+      <li><strong>Dual visibility map</strong><span>Google SERP and AI answers measured side by side, so you see the gap between where you rank and where you get recommended.</span></li>
+      <li><strong>Bounded GEO score</strong><span>Every score reported with its confidence interval and an honest stable or volatile verdict, never a bare number.</span></li>
+      <li><strong>Real lead detection</strong><span>Head to head with your top rival, showing whether a lead is real or just noise once the intervals overlap.</span></li>
+      <li><strong>Web verified identity</strong><span>We read your real website before measuring, so an ambiguous name never audits the wrong company.</span></li>
+      <li><strong>Market aware search</strong><span>Audits run against the right country and language, not a US default.</span></li>
+      <li><strong>Board ready Deep Audit</strong><span>A written verdict, a defensible score, a remediation plan, and a downloadable dossier you can forward.</span></li>
+      <li><strong>Instant, no signup</strong><span>One brand name, a full competitive read in about ten seconds, no account required.</span></li>
+    </ul>
+  </div>
+
+  <div class="col progress">
+    <div class="col-head"><h2>In progress</h2><span class="badge">Landing next</span></div>
+    <p class="col-sub">Being built now.</p>
+    <ul class="items">
+      <li><strong>Tighter reads for European markets</strong><span>Sharper measurement in the languages and search results your buyers actually use across Europe.</span></li>
+      <li><strong>Trend over time</strong><span>Watch your bounded score move across measurements, so you know if a change is real or the model drifting.</span></li>
+    </ul>
+  </div>
+
+  <div class="col next">
+    <div class="col-head"><h2>Next</h2><span class="badge">Direction</span></div>
+    <p class="col-sub">Where this is heading. Direction, not dates.</p>
+    <ul class="items">
+      <li><strong>A sector visibility index</strong><span>A public reference for how visible brands are in AI answers, by industry.</span></li>
+      <li><strong>Ongoing monitoring for teams</strong><span>Keep an eye on your visibility without re-running audits by hand.</span></li>
+      <li><strong>Shareable brand pages</strong><span>A clean, linkable read of any brand's AI visibility.</span></li>
+    </ul>
+  </div>
+
+  <div class="note">We ship in public and we do not promise dates we cannot keep. If something here matters to you, tell us, that is how the order changes.</div>
+
+  <div class="cta">
+    <a href="/" class="go">Measure your brand</a>
+    <a href="/methodology" class="alt">How we measure</a>
+  </div>
+
+  <footer>Nadelio, the AI visibility score you can show your board. Built by <a href="https://github.com/arochab">Adam Chabbi</a>.</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,29 @@
+﻿# File d'audit Nadelio, format : Marque | hint de désambiguïsation
+# Lignes # = commentaires. DONE = déjà auditée. L'ordre = priorité.
+# Le hint (après le |) garantit la bonne entité — à passer au champ "précision".
+#
+# ── Déjà auditées (6 juillet) ──
+DONE Weglot | weglot.com website translation           # domine l'IA, mail prêt
+DONE Payflows | payflows.io finance automation          # invisible, bon dossier
+DONE Toucan | toucantoco.com embedded analytics          # domine l'IA, TOP cible
+DONE Sifflet | siffletdata.com data observability        # SERP était vide (bug corrigé), À RÉAUDITER
+#
+# ── File d'audit prioritaire (coeur SaaS, calibre confirmé, nom peu ambigu) ──
+DONE Stonly | stonly.com knowledge base for customer support
+PhantomBuster | phantombuster.com sales automation LinkedIn scraping
+DataGalaxy | datagalaxy.com data catalog and data governance platform
+Carbonfact | carbonfact.com carbon accounting for apparel brands
+Meilisearch | meilisearch.com open-source search API for developers
+Patrowl | patrowl.io external attack surface management and pentest as a service
+Citalid | citalid.com cyber risk quantification platform
+Cycloid | cycloid.io internal developer platform and DevOps tooling
+WeWeb | weweb.io no-code frontend builder for enterprise apps, not WeWork
+#
+# ── Bon calibre mais NOM AMBIGU : hint IMPÉRATIF (sinon mauvaise entité) ──
+Figures | figures.hr salary benchmarking for HR teams, not Figure AI robotics
+Defacto | getdefacto.com embedded lending API for B2B, not the Turkish fashion brand
+Mention | mention.com social listening brand monitoring, not the generic word
+Metroscope | Metroscope EDF digital twin diagnostics for power plants, not the code tool
+#
+# ── Réserve (à approfondir si besoin) ──
+# Feedier | feedier.com customer feedback CX platform    # ~25 emp, proche plancher
