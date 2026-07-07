@@ -1078,11 +1078,32 @@ STABLE_MAX_RATIO = 0.15
 VOLATIL_MIN_RATIO = 0.30
 
 
-def _run_ai_visibility_once(brands, queries, api_key):
-    """One sampled call. Returns {query: {brand: {"rank": int, "kind": "primary"|"mentioned"}}}."""
+# ---------------------------------------------------------------------------
+# AI-assistant providers. The AI-visibility probe can be run against different
+# assistants (Claude, ChatGPT, Gemini, ...). The PROMPT and the PARSING of the
+# returned JSON are identical across assistants; only the HTTP call differs
+# (endpoint, auth header, request/response envelope). So each assistant is a
+# provider entry: an id, a human label, the env var holding its key, and a
+# "call" function that takes the prompt and returns the raw text answer.
+#
+# FUTUREPROOF: adding an assistant is one entry in _AI_PROVIDERS plus one small
+# _call_* function. GRACEFUL: an assistant whose API key is not set is simply
+# absent from the choices (never an error). The default stays Claude, which is
+# already configured.
+# ---------------------------------------------------------------------------
+OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions"
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/models/"
+                   + GEMINI_MODEL + ":generateContent")
+
+
+def _ai_visibility_prompt(brands, queries):
+    """The single shared prompt every assistant answers, so results are
+    comparable across assistants."""
     queries_block = "\n".join(f"{i+1}. {q}" for i, q in enumerate(queries))
     brands_list = ", ".join(brands)
-    prompt = (
+    return (
         "You are a helpful AI assistant answering buyer questions. "
         "A user asks each of the following questions. For EACH question, "
         "list which of these brands you would mention in your answer, "
@@ -1095,6 +1116,9 @@ def _run_ai_visibility_once(brands, queries, api_key):
         '{"results":[{"query":"...","mentioned":[{"brand":"Brand1","kind":"primary"},'
         '{"brand":"Brand2","kind":"mentioned"}]}]}'
     )
+
+
+def _call_claude(prompt, api_key):
     body = json.dumps({
         "model": ANTHROPIC_MODEL,
         "max_tokens": 600,
@@ -1103,21 +1127,89 @@ def _run_ai_visibility_once(brands, queries, api_key):
     }).encode()
     req = urllib.request.Request(
         ANTHROPIC_ENDPOINT, data=body,
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        method="POST",
-    )
+        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
+                 "content-type": "application/json"},
+        method="POST")
+    data = _urlopen_json_with_retry(req, timeout=40, what="Claude API (AI visibility)")
+    return "".join(b.get("text", "") for b in data.get("content", []))
+
+
+def _call_openai(prompt, api_key):
+    body = json.dumps({
+        "model": OPENAI_MODEL,
+        "max_tokens": 600,
+        "temperature": AI_RUN_TEMPERATURE,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        OPENAI_ENDPOINT, data=body,
+        headers={"Authorization": "Bearer " + api_key,
+                 "content-type": "application/json"},
+        method="POST")
+    data = _urlopen_json_with_retry(req, timeout=40, what="OpenAI API (AI visibility)")
+    choices = data.get("choices") or []
+    return choices[0].get("message", {}).get("content", "") if choices else ""
+
+
+def _call_gemini(prompt, api_key):
+    body = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": AI_RUN_TEMPERATURE, "maxOutputTokens": 600},
+    }).encode()
+    # Gemini takes the key as a query param, not a header.
+    req = urllib.request.Request(
+        GEMINI_ENDPOINT + "?key=" + urllib.parse.quote(api_key), data=body,
+        headers={"content-type": "application/json"}, method="POST")
+    data = _urlopen_json_with_retry(req, timeout=40, what="Gemini API (AI visibility)")
+    cands = data.get("candidates") or []
+    if not cands:
+        return ""
+    parts = cands[0].get("content", {}).get("parts", [])
+    return "".join(p.get("text", "") for p in parts)
+
+
+# Provider registry. Order = display order. The first available one is default.
+_AI_PROVIDERS = {
+    "claude":  {"label": "Claude",  "env": "ANTHROPIC_API_KEY", "call": _call_claude},
+    "chatgpt": {"label": "ChatGPT", "env": "OPENAI_API_KEY",    "call": _call_openai},
+    "gemini":  {"label": "Gemini",  "env": "GEMINI_API_KEY",    "call": _call_gemini},
+}
+DEFAULT_AI_PROVIDER = "claude"
+
+
+def _provider_key(provider_id):
+    p = _AI_PROVIDERS.get(provider_id)
+    return os.environ.get(p["env"]) if p else None
+
+
+def _available_providers():
+    """Ids of assistants whose API key is configured, in display order."""
+    return [pid for pid in _AI_PROVIDERS if _provider_key(pid)]
+
+
+def _resolve_provider(requested):
+    """Pick the assistant to use: the requested one if available, else the
+    default if available, else the first available, else None."""
+    if requested in _AI_PROVIDERS and _provider_key(requested):
+        return requested
+    if _provider_key(DEFAULT_AI_PROVIDER):
+        return DEFAULT_AI_PROVIDER
+    avail = _available_providers()
+    return avail[0] if avail else None
+
+
+def _run_ai_visibility_once(brands, queries, api_key, provider_id=DEFAULT_AI_PROVIDER):
+    """One sampled call to the chosen assistant. Returns
+    {query: {brand: {"rank": int, "kind": "primary"|"mentioned"}}}."""
+    prompt = _ai_visibility_prompt(brands, queries)
+    call = _AI_PROVIDERS.get(provider_id, _AI_PROVIDERS[DEFAULT_AI_PROVIDER])["call"]
     try:
-        data = _urlopen_json_with_retry(req, timeout=40, what="Claude API (AI visibility)")
+        text = call(prompt, api_key)
     except Exception:
-        logger.exception("AI visibility run failed")
+        logger.exception("AI visibility run failed (provider=%s)", provider_id)
         return {}  # graceful degradation — SERP data still works (after retries)
 
-    text = "".join(b.get("text", "") for b in data.get("content", []))
-    parsed = _extract_json_object(text)
+    parsed = _extract_json_object(text or "")
     if parsed is None:
         return {}
 
@@ -1146,10 +1238,11 @@ def _run_ai_visibility_once(brands, queries, api_key):
     return ai_map
 
 
-def check_ai_visibility(brands, queries, api_key, n_runs=None, return_runs=False):
-    """Run the AI-visibility probe n_runs times and aggregate into per-brand
-    per-query stats: average rank, mention rate (consistency), and whether the
-    brand was ever the primary recommendation.
+def check_ai_visibility(brands, queries, api_key, n_runs=None, return_runs=False,
+                        provider_id=DEFAULT_AI_PROVIDER):
+    """Run the AI-visibility probe n_runs times against the chosen assistant and
+    aggregate into per-brand per-query stats: average rank, mention rate
+    (consistency), and whether the brand was ever the primary recommendation.
 
     n_runs defaults to AI_RUNS. A higher n_runs (paid Deep Audit) tightens the
     confidence interval of the bounded GEO score; the free tier uses fewer runs
@@ -1161,7 +1254,7 @@ def check_ai_visibility(brands, queries, api_key, n_runs=None, return_runs=False
     if n_runs is None:
         n_runs = AI_RUNS
     n_runs = max(1, min(MAX_AI_RUNS, int(n_runs)))
-    runs = [_run_ai_visibility_once(brands, queries, api_key) for _ in range(n_runs)]
+    runs = [_run_ai_visibility_once(brands, queries, api_key, provider_id) for _ in range(n_runs)]
     runs = [r for r in runs if r]  # drop failed runs
     if not runs:
         return ({}, []) if return_runs else {}
@@ -1513,6 +1606,16 @@ def roadmap():
     resp = send_from_directory("web", "roadmap.html")
     resp.headers["Cache-Control"] = "public, max-age=3600"
     return resp
+
+
+@app.route("/api/providers")
+def api_providers():
+    """The AI assistants currently available to measure against (only those with
+    a configured key), so the UI can build the selector dynamically and never
+    offer an assistant that would fail. Default is the resolved provider."""
+    avail = [{"id": pid, "label": _AI_PROVIDERS[pid]["label"]}
+             for pid in _available_providers()]
+    return jsonify({"providers": avail, "default": _resolve_provider(None)})
 
 
 # ---------------------------------------------------------------------------
@@ -1968,6 +2071,9 @@ def api_analyze():
     brand = (data.get("brand") or "").strip()
     hint = (data.get("hint") or "").strip()
     market = (data.get("market") or "").strip()  # optional forced market
+    # Chosen AI assistant (claude / chatgpt / gemini). Resolved to one whose key
+    # is configured; unknown or unavailable falls back to the default.
+    ai_provider = _resolve_provider((data.get("ai") or "").strip().lower())
 
     if not live:
         return jsonify(SAMPLE)
@@ -2124,8 +2230,14 @@ def api_analyze():
         # smaller n (honest but wider interval), protecting unit economics while
         # still showing the confidence bound everywhere.
         n_ai_runs = DEEP_AI_RUNS if paid_ok else FREE_AI_RUNS
-        ai_vis, ai_runs = check_ai_visibility(competitors, queries, llm_key,
-                                              n_runs=n_ai_runs, return_runs=True)
+        # The AI-visibility probe runs against the CHOSEN assistant, using that
+        # assistant's own API key (which may differ from the Anthropic key used
+        # for strategy inference). Falls back to Claude if the chosen one lost
+        # its key between resolve and here.
+        ai_key = _provider_key(ai_provider) or llm_key
+        ai_vis, ai_runs = check_ai_visibility(competitors, queries, ai_key,
+                                              n_runs=n_ai_runs, return_runs=True,
+                                              provider_id=ai_provider)
         # Merge AI visibility into ranking data
         for entry in ranking:
             b = entry["brand"]
@@ -2188,6 +2300,11 @@ def api_analyze():
             "identified_as": identified_as,
             "confidence": confidence,
             "cost": cost,
+            # Which assistant the AI-visibility side was measured on, so the UI
+            # can state it plainly ("measured on ChatGPT") and the bounded score
+            # is never mistaken for a cross-assistant average.
+            "ai_provider": ai_provider,
+            "ai_provider_label": (_AI_PROVIDERS.get(ai_provider) or {}).get("label", ""),
         }
         # Bounded GEO score on BOTH tiers: the object carries point, half_width,
         # low/high, n, verdict. geo_score (the bare point) is kept alongside for
