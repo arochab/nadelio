@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Nadelio logo (legacy BP monogram, to redesign)">
+  <!-- Fond creme plein bord-a-bord, rassurant et chaleureux -->
+  <rect x="0" y="0" width="512" height="512" fill="#f4f2ec"/>
+
+  <!-- Monogramme BP cote a cote, centre. Cap height 212 (y 150..362).
+       Construction robuste: chaque lettre = groupe de formes simples NON auto-secantes,
+       le contrepoincon est un anneau creme peint PAR-DESSUS (pas d'evenodd fragile). -->
+
+  <!-- ============ LETTRE B (sauge fonce) ============ -->
+  <g fill="#3d6b5c">
+    <!-- Fut vertical -->
+    <rect x="150" y="150" width="46" height="212" rx="4"/>
+    <!-- Bol superieur: rectangle + demi-cercle droit -->
+    <path d="M 196 150 H 226 a 56 56 0 0 1 0 112 H 196 Z"/>
+    <!-- Bol inferieur (legerement plus large, classique) -->
+    <path d="M 196 250 H 230 a 56 56 0 0 1 0 112 H 196 Z"/>
+  </g>
+  <!-- Contrepoincons du B (creme, par-dessus) -->
+  <g fill="#f4f2ec">
+    <path d="M 196 186 H 224 a 20 20 0 0 1 0 40 H 196 Z"/>
+    <path d="M 196 286 H 228 a 20 20 0 0 1 0 40 H 196 Z"/>
+  </g>
+
+  <!-- ============ LETTRE P (sauge principal) ============ -->
+  <g fill="#5b8c7e">
+    <!-- Fut / jambe pleine hauteur -> lecture P immediate -->
+    <rect x="272" y="150" width="46" height="212" rx="4"/>
+    <!-- Bol superieur du P -->
+    <path d="M 318 150 H 322 a 60 60 0 0 1 0 120 H 318 Z"/>
+  </g>
+  <!-- Contrepoincon du P (creme) -->
+  <path fill="#f4f2ec" d="M 318 190 H 320 a 20 20 0 0 1 0 40 H 318 Z"/>
+
+  <!-- Accent violet AI discret, centre dans le contrepoincon du P -->
+  <circle cx="338" cy="210" r="12" fill="#6e5696"/>
+</svg>

@@ -3,22 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BrandPulse, the GEO visibility instrument</title>
-<meta name="description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and on ChatGPT/Claude, in 10 seconds. The GEO visibility index.">
-<link rel="canonical" href="https://brandpulse-app.onrender.com/">
+<title>Nadelio, the AI visibility score you can show your board</title>
+<meta name="description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and on ChatGPT/Claude, in 10 seconds. A bounded GEO visibility score, not noise.">
+<link rel="canonical" href="https://nadelio.com/">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://brandpulse-app.onrender.com/">
-<meta property="og:title" content="BrandPulse, the GEO visibility instrument">
-<meta property="og:description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and on ChatGPT/Claude. The GEO visibility index.">
-<meta property="og:image" content="https://brandpulse-app.onrender.com/demo-brandpulseapp.gif">
+<meta property="og:url" content="https://nadelio.com/">
+<meta property="og:title" content="Nadelio, the AI visibility score you can show your board">
+<meta property="og:description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and on ChatGPT/Claude. A bounded GEO visibility score, not noise.">
+<meta property="og:image" content="https://nadelio.com/demo-nadelio.gif">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="BrandPulse, the GEO visibility instrument">
+<meta name="twitter:title" content="Nadelio, the AI visibility score you can show your board">
 <meta name="twitter:description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and on ChatGPT/Claude.">
-<meta name="twitter:image" content="https://brandpulse-app.onrender.com/demo-brandpulseapp.gif">
+<meta name="twitter:image" content="https://nadelio.com/demo-nadelio.gif">
 
 <meta name="theme-color" content="#0E1512">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230E1512'/><circle cx='16' cy='16' r='9' fill='none' stroke='%234FD1A5' stroke-width='2.4'/><circle cx='16' cy='16' r='3.2' fill='%238B6FE8'/></svg>">
@@ -272,6 +272,17 @@
   .dial .n .p{font-size:20px;color:var(--muted-dark);}
   .dial .dial-tag{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-top:6px;}
   .dial .sub{font-family:var(--mono);font-size:11px;color:var(--muted-dark);margin-top:8px;letter-spacing:.04em;line-height:1.5;}
+  /* Bounded-score meta: the +/- interval and the STABLE/MODERE/VOLATIL verdict.
+     The interval is the whole differentiator, so it reads as part of the number,
+     not a footnote. */
+  .dial .pm{font-size:22px;color:var(--muted-dark);font-weight:600;margin-left:2px;}
+  .dial .ci{font-family:var(--mono);font-size:11px;color:var(--muted-dark);margin-top:6px;letter-spacing:.03em;}
+  .vbadge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:3px 8px;border-radius:6px;margin-top:8px;}
+  .vbadge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .vbadge.stable{color:var(--sage-signal);background:rgba(79,209,165,.12);}
+  .vbadge.modere{color:var(--amber);background:rgba(214,158,74,.14);}
+  .vbadge.volatil{color:#E08A5C;background:rgba(224,138,92,.14);}
+  .vbadge.single{color:var(--muted-dark);background:var(--ground-2);}
 
   .insight{font-size:14px;line-height:1.65;color:var(--paper-ink);background:rgba(79,209,165,.06);
     border-left:3px solid var(--sage-signal);padding:13px 16px;border-radius:0 10px 10px 0;margin-bottom:22px;}
@@ -587,7 +598,7 @@
 <div class="console">
   <!-- ============ RAIL: the instrument facade ============ -->
   <aside class="rail" aria-label="Instrument channels">
-    <div class="rail-mono" aria-label="BrandPulse">BP</div>
+    <div class="rail-mono" aria-label="Nadelio">Na</div>
     <div class="rail-channels">
       <div class="chan" id="chan01"><span class="cno mono">01</span><span class="cdot"></span><span class="clabel">SERP</span></div>
       <div class="chan" id="chan02"><span class="cno mono">02</span><span class="cdot"></span><span class="clabel">AI</span></div>
@@ -659,11 +670,11 @@
       <div id="out"></div>
 
       <footer class="site">
-        <div class="brandline">BrandPulse</div>
+        <div class="brandline">Nadelio</div>
         <div class="row">
           <a href="mailto:adam.chabbi94@gmail.com">Contact support</a>
           <span class="sep"></span>
-          <a href="/compare">Why BrandPulse?</a>
+          <a href="/compare">Why Nadelio?</a>
           <span class="sep"></span>
           <a href="mailto:adam.chabbi94@gmail.com">Legal and terms</a>
         </div>
@@ -1314,7 +1325,7 @@
   function copyMatrix(btn,brandName){
     var grid=document.getElementById('matrixGrid');
     if(!grid)return;
-    var text='BrandPulse, SERP x AI matrix for '+brandName+'\n'+
+    var text='Nadelio, SERP x AI matrix for '+brandName+'\n'+
       Array.prototype.map.call(grid.children,function(cell){return cell.children[0].textContent+': '+cell.children[1].textContent;}).join('\n');
     var done=function(){var old=btn.textContent;btn.textContent='Copied';setTimeout(function(){btn.textContent=old;},1400);};
     if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(done);}else{done();}
@@ -1467,10 +1478,20 @@
     }
     var geoCol=geoScoreColorDark(geoHero);
     var geoLbl=geoScoreLabel(geoHero);
+    // Bounded score: when the backend supplies d.geo with a half_width, the hero
+    // shows "42 plus or minus 6" plus a "based on n measures" line and the
+    // STABLE/MODERE/VOLATIL badge. This is the Arme 1: a number is never shown
+    // naked. Falls back to the plain number for legacy/absent geo objects.
+    var geoObj=(d.geo&&youData.found)?d.geo:null;
+    var pmHtml=(geoObj&&geoObj.half_width!=null)?'<span class="pm">&plusmn;'+geoObj.half_width+'</span>':'';
+    var ciHtml=geoObj?'<div class="ci">'+esc(ciText(geoObj))+'</div>':'';
+    var badgeHtml=geoObj?verdictBadge(geoObj):'';
     var dialBlock='<div class="dial" id="geoDial">'+
       '<div class="cap">'+(youData.found?'Your GEO score':'Leader GEO score')+'</div>'+
-      '<div class="n mono" style="color:'+geoCol+'"><span id="heroNum">0</span><span class="p">/100</span></div>'+
+      '<div class="n mono" style="color:'+geoCol+'"><span id="heroNum">0</span>'+pmHtml+'<span class="p">/100</span></div>'+
       '<div class="dial-tag" style="color:'+geoCol+'">'+geoLbl+'</div>'+
+      badgeHtml+
+      ciHtml+
       (dialSubTxt?'<div class="sub">'+dialSubTxt+'</div>':'')+
       '</div>';
 
@@ -1539,6 +1560,23 @@
   // ---- GEO score gauge (0-100) ,  SVG arc ----
   function geoScoreColor(s){return s>=71?'var(--sage-ink)':(s>=41?'var(--amber)':'#B5722E');}
   function geoScoreLabel(s){return s>=71?'Strong':(s>=41?'Middling':'Weak');}
+
+  // Bounded-score UI helpers. The backend sends d.geo = {point, half_width, low,
+  // high, n, verdict}. A verdict of STABLE/MODERE/VOLATIL/SINGLE_RUN drives a
+  // coloured badge; half_width prints as the "plus or minus" beside the number.
+  // No dashes anywhere (the "plus or minus" symbol is used, not a hyphen).
+  function verdictClass(v){var m={STABLE:'stable',MODERE:'modere',VOLATIL:'volatil',SINGLE_RUN:'single'};return m[v]||'single';}
+  function verdictLabel(v){var m={STABLE:'Stable',MODERE:'Moderate',VOLATIL:'Volatile',SINGLE_RUN:'Single run'};return m[v]||'';}
+  // The interval text shown under the score. Never invents a bound on n=1.
+  function ciText(geo){
+    if(!geo||geo.half_width==null){return 'single measure, reliability not bounded';}
+    return 'based on '+geo.n+' AI measures';
+  }
+  // The verdict badge markup.
+  function verdictBadge(geo){
+    if(!geo||!geo.verdict)return '';
+    return '<div class="vbadge '+verdictClass(geo.verdict)+'">'+esc(verdictLabel(geo.verdict))+'</div>';
+  }
   function geoScoreBlock(score){
     var s=Math.max(0,Math.min(100,parseInt(score)||0));
     var col=geoScoreColor(s);
@@ -1621,7 +1659,7 @@
     var teaserEntry=rr.find(function(x){return x.brand.toLowerCase()===String(brandName).toLowerCase();})
       ||rr.filter(function(x){return x.share_of_voice>0;})[0]||rr[0];
     var teaserScore=(d.geo_score!=null)?d.geo_score:(teaserEntry?computeGeoScore(teaserEntry,qq.length):42);
-    var fileName='brandpulse-deep-audit-'+esc(brandName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''))+'.html';
+    var fileName='nadelio-deep-audit-'+esc(brandName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''))+'.html';
     var main='<div class="doc-main">'+
       '<h3>Your board-ready GEO dossier</h3>'+
       '<div class="doc-sub">A written verdict, a defensible GEO score and a concrete action plan, forwardable to your board as a single HTML file.</div>'+
@@ -1635,7 +1673,7 @@
       geoScoreBlock(teaserScore)+
       '<div class="anchor">'+
         '<div class="col"><div class="lab">Agency GEO audit</div><div class="big">3000 to 5000&euro;</div><div class="sm">3 weeks, slide deck</div></div>'+
-        '<div class="col hi"><div class="lab">BrandPulse Deep Audit</div><div class="big">79&euro;</div><div class="sm">60 seconds, forwardable to your board</div></div>'+
+        '<div class="col hi"><div class="lab">Nadelio Deep Audit</div><div class="big">79&euro;</div><div class="sm">60 seconds, forwardable to your board</div></div>'+
       '</div>'+
       '<div class="doc-cta" id="deepAuditCta">'+
         '<div class="actionbar"><button class="go" onclick="startCheckout()">Run the Deep Audit</button><span class="doc-price">79<span class="eu">&euro;</span></span></div>'+
@@ -1671,7 +1709,7 @@
     var geo=d.geo_score!=null?d.geo_score:'-';
     var srcUrl=d.official_url||'';
     var doc='<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
-      '<title>BrandPulse Deep Audit, '+esc2(brandName)+'</title><style>'+
+      '<title>Nadelio Deep Audit, '+esc2(brandName)+'</title><style>'+
       ':root{--sage:#3D6B5C;--sage-signal:#4FD1A5;--surface:#EDEBE4;--card:#FBFAF6;--violet:#6E5696;--ink:#0E1512;--line:#D9D6CC;--muted:#6E6C64;}'+
       '*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--surface);line-height:1.55;margin:0;padding:40px 20px;}'+
       '.wrap{max-width:820px;margin:0 auto;}'+
@@ -1686,7 +1724,7 @@
       'a{color:var(--sage);}.ai-note{color:var(--violet);font-size:12px;}ul,ol{padding-left:20px;}li{margin-bottom:6px;}'+
       'footer{text-align:center;font-size:12px;color:var(--muted);margin-top:20px;}@media print{body{background:#fff;padding:0;}.card{border:none;}}'+
       '</style></head><body><div class="wrap">'+
-      '<div class="card"><span class="badge">BrandPulse Deep Audit, sourced</span>'+
+      '<div class="card"><span class="badge">Nadelio Deep Audit, sourced</span>'+
       '<h1>'+esc2(brandName)+'</h1>'+
       '<div class="meta">Generated '+esc2(when)+(d.market?', market '+esc2(d.market):'')+', '+queries.length+' buyer queries, '+r.length+' brands tracked.</div>'+
       (d.identified_as?'<h2>Identity verification</h2><p>'+esc2(d.identified_as)+'</p>'+(srcUrl?'<p class="meta">Official source: <a href="'+esc2(srcUrl)+'">'+esc2(srcUrl)+'</a></p>':''):'')+
@@ -1698,13 +1736,13 @@
         (rep.verdict?'<div class="insight">'+esc2(rep.verdict)+'</div>':'')+
         (bsHtml?'<h2 style="margin-top:18px">Top blind spots</h2><ul>'+bsHtml+'</ul>':'')+
         (actHtml?'<h2 style="margin-top:18px">Action plan</h2><ol>'+actHtml+'</ol>':'')+'</div>':'')+
-      '<footer>BrandPulse, brandpulse-app.onrender.com, '+esc2(when)+'</footer>'+
+      '<footer>Nadelio, nadelio.com, '+esc2(when)+'</footer>'+
       '</div></body></html>';
     var blob=new Blob([doc],{type:'text/html'});
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a');
     a.href=url;
-    a.download='brandpulse-deep-audit-'+brandName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+when+'.html';
+    a.download='nadelio-deep-audit-'+brandName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+when+'.html';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     setTimeout(function(){URL.revokeObjectURL(url);},2000);
   }

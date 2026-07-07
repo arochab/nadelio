@@ -2,6 +2,7 @@ import base64
 import datetime
 import json
 import logging
+import math
 import os
 import pathlib
 import random
@@ -20,6 +21,13 @@ app = Flask(__name__, static_folder="web", static_url_path="")
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+# Public site URL. Single source of truth for every canonical / OG / share /
+# user-agent URL so no deployment hostname is ever hard-coded twice. Override
+# via env SITE_URL. Flip this to https://nadelio.com the moment the custom
+# domain is verified live on Render; until then it stays on the Render URL so
+# canonical/OG never point at a host that does not yet answer.
+SITE_URL = os.environ.get("SITE_URL", "https://brandpulseapp.onrender.com").rstrip("/")
+
 ZONE = "serpleadresearch"
 SERP_ENDPOINT = "https://api.brightdata.com/request"
 ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages"
@@ -485,6 +493,38 @@ _MARKET_PRESETS = {
     "global": "US / Global (English)",
 }
 
+# Google locale parameters (gl = country, hl = interface language) per market
+# key. Without these, Bright Data resolves the SERP from a US/English default,
+# so a "France" audit was silently reading US Google ranks. Propagating gl/hl
+# makes the market promise real: a French audit reads google.fr in French.
+# Keys mirror _MARKET_PRESETS; anything unknown falls back to US/English so the
+# behavior is never worse than before.
+_MARKET_LOCALE = {
+    "fr": ("fr", "fr"),
+    "france": ("fr", "fr"),
+    "de": ("de", "de"),
+    "dach": ("de", "de"),
+    "uk": ("gb", "en"),
+    "us": ("us", "en"),
+    "global": ("us", "en"),
+}
+_DEFAULT_LOCALE = ("us", "en")
+
+
+def _market_locale(market):
+    """Map a market key (or free-text market label) to (gl, hl) Google params."""
+    key = (market or "").strip().lower()
+    if key in _MARKET_LOCALE:
+        return _MARKET_LOCALE[key]
+    # Tolerate human labels ("France (French-speaking market)") by scanning for
+    # a known market word, so a resolved/inferred label still geolocates.
+    for word, loc in (("france", _MARKET_LOCALE["fr"]), ("french", _MARKET_LOCALE["fr"]),
+                      ("german", _MARKET_LOCALE["de"]), ("dach", _MARKET_LOCALE["de"]),
+                      ("kingdom", _MARKET_LOCALE["uk"]), ("britain", _MARKET_LOCALE["uk"])):
+        if word in key:
+            return loc
+    return _DEFAULT_LOCALE
+
 
 def _extract_json_object(text):
     """Pull the first valid JSON object out of an LLM reply, tolerant of the
@@ -644,7 +684,7 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
 # only, DNS-resolved, private/loopback/link-local IPs refused, redirects
 # re-validated the same way, short timeout, capped body size.
 # ---------------------------------------------------------------------------
-_RECON_UA = "Mozilla/5.0 (compatible; BrandPulseBot/1.0; +https://brandpulse-app.onrender.com)"
+_RECON_UA = "Mozilla/5.0 (compatible; NadelioBot/1.0; +%s)" % SITE_URL
 _RECON_TIMEOUT = 6
 _RECON_MAXBYTES = 200_000
 _DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?)+$", re.I)
@@ -900,8 +940,16 @@ def _recon(brand, serp_key):
 # ---------------------------------------------------------------------------
 # Step 2: Bright Data SERP
 # ---------------------------------------------------------------------------
-def run_query(query, api_key):
+def run_query(query, api_key, gl=None, hl=None):
     url = "https://www.google.com/search?q=" + urllib.parse.quote(query) + "&brd_json=1"
+    # Geolocate the SERP so a market-scoped audit reads the right Google. gl sets
+    # the country, hl the interface language. Both are simple, well-supported
+    # Google URL params that Bright Data forwards. Omitted -> Google's default
+    # (US/English), preserving the previous behavior when no market is known.
+    if gl:
+        url += "&gl=" + urllib.parse.quote(gl)
+    if hl:
+        url += "&hl=" + urllib.parse.quote(hl)
     payload = json.dumps({"zone": ZONE, "url": url, "format": "raw"}).encode()
     req = urllib.request.Request(
         SERP_ENDPOINT, data=payload,
@@ -957,10 +1005,10 @@ def _result_kind(brand, result):
     return "citation" if _brand_slug(brand) in host.replace("-", "").replace(".", "") else "mention"
 
 
-def analyze(brands, queries, api_key):
+def analyze(brands, queries, api_key, gl=None, hl=None):
     stats = {b: {"mentions": 0, "appearances": 0, "ranks": [], "evidence": [], "cells": {}} for b in brands}
     for query in queries:
-        results = run_query(query, api_key)
+        results = run_query(query, api_key, gl=gl, hl=hl)
         hit = {b: False for b in brands}
         for pos, result in enumerate(results, 1):
             for b in brands:
@@ -1010,6 +1058,23 @@ def analyze(brands, queries, api_key):
 # ---------------------------------------------------------------------------
 AI_RUNS = int(os.environ.get("AI_RUNS", "3"))
 AI_RUN_TEMPERATURE = 0.7
+
+# Per-tier run counts. The number of AI runs directly drives cost (one Haiku
+# call per run) AND the width of the bounded GEO score's confidence interval:
+# more runs -> a tighter, more defensible interval. The free tier gets an
+# honest but wider interval; the paid Deep Audit buys the tighter one. MAX is a
+# hard ceiling protecting unit economics.
+FREE_AI_RUNS = int(os.environ.get("FREE_AI_RUNS", "3"))
+DEEP_AI_RUNS = int(os.environ.get("DEEP_AI_RUNS", "8"))
+MAX_AI_RUNS = int(os.environ.get("MAX_AI_RUNS", "15"))
+
+# Bounded-score verdict thresholds (kept as constants so they can be recalibrated
+# without touching the logic). half_width is the +/- of the 95% interval on the
+# 0-100 score; ratio is half_width relative to the point estimate.
+STABLE_MAX_HALFWIDTH = 4
+VOLATIL_MIN_HALFWIDTH = 10
+STABLE_MAX_RATIO = 0.15
+VOLATIL_MIN_RATIO = 0.30
 
 
 def _run_ai_visibility_once(brands, queries, api_key):
@@ -1080,14 +1145,25 @@ def _run_ai_visibility_once(brands, queries, api_key):
     return ai_map
 
 
-def check_ai_visibility(brands, queries, api_key):
-    """Run the AI-visibility probe AI_RUNS times and aggregate into per-brand
+def check_ai_visibility(brands, queries, api_key, n_runs=None, return_runs=False):
+    """Run the AI-visibility probe n_runs times and aggregate into per-brand
     per-query stats: average rank, mention rate (consistency), and whether the
-    brand was ever the primary recommendation."""
-    runs = [_run_ai_visibility_once(brands, queries, api_key) for _ in range(AI_RUNS)]
+    brand was ever the primary recommendation.
+
+    n_runs defaults to AI_RUNS. A higher n_runs (paid Deep Audit) tightens the
+    confidence interval of the bounded GEO score; the free tier uses fewer runs
+    to keep cost low. return_runs=True additionally returns the raw list of
+    per-run maps so the caller can compute the per-run GEO score distribution
+    (the confidence interval) without a second pass. The aggregated ai_map shape
+    is unchanged, so every existing caller keeps working (return_runs defaults
+    to False)."""
+    if n_runs is None:
+        n_runs = AI_RUNS
+    n_runs = max(1, min(MAX_AI_RUNS, int(n_runs)))
+    runs = [_run_ai_visibility_once(brands, queries, api_key) for _ in range(n_runs)]
     runs = [r for r in runs if r]  # drop failed runs
     if not runs:
-        return {}
+        return ({}, []) if return_runs else {}
 
     agg = {q: {b: {"ranks": [], "hits": 0, "primary_hits": 0} for b in brands} for q in queries}
     for run in runs:
@@ -1100,7 +1176,7 @@ def check_ai_visibility(brands, queries, api_key):
                     if cell["kind"] == "primary":
                         agg[q][b]["primary_hits"] += 1
 
-    n_runs = len(runs)
+    n_ok = len(runs)
     ai_map = {}
     for q in queries:
         ai_map[q] = {}
@@ -1110,11 +1186,11 @@ def check_ai_visibility(brands, queries, api_key):
                 continue
             ai_map[q][b] = {
                 "rank": round(sum(s["ranks"]) / len(s["ranks"]), 1),
-                "consistency": round(100 * s["hits"] / n_runs),
+                "consistency": round(100 * s["hits"] / n_ok),
                 "kind": "primary" if s["primary_hits"] * 2 >= s["hits"] else "mentioned",
-                "runs": n_runs,
+                "runs": n_ok,
             }
-    return ai_map
+    return (ai_map, runs) if return_runs else ai_map
 
 
 # ---------------------------------------------------------------------------
@@ -1149,6 +1225,85 @@ def _geo_score(ranking, queries, brand):
         rank_c = max(0.0, min(100.0, (10.0 - float(ai_rank)) / 9.0 * 100.0))
 
     return int(round((sov_c + cov_c + rank_c) / 3.0))
+
+
+def _score_from_components(sov_c, cov_c, rank_c):
+    """The GEO arithmetic in one place: three 0-100 components averaged. Kept as a
+    helper so the point score and the per-run distribution use the SAME formula."""
+    return int(round((sov_c + cov_c + rank_c) / 3.0))
+
+
+def _geo_bounded(ranking, queries, brand, per_run_maps):
+    """Bounded GEO score: the point estimate plus a 95% confidence interval and a
+    STABLE/MODERE/VOLATIL verdict, derived from the per-run AI-visibility maps.
+
+    Rationale: the SERP component (share of voice) is deterministic within one
+    audit, so all run-to-run variance comes from the stochastic AI component
+    (coverage + AI rank). We therefore hold the SERP part constant and recompute
+    the AI part for EACH run, giving a distribution of n scores. The interval is
+    a plain 95% Wald interval on the mean (1.96 * standard error), which is
+    honest, cheap, and explainable to a board in one sentence. With a single run
+    we refuse to fabricate a bound (verdict SINGLE_RUN): a bound on n=1 would be a
+    lie. Returns a dict, or None when the brand is absent / no runs exist."""
+    you = next((r for r in ranking if r["brand"].lower() == str(brand).lower()), None)
+    if not you or not queries or not per_run_maps:
+        return None
+
+    sov = float(you.get("share_of_voice") or 0)
+    sov_c = max(0.0, min(100.0, sov))
+    nq = len(queries)
+    bl = str(brand).lower()
+
+    scores = []
+    for run in per_run_maps:
+        hits, ranks = 0, []
+        for q in queries:
+            cell = None
+            qmap = run.get(q, {})
+            for b, c in qmap.items():
+                if b.lower() == bl:
+                    cell = c
+                    break
+            if cell:
+                hits += 1
+                ranks.append(cell.get("rank", 10))
+        cov_c = max(0.0, min(100.0, 100.0 * hits / nq)) if nq else 0.0
+        if ranks:
+            avg_rank = sum(ranks) / len(ranks)
+            rank_c = max(0.0, min(100.0, (10.0 - avg_rank) / 9.0 * 100.0))
+        else:
+            rank_c = 0.0
+        scores.append(_score_from_components(sov_c, cov_c, rank_c))
+
+    if not scores:
+        return None
+    n = len(scores)
+    mean = sum(scores) / n
+    point = int(round(mean))
+
+    if n < 2:
+        # Never bound a single sample. Report the point with an explicit caveat.
+        return {"point": point, "half_width": None, "low": point, "high": point,
+                "n": n, "verdict": "SINGLE_RUN", "scores": scores}
+
+    # Sample standard deviation -> standard error -> 95% Wald half-width.
+    var = sum((s - mean) ** 2 for s in scores) / (n - 1)
+    sd = math.sqrt(var)
+    se = sd / math.sqrt(n)
+    half_width = max(1, int(round(1.96 * se)))  # never show +/- 0 on a stochastic measure
+    low = max(0, point - half_width)
+    high = min(100, point + half_width)
+
+    ratio = half_width / max(point, 1)
+    if half_width <= STABLE_MAX_HALFWIDTH and ratio <= STABLE_MAX_RATIO:
+        verdict = "STABLE"
+    elif half_width >= VOLATIL_MIN_HALFWIDTH or ratio >= VOLATIL_MIN_RATIO:
+        verdict = "VOLATIL"
+    else:
+        verdict = "MODERE"
+
+    return {"point": point, "half_width": half_width, "low": low, "high": high,
+            "n": n, "verdict": verdict, "scores": scores}
 
 
 def _build_remediation(ranking, queries, identified_as, evidence, brand, llm_key):
@@ -1235,6 +1390,102 @@ def _build_remediation(ranking, queries, identified_as, evidence, brand, llm_key
 
 
 # ---------------------------------------------------------------------------
+# Durable audit history (the longitudinal moat).
+#
+# Render's free tier has an ephemeral disk wiped on every deploy/sleep, so the
+# in-memory/file cache is NOT a durable record. To accumulate a proprietary,
+# non-backfillable timeline of AI-visibility measurements (the one advantage a
+# late competitor can never reconstruct), each real audit is appended to an
+# EXTERNAL store: Cloudflare D1 (managed SQLite), reached over plain HTTPS with
+# the stdlib — no driver, no new dependency.
+#
+# SECURITY: D1_TOKEN must be a Cloudflare token scoped strictly to D1:Edit on a
+# SINGLE database, with ZERO Zone/DNS permission (it shares the account that
+# holds the nadelio.com domain). It lives only in a Render env var, never in
+# code. Every write is parameterized (never string-formatted SQL).
+#
+# FAIL-OPEN: logging is best-effort. If the store is unset, unreachable, over
+# quota, or errors for any reason, the audit response is UNAFFECTED. History is
+# never in the critical path of what the user paid for or waited for.
+#
+# Table (create once in the D1 console):
+#   CREATE TABLE IF NOT EXISTS audit_history (
+#     id INTEGER PRIMARY KEY AUTOINCREMENT,
+#     ts TEXT NOT NULL, brand TEXT NOT NULL, sector TEXT, market TEXT,
+#     query_language TEXT, tier TEXT, geo_point INTEGER, geo_half_width INTEGER,
+#     geo_verdict TEXT, n_runs INTEGER, share_of_voice REAL, ai_avg_rank REAL,
+#     n_queries INTEGER, n_brands INTEGER);
+# ---------------------------------------------------------------------------
+_CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID")
+_CF_D1_DB_ID = os.environ.get("CF_D1_DB_ID")
+_CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN")
+
+
+def _history_enabled():
+    return bool(_CF_ACCOUNT_ID and _CF_D1_DB_ID and _CF_D1_TOKEN)
+
+
+def _d1_query(sql, params=None, timeout=6):
+    """POST one parameterized SQL statement to Cloudflare D1 over HTTPS (stdlib).
+    Returns the list of result rows (dicts). Raises on transport/API error; the
+    caller decides whether to swallow it."""
+    url = ("https://api.cloudflare.com/client/v4/accounts/"
+           + urllib.parse.quote(_CF_ACCOUNT_ID) + "/d1/database/"
+           + urllib.parse.quote(_CF_D1_DB_ID) + "/query")
+    body = json.dumps({"sql": sql, "params": params or []}).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body, method="POST",
+        headers={
+            "Authorization": "Bearer " + _CF_D1_TOKEN,
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    if not payload.get("success"):
+        raise RuntimeError("D1 error: %s" % (payload.get("errors"),))
+    res = payload.get("result") or []
+    return (res[0].get("results") if res else []) or []
+
+
+def _log_audit_history(result):
+    """Append one audit measurement to the durable store. BEST-EFFORT: never
+    raises, never blocks the audit. No-op when history storage is not configured
+    (so local dev and unconfigured deploys behave exactly as before)."""
+    if not _history_enabled():
+        return
+    try:
+        you = next((r for r in (result.get("ranking") or [])
+                    if r.get("brand", "").lower() == str(result.get("brand", "")).lower()), None)
+        geo = result.get("geo") or {}
+        _d1_query(
+            "INSERT INTO audit_history (ts, brand, sector, market, query_language, "
+            "tier, geo_point, geo_half_width, geo_verdict, n_runs, share_of_voice, "
+            "ai_avg_rank, n_queries, n_brands) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [
+                datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                str(result.get("brand", ""))[:200],
+                str(result.get("sector", ""))[:200],
+                str(result.get("market", ""))[:120],
+                str(result.get("query_language", ""))[:60],
+                str(result.get("tier", ""))[:20],
+                geo.get("point"),
+                geo.get("half_width"),
+                geo.get("verdict"),
+                geo.get("n"),
+                (you or {}).get("share_of_voice"),
+                (you or {}).get("ai_avg_rank"),
+                len(result.get("queries") or []),
+                len(result.get("ranking") or []),
+            ],
+        )
+    except Exception:
+        # Swallow everything: a history failure must never surface to the user.
+        logger.warning("audit history log failed (non-fatal)", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 @app.route("/")
@@ -1281,7 +1532,7 @@ def _notify_waitlist_webhook(email):
     if not WAITLIST_WEBHOOK_URL:
         return
     try:
-        body = json.dumps({"email": email, "source": "brandpulse-waitlist"}).encode()
+        body = json.dumps({"email": email, "source": "nadelio-waitlist"}).encode()
         req = urllib.request.Request(
             WAITLIST_WEBHOOK_URL, data=body,
             headers={"Content-Type": "application/json"},
@@ -1848,8 +2099,18 @@ def api_analyze():
             sector = strat.get("sector", "")
         if not competitors or not queries:
             return jsonify(dict(SAMPLE, notice="Could not infer competitors - showing sample analysis."))
-        ranking = analyze(competitors, queries, serp_key)
-        ai_vis = check_ai_visibility(competitors, queries, llm_key)
+        # Geolocate the SERP to the resolved market: a forced "fr" or an inferred
+        # French market both map to google.fr in French. Falls back to US/English
+        # when the market is unknown, so this never worsens the prior behavior.
+        gl, hl = _market_locale(market or market_out)
+        ranking = analyze(competitors, queries, serp_key, gl=gl, hl=hl)
+        # Bounded score needs the per-run distribution: request return_runs. The
+        # paid Deep Audit buys more runs (tighter interval); the free tier gets a
+        # smaller n (honest but wider interval), protecting unit economics while
+        # still showing the confidence bound everywhere.
+        n_ai_runs = DEEP_AI_RUNS if paid_ok else FREE_AI_RUNS
+        ai_vis, ai_runs = check_ai_visibility(competitors, queries, llm_key,
+                                              n_runs=n_ai_runs, return_runs=True)
         # Merge AI visibility into ranking data
         for entry in ranking:
             b = entry["brand"]
@@ -1864,14 +2125,15 @@ def api_analyze():
             entry["ai_avg_rank"] = round(sum(ai_ranks) / len(ai_ranks), 1) if ai_ranks else None
             ai_consist = [ai_vis[q][b]["consistency"] for q in queries if q in ai_vis and b in ai_vis[q]]
             entry["ai_consistency"] = round(sum(ai_consist) / len(ai_consist)) if ai_consist else None
-        # Paid Deep Audit deliverable: a defensible GEO score (in-process, zero
-        # API) and ONE written remediation LLM call. Both are gated inside paid_ok
-        # so the free tier never pays for or receives them.
-        geo = None
+        # Bounded GEO score (the Arme 1): the point estimate WITH its 95%
+        # confidence interval and STABLE/MODERE/VOLATIL verdict, computed from the
+        # per-run distribution. Shown on BOTH tiers (free = wider interval), so a
+        # bare number is never displayed anywhere. Zero extra API cost (reuses the
+        # runs already made). The written remediation report stays paid-only.
+        geo = _geo_bounded(ranking, queries, brand, ai_runs)
         report = None
-        n_llm_calls = 1 + AI_RUNS  # strategy + AI visibility
+        n_llm_calls = 1 + len(ai_runs)  # strategy + the AI-visibility runs actually made
         if paid_ok:
-            geo = _geo_score(ranking, queries, brand)
             report = _build_remediation(ranking, queries, identified_as,
                                         recon.get("evidence", []), brand, llm_key)
             if report is not None:
@@ -1899,10 +2161,16 @@ def api_analyze():
             "confidence": confidence,
             "cost": cost,
         }
+        # Bounded GEO score on BOTH tiers: the object carries point, half_width,
+        # low/high, n, verdict. geo_score (the bare point) is kept alongside for
+        # backward compatibility with any older client path; new rendering must
+        # read result["geo"] and never show the point without its interval.
+        if geo is not None:
+            result["geo"] = geo
+            result["geo_score"] = geo.get("point")
         # Deep-audit-only fields: never present on a free result, so the frontend
         # can key its whole "deep vs free" rendering on d.tier / their presence.
         if paid_ok:
-            result["geo_score"] = geo
             result["evidence"] = recon.get("evidence", [])
             result["official_url"] = recon.get("official_url", "")
             if report is not None:
@@ -1918,6 +2186,10 @@ def api_analyze():
         # This free run delivered a real analysis: it legitimately consumes its
         # daily slot, so the `finally` must NOT release it (see BUG-2 FIX above).
         slot_consumed = True
+        # Append this real measurement to the durable longitudinal store. Only
+        # fresh live audits are logged (not cache re-serves), so each row is one
+        # genuine timestamped measurement. Best-effort: never affects the response.
+        _log_audit_history(result)
         return jsonify(result)
     except Exception as e:
         logger.exception("Live analysis failed for brand='%s'", brand)

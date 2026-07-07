@@ -21,14 +21,17 @@ venv/
 Thumbs.db
 
 # Whitelist: files needed despite broader ignore rules
-!web/demo-brandpulseapp.gif
+!web/demo-nadelio.gif
 !render.yaml
 !requirements.txt
 
-# Démo lourde — servie depuis web/ pour og:image
-# (web/demo-brandpulseapp.gif is whitelisted below)
+# Démo lourde, servie depuis web/ pour og:image
+# (web/demo-nadelio.gif is whitelisted above)
 
-# Internal strategy docs — never push to public repo
+# Internal strategy docs and run artifacts, never push to public repo
 PRICING-STRATEGY.md
 THE-WIRE-MOVE.md
+THE-WIRE-DIGEST.md
 posts/
+tools/audit-results/
+tools/*.log
