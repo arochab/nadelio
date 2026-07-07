@@ -1500,6 +1500,13 @@ def compare():
     return resp
 
 
+@app.route("/methodology", strict_slashes=False)
+def methodology():
+    resp = send_from_directory("web", "methodology.html")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 # ---------------------------------------------------------------------------
 # Waitlist (Pro launch email capture)
 # ---------------------------------------------------------------------------

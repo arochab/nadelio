@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Nadelio measures, methodology</title>
+<meta name="description" content="How the Nadelio GEO visibility score is computed: multiple AI runs, a confidence interval, and an honest STABLE or VOLATILE verdict. A score without its interval is marketing, not a measurement.">
+<link rel="canonical" href="https://nadelio.com/methodology">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://nadelio.com/methodology">
+<meta property="og:title" content="How Nadelio measures">
+<meta property="og:description" content="A GEO score reported with its confidence interval. We show our work.">
+<meta property="og:image" content="https://nadelio.com/demo-nadelio.gif">
+<meta name="theme-color" content="#f4f2ec">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>N</text></svg>">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{--ink:#15140f;--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--card:#fbfaf6;--line:#e8e6dd;--muted:#6f6d64;--faint:#918f84;--amber:#b5722e;--rust:#a4552f;}
+  html,body{height:100%;}
+  body{font-family:"Inter","Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.6;position:relative;overflow-x:hidden;background:var(--paper);}
+  .aurora{position:fixed;inset:0;z-index:-2;background:var(--paper);overflow:hidden;}
+  .aurora::before{content:"";position:absolute;width:55vw;height:55vw;border-radius:50%;filter:blur(90px);opacity:.42;background:radial-gradient(circle,#cfe0d7,transparent 65%);top:-16vw;left:-12vw;}
+  .grain{position:fixed;inset:0;z-index:-1;opacity:.03;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .wrap{max-width:660px;margin:0 auto;padding:56px 22px 96px;}
+  .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--sage);text-decoration:none;margin-bottom:34px;transition:opacity .15s;}
+  .back:hover{opacity:.65;}
+  .eyebrow{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--sage-d);margin-bottom:16px;}
+  h1{font-size:38px;font-weight:600;letter-spacing:-1.2px;line-height:1.08;margin-bottom:18px;max-width:16ch;}
+  .lede{font-size:17px;color:var(--muted);margin-bottom:14px;max-width:58ch;}
+  .lede strong{color:var(--ink);font-weight:600;}
+  section{margin-top:44px;}
+  h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sage-d);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--line);}
+  p{font-size:15.5px;color:#2c2a24;margin-bottom:14px;max-width:62ch;}
+  p.small{font-size:13.5px;color:var(--muted);}
+  strong{font-weight:600;}
+  .steps{list-style:none;counter-reset:s;margin:6px 0 8px;}
+  .steps li{counter-increment:s;position:relative;padding:0 0 16px 40px;font-size:15px;color:#2c2a24;max-width:60ch;}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:-2px;width:26px;height:26px;border-radius:8px;background:var(--card);border:1px solid var(--line);font-family:ui-monospace,monospace;font-size:13px;font-weight:600;color:var(--sage-d);display:flex;align-items:center;justify-content:center;}
+  .callout{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--sage);border-radius:0 12px 12px 0;padding:18px 20px;margin:18px 0;font-size:15px;color:#2c2a24;max-width:62ch;}
+  .callout strong{color:var(--sage-d);}
+  .verdicts{display:flex;flex-direction:column;gap:10px;margin:8px 0 4px;}
+  .vrow{display:flex;align-items:baseline;gap:12px;font-size:14.5px;color:#2c2a24;}
+  .vtag{flex-shrink:0;font-family:ui-monospace,monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:6px;min-width:78px;text-align:center;}
+  .vtag.stable{color:#2f7d63;background:rgba(79,160,120,.14);}
+  .vtag.moderate{color:var(--amber);background:rgba(181,114,46,.13);}
+  .vtag.volatile{color:var(--rust);background:rgba(164,85,47,.13);}
+  .ex{font-family:ui-monospace,"SF Mono",Menlo,monospace;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:2px 7px;font-size:13px;color:var(--sage-d);white-space:nowrap;}
+  .honest{background:linear-gradient(180deg,#f7f4ec,#fbfaf6);border:1px solid var(--line);border-radius:16px;padding:26px 26px 8px;margin-top:10px;}
+  .honest h2{border:none;color:var(--sage-d);}
+  .honest ul{list-style:none;}
+  .honest li{position:relative;padding:0 0 14px 24px;font-size:14.5px;color:#2c2a24;max-width:58ch;}
+  .honest li::before{content:"";position:absolute;left:2px;top:9px;width:7px;height:7px;border-radius:50%;background:var(--sage);}
+  .cta{margin-top:46px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+  .cta a.go{font-size:15px;font-weight:500;text-decoration:none;border-radius:12px;padding:14px 26px;background:var(--ink);color:#fff;transition:transform .12s,opacity .2s;}
+  .cta a.go:hover{opacity:.9;}
+  .cta a.go:active{transform:scale(.97);}
+  .cta a.alt{font-size:14px;color:var(--sage);text-decoration:none;}
+  .cta a.alt:hover{opacity:.7;}
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--faint);}
+  footer a{color:var(--sage);text-decoration:none;}
+  @media(max-width:540px){
+    .wrap{padding:40px 18px 72px;}
+    h1{font-size:30px;}
+    .lede{font-size:16px;}
+  }
+</style>
+</head>
+<body>
+<div class="aurora"></div><div class="grain"></div>
+<div class="wrap">
+  <a href="/" class="back"><span aria-hidden="true">&larr;</span> Back to Nadelio</a>
+
+  <div class="eyebrow">Methodology</div>
+  <h1>How Nadelio measures, and why the interval matters.</h1>
+  <p class="lede">Most AI visibility tools hand you a single number. That number is a <strong>noisy sample of one</strong> on a model that answers differently every time you ask. Nadelio measures across several runs and reports the score <strong>with its confidence interval</strong>, so you know whether a result is real or just noise.</p>
+
+  <section>
+    <h2>What we actually measure</h2>
+    <p>You type one brand. Nadelio identifies your competitive set, then measures two territories side by side:</p>
+    <ol class="steps">
+      <li><strong>Google (SERP).</strong> Each buyer-intent query runs against live Google for your market, geolocated to the right country and language. We record where every brand ranks.</li>
+      <li><strong>AI answers.</strong> The same buyer questions are put to an AI assistant. We record which brands it recommends, in what order, and whether each is the primary answer or a passing mention.</li>
+    </ol>
+    <p>The GEO score combines three equally weighted parts, each on a 0 to 100 scale: your Google share of voice, your coverage in AI answers, and the quality of your AI rank.</p>
+  </section>
+
+  <section>
+    <h2>Why one number lies</h2>
+    <p>Ask an AI assistant the same question ten times and you will not get the same answer ten times. The models are non deterministic by design. A tool that runs your query <strong>once</strong> and prints a score is reporting a coin flip as if it were a fact.</p>
+    <div class="callout">In a controlled test, an aggregate mention rate of <strong>10.8%</strong> corresponded to a true recall of <strong>1.9%</strong>. Nine points of difference, entirely because nobody bounded the noise. A score without its interval is marketing, not a measurement.</div>
+    <p>So Nadelio runs the AI measurement several times and looks at the <strong>spread</strong> of the results, not just the average.</p>
+  </section>
+
+  <section>
+    <h2>The confidence interval</h2>
+    <p>From the runs we compute the average score and a <strong>95% confidence interval</strong> around it: the plain standard error of the mean, times 1.96. Explained in one line to anyone: the true value is very likely within this band.</p>
+    <p>We report it as <span class="ex">42 &plusmn; 6</span>, never as a bare <span class="ex">42</span>. And we refuse to put an interval on a single run: with one measurement, we say so plainly rather than inventing a false precision.</p>
+    <p class="small">The paid Deep Audit runs more measurements, which tightens the interval. The free audit shows an honest but wider band. Nothing is hidden behind the paywall except the number of samples.</p>
+  </section>
+
+  <section>
+    <h2>Reading the verdict</h2>
+    <p>The interval drives one honest label, so you know at a glance how much to trust the number:</p>
+    <div class="verdicts">
+      <div class="vrow"><span class="vtag stable">Stable</span><span>The band is tight. This is a number you can present to your board.</span></div>
+      <div class="vrow"><span class="vtag moderate">Moderate</span><span>Some spread. Directionally useful, worth a second look before you act on it.</span></div>
+      <div class="vrow"><span class="vtag volatile">Volatile</span><span>Wide band. The model is inconsistent here. Do not cite this as a fact yet.</span></div>
+    </div>
+    <p style="margin-top:16px;">This is also why a lead can be an illusion. If your score is <span class="ex">44 &plusmn; 9</span> and a rival sits at <span class="ex">48 &plusmn; 11</span>, the bands overlap: the rival is not really ahead, the gap is noise. Nadelio says so. A tool showing bare numbers would call it a loss.</p>
+  </section>
+
+  <section class="honest">
+    <h2>What we will not pretend</h2>
+    <ul>
+      <li>When we identify your company from the name alone without confirming it on the web, we flag it and ask you to confirm, rather than confidently auditing the wrong business.</li>
+      <li>The AI measurement reflects how a leading assistant answers today. Models change; that is exactly why a bounded, repeatable measurement matters more than a one time snapshot.</li>
+      <li>A wide interval is not a bug we hide. It is the honest signal that the answer is unstable, which is information you can act on.</li>
+    </ul>
+  </section>
+
+  <div class="cta">
+    <a href="/" class="go">Measure your brand</a>
+    <a href="/compare" class="alt">Why Nadelio, not a static tool</a>
+  </div>
+
+  <footer>Nadelio, the AI visibility score you can show your board. Built by <a href="https://github.com/arochab">Adam Chabbi</a>.</footer>
+</div>
+</body>
+</html>
