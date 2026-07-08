@@ -1,5 +1,6 @@
 import base64
 import datetime
+import hmac
 import html as _html
 import json
 import logging
@@ -1577,6 +1578,209 @@ def _log_audit_history(result):
     except Exception:
         # Swallow everything: a history failure must never surface to the user.
         logger.warning("audit history log failed (non-fatal)", exc_info=True)
+
+
+def _last_bounded_score(brand):
+    """The most recent bounded score logged for `brand`, from D1. Returns
+    {point, verdict, ts} or None (no history, or history not configured).
+    Used to detect a week-over-week swing worth alerting on."""
+    if not _history_enabled():
+        return None
+    try:
+        rows = _d1_query(
+            "SELECT ts, geo_point, geo_verdict FROM audit_history "
+            "WHERE brand = ? ORDER BY ts DESC LIMIT 1",
+            [brand])
+    except Exception:
+        return None
+    if not rows:
+        return None
+    r = rows[0]
+    return {"ts": r.get("ts"), "point": r.get("geo_point"), "verdict": r.get("geo_verdict")}
+
+
+def _run_full_audit(brand, hint="", market="", n_runs=None, ai_provider=DEFAULT_AI_PROVIDER):
+    """The measurement pipeline shared by a live user audit and the monitoring
+    cron: identify -> geolocated SERP -> bounded AI visibility -> bounded GEO
+    score. Returns a result dict shaped like api_analyze's, or None if either
+    API key is missing or inference fails. No quota/payment gate here — the
+    caller (cron) already gates on an active paid subscription."""
+    serp_key = os.environ.get("BRIGHTDATA_API_KEY")
+    llm_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not serp_key or not llm_key:
+        return None
+    ai_key = _provider_key(ai_provider) or llm_key
+
+    recon = _recon(brand, serp_key)
+    try:
+        strat = infer_strategy(brand, llm_key, hint or None, market=market or None,
+                               max_queries=MAX_QUERIES_FREE, evidence=recon["evidence"] or None)
+    except RuntimeError:
+        return None
+    competitors, queries, market_out, query_language, identified_as, confidence = \
+        _sanitize_strategy(brand, strat, MAX_QUERIES_FREE, has_evidence=bool(recon.get("evidence")))
+    if not competitors or not queries:
+        return None
+
+    gl, hl = _market_locale(market or market_out)
+    ranking = analyze(competitors, queries, serp_key, gl=gl, hl=hl)
+    ai_vis, ai_runs = check_ai_visibility(competitors, queries, ai_key,
+                                          n_runs=n_runs or FREE_AI_RUNS, return_runs=True,
+                                          provider_id=ai_provider)
+    for entry in ranking:
+        b = entry["brand"]
+        entry["ai_cells"] = {}
+        for q in queries:
+            cell = ai_vis.get(q, {}).get(b)
+            if cell:
+                entry["ai_cells"][q] = cell
+        ai_mentioned = sum(1 for q in queries if q in ai_vis and b in ai_vis[q])
+        entry["ai_coverage"] = f"{ai_mentioned}/{len(queries)}"
+        ai_ranks = [ai_vis[q][b]["rank"] for q in queries if q in ai_vis and b in ai_vis[q]]
+        entry["ai_avg_rank"] = round(sum(ai_ranks) / len(ai_ranks), 1) if ai_ranks else None
+
+    geo = _geo_bounded(ranking, queries, brand, ai_runs)
+    return {
+        "brand": brand, "sector": strat.get("sector", ""), "market": market_out,
+        "query_language": query_language, "queries": queries, "ranking": ranking,
+        "mode": "live", "tier": "monitor", "identified_as": identified_as,
+        "confidence": confidence, "geo": geo, "geo_score": (geo or {}).get("point"),
+        "ai_provider": ai_provider,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Monitoring cron (the recurring product's engine).
+#
+# Runs weekly, triggered by an external scheduler (GitHub Actions) hitting
+# /api/cron/monitor with a shared secret — no scheduler lives inside this
+# process (Render free dynos sleep, an in-process scheduler would not fire
+# reliably). Stripe is the registry: list active subscriptions, read
+# tier/brand/market from their metadata, no local subscriber list needed.
+#
+# COST DISCIPLINE: n_runs is capped per tier (SUB_TIERS), and the whole run
+# stops early if BEST-EFFORT budget signals look off — this is the one place
+# identified as able to turn cash-negative if left unbounded.
+# ---------------------------------------------------------------------------
+CRON_SECRET = os.environ.get("CRON_SECRET")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+ALERT_FROM_EMAIL = os.environ.get("ALERT_FROM_EMAIL", "alerts@nadelio.com")
+
+
+def _send_email(to_email, subject, html):
+    """POST to the Resend API (stdlib urllib, no dependency). Best-effort: never
+    raises. No-op when RESEND_API_KEY is unset."""
+    if not RESEND_API_KEY or not to_email or "@" not in to_email:
+        return False
+    try:
+        body = json.dumps({
+            "from": "Nadelio <" + ALERT_FROM_EMAIL + ">",
+            "to": [to_email], "subject": subject, "html": html,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.resend.com/emails", data=body, method="POST",
+            headers={"Authorization": "Bearer " + RESEND_API_KEY,
+                     "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
+        return True
+    except Exception:
+        logger.warning("alert email failed for %s (non-fatal)", to_email, exc_info=True)
+        return False
+
+
+def _list_active_subscriptions(secret_key):
+    """All active/trialing Stripe subscriptions with our tier/brand metadata,
+    paginated. Stripe caps list results at 100/page; monitoring volume is far
+    below that for the foreseeable future, but pagination is handled anyway."""
+    out, starting_after = [], None
+    for _ in range(20):  # hard ceiling: never loop unboundedly on a Stripe glitch
+        path = "/subscriptions?status=active&limit=100"
+        if starting_after:
+            path += "&starting_after=" + urllib.parse.quote(starting_after)
+        try:
+            page = _stripe_request("GET", path, secret_key)
+        except RuntimeError:
+            break
+        data = page.get("data") or []
+        out.extend(data)
+        if not page.get("has_more") or not data:
+            break
+        starting_after = data[-1].get("id")
+    return out
+
+
+def _verdict_word(v):
+    return {"STABLE": "stable", "MODERE": "moderate", "VOLATIL": "volatile",
+            "SINGLE_RUN": "unbounded"}.get(v, v or "")
+
+
+@app.route("/api/cron/monitor", methods=["POST"])
+def api_cron_monitor():
+    """Weekly monitoring run. Auth: header X-Cron-Secret must match CRON_SECRET
+    (constant-time compare). Best-effort per subscriber: one failure never
+    blocks the rest. Returns a summary, never subscriber PII beyond counts."""
+    if not CRON_SECRET or not hmac.compare_digest(
+            request.headers.get("X-Cron-Secret", ""), CRON_SECRET):
+        return jsonify({"error": "unauthorized"}), 401
+
+    secret_key, _ = _stripe_config()
+    if not secret_key:
+        return jsonify({"error": "stripe not configured"}), 502
+
+    subs = _list_active_subscriptions(secret_key)
+    measured, alerted, errors = 0, 0, 0
+    for sub in subs:
+        meta = sub.get("metadata") or {}
+        tier = meta.get("tier", "")
+        brand = (meta.get("brand") or "").strip()
+        market = meta.get("market", "")
+        tier_cfg = SUB_TIERS.get(tier)
+        if not brand or not tier_cfg:
+            continue
+        try:
+            before = _last_bounded_score(brand)
+            result = _run_full_audit(brand, market=market, n_runs=tier_cfg["n_runs"])
+            if result is None:
+                errors += 1
+                continue
+            _log_audit_history(result)
+            measured += 1
+
+            geo = result.get("geo") or {}
+            verdict = geo.get("verdict")
+            point = geo.get("point")
+            swing = (before and before.get("verdict") == "STABLE"
+                     and verdict in ("VOLATIL", "MODERE"))
+            drop = (before and isinstance(before.get("point"), (int, float))
+                    and isinstance(point, (int, float))
+                    and (before["point"] - point) >= 10)
+            if (swing or drop):
+                customer_email = ""
+                try:
+                    cust = sub.get("customer")
+                    if cust:
+                        c = _stripe_request("GET", "/customers/" + urllib.parse.quote(str(cust)), secret_key)
+                        customer_email = c.get("email") or ""
+                except RuntimeError:
+                    pass
+                if customer_email:
+                    reason = "turned volatile" if swing else "dropped %s points" % round(before["point"] - point)
+                    _send_email(
+                        customer_email,
+                        "Nadelio alert: %s %s" % (brand, reason),
+                        "<p><b>%s</b> just %s.</p><p>New score: <b>%s</b>%s, verdict <b>%s</b>.</p>"
+                        "<p><a href=\"%s/brand/%s\">See the full read</a></p>" % (
+                            _html.escape(brand), _html.escape(reason), point,
+                            ("&plusmn;" + str(geo.get("half_width"))) if geo.get("half_width") is not None else "",
+                            _verdict_word(verdict), SITE_URL, _brand_key(brand)))
+                    alerted += 1
+        except Exception:
+            errors += 1
+            logger.warning("monitoring run failed for brand=%r (non-fatal)", brand, exc_info=True)
+
+    return jsonify({"subscriptions": len(subs), "measured": measured,
+                     "alerted": alerted, "errors": errors})
 
 
 # ---------------------------------------------------------------------------

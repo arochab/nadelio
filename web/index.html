@@ -1137,27 +1137,12 @@
   }
 
   // Email capture BEFORE the paywall + a single pre-sell monitoring line.
+  // Subscription tiers deliberately NOT surfaced here yet: pricing needs its
+  // own page and story before it is shown, not three buttons bolted under a
+  // free audit. See notifyMonitoring() below for the interest-capture path.
   function proCta(){
     return '<div class="pro-cta"><span class="label">Receive this diagnosis and your 3 blind spots by email.</span><input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Send it to me</button><span class="ok" id="proOk">You\'re on the list.</span>'+
-      '<span class="monitor">Keep it measured: weekly bounded score, alert the moment it turns volatile.</span>'+
-      '<div class="sub-row">'+
-        '<button class="sub-tier" onclick="startSubscribe(\'starter\')"><div class="tn">Starter</div><div class="tp">99&euro;<span>/mo</span></div><div class="td">1 brand monitored weekly</div></button>'+
-        '<button class="sub-tier" onclick="startSubscribe(\'pro\')"><div class="tn">Pro</div><div class="tp">249&euro;<span>/mo</span></div><div class="td">3 brands, tighter interval</div></button>'+
-        '<button class="sub-tier" onclick="startSubscribe(\'agency\')"><div class="tn">Agency</div><div class="tp">499&euro;<span>/mo</span></div><div class="td">10 brands, white-label ready</div></button>'+
-      '</div><span class="sub-msg" id="subMsg"></span></div>';
-  }
-  async function startSubscribe(tier){
-    var brand=(window.__curBrand||'').trim();
-    var msg=document.getElementById('subMsg');
-    if(!brand){if(msg){msg.textContent='Run an audit first, then subscribe to monitor that brand.';msg.style.display='inline';}return;}
-    var em=document.getElementById('proEmail');
-    var email=em&&em.value&&em.value.indexOf('@')>0?em.value.trim():'';
-    try{
-      var res=await fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier:tier,brand:brand,email:email,market:getMarket()})});
-      var d=await res.json();
-      if(d&&d.url){window.location.href=d.url;return;}
-      if(msg){msg.textContent=(d&&d.error)?d.error:'Subscriptions are not available yet.';msg.style.display='inline';}
-    }catch(e){if(msg){msg.textContent='Could not reach the payment service. Try again in a moment.';msg.style.display='inline';}}
+      '<span class="monitor">Ongoing monitoring is coming. <a onclick="notifyMonitoring(this)" tabindex="0" onkeydown="if(event.key===\'Enter\')notifyMonitoring(this)">Keep me posted</a></span></div>';
   }
   async function resumeSubscription(sessionId){
     var out=document.getElementById('out');
