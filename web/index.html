@@ -413,6 +413,20 @@
   .pro-cta button:hover{filter:brightness(1.08);}
   .pro-cta .ok{font-size:13px;color:var(--sage-signal);display:none;width:100%;}
   .pro-cta .monitor{width:100%;font-size:12px;color:var(--muted-dark);margin-top:10px;}
+  /* Real monitoring subscription tiers (Étage 0). Buttons, not links: this is
+     the recurring product, priced at market (99-499), never the 29 loss-leader. */
+  .sub-row{width:100%;display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+  .sub-tier{flex:1;min-width:150px;text-align:left;font-family:var(--body);cursor:pointer;
+    background:var(--ground-2);border:1px solid var(--hairline-2);border-radius:11px;
+    padding:11px 13px;color:#fff;transition:border-color var(--d-ui);}
+  .sub-tier:hover{border-color:var(--action);filter:none;}
+  .sub-tier .tn{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--sage-signal);}
+  .sub-tier .tp{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:2px;}
+  .sub-tier .tp span{font-size:11px;color:var(--muted-dark);font-weight:400;}
+  .sub-tier .td{font-size:11px;color:var(--muted-dark);margin-top:2px;line-height:1.4;}
+  .sub-msg{width:100%;font-size:12px;color:var(--amber);display:none;}
+  .sub-banner{background:rgba(79,209,165,.1);border:1px solid rgba(79,209,165,.3);border-radius:12px;
+    padding:16px 18px;font-size:14px;color:var(--sage-signal);margin-bottom:14px;}
   .pro-cta .monitor a{color:var(--sage-signal);text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
 
   /* ============================================================
@@ -1125,7 +1139,40 @@
   // Email capture BEFORE the paywall + a single pre-sell monitoring line.
   function proCta(){
     return '<div class="pro-cta"><span class="label">Receive this diagnosis and your 3 blind spots by email.</span><input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Send it to me</button><span class="ok" id="proOk">You\'re on the list.</span>'+
-      '<span class="monitor">Monthly monitoring from 29&euro;/mo. <a onclick="notifyMonitoring(this)" tabindex="0" onkeydown="if(event.key===\'Enter\')notifyMonitoring(this)">Keep me posted</a></span></div>';
+      '<span class="monitor">Keep it measured: weekly bounded score, alert the moment it turns volatile.</span>'+
+      '<div class="sub-row">'+
+        '<button class="sub-tier" onclick="startSubscribe(\'starter\')"><div class="tn">Starter</div><div class="tp">99&euro;<span>/mo</span></div><div class="td">1 brand monitored weekly</div></button>'+
+        '<button class="sub-tier" onclick="startSubscribe(\'pro\')"><div class="tn">Pro</div><div class="tp">249&euro;<span>/mo</span></div><div class="td">3 brands, tighter interval</div></button>'+
+        '<button class="sub-tier" onclick="startSubscribe(\'agency\')"><div class="tn">Agency</div><div class="tp">499&euro;<span>/mo</span></div><div class="td">10 brands, white-label ready</div></button>'+
+      '</div><span class="sub-msg" id="subMsg"></span></div>';
+  }
+  async function startSubscribe(tier){
+    var brand=(window.__curBrand||'').trim();
+    var msg=document.getElementById('subMsg');
+    if(!brand){if(msg){msg.textContent='Run an audit first, then subscribe to monitor that brand.';msg.style.display='inline';}return;}
+    var em=document.getElementById('proEmail');
+    var email=em&&em.value&&em.value.indexOf('@')>0?em.value.trim():'';
+    try{
+      var res=await fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier:tier,brand:brand,email:email,market:getMarket()})});
+      var d=await res.json();
+      if(d&&d.url){window.location.href=d.url;return;}
+      if(msg){msg.textContent=(d&&d.error)?d.error:'Subscriptions are not available yet.';msg.style.display='inline';}
+    }catch(e){if(msg){msg.textContent='Could not reach the payment service. Try again in a moment.';msg.style.display='inline';}}
+  }
+  async function resumeSubscription(sessionId){
+    var out=document.getElementById('out');
+    try{
+      var res=await fetch('/api/verify-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sessionId})});
+      var d=await res.json();
+      if(d&&d.ok){
+        out.innerHTML='<div class="card"><div class="sub-banner">Monitoring is live for <b>'+esc(d.brand||'your brand')+'</b> ('+esc(d.tier||'')+' plan). First bounded measurement runs this week, you will be alerted the moment the score turns volatile.</div></div>';
+      }else{
+        out.innerHTML='<div class="card"><div class="stage">We could not confirm this subscription. If you just paid, give it a minute and refresh, or contact support.</div></div>';
+      }
+    }catch(e){
+      out.innerHTML='<div class="card"><div class="stage">Could not verify the subscription right now. Refresh in a moment.</div></div>';
+    }
+    try{history.replaceState(null,'','/');}catch(e){}
   }
   function notifyMe(){
     var em=document.getElementById('proEmail');var ok=document.getElementById('proOk');
@@ -1351,6 +1398,7 @@
 
   function render(d){
     var r=d.ranking||[],queries=d.queries||[],brandName=d.brand||'';
+    window.__curBrand=brandName; // the brand a monitoring subscription attaches to
     var present=r.filter(function(x){return x.share_of_voice>0;});
     var isDeepTier=(d.tier==='deep');
     // rail state reflects the source of truth
@@ -1815,6 +1863,7 @@
     var params;try{params=new URLSearchParams(window.location.search);}catch(e){params=null;}
     try{fetch('/api/waitlist',{method:'HEAD'}).catch(function(){});}catch(e){}
     if(params&&params.get('paid')){resumeDeepAudit();return;}
+    if(params&&params.get('sub')){resumeSubscription(params.get('sub'));return;}
     var brandParam=params?(params.get('brand')||'').trim():'';
     if(brandParam){
       var bEl=document.getElementById('brand');if(bEl)bEl.value=brandParam;

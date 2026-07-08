@@ -54,3 +54,11 @@ services:
         sync: false
       - key: STRIPE_PRICE_ID
         sync: false
+      # Monitoring subscription tiers (recurring monthly prices created in the
+      # Stripe dashboard). Any missing tier returns a clean "not configured".
+      - key: STRIPE_PRICE_MONITOR_STARTER
+        sync: false
+      - key: STRIPE_PRICE_MONITOR_PRO
+        sync: false
+      - key: STRIPE_PRICE_MONITOR_AGENCY
+        sync: false

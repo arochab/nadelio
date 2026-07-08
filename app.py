@@ -1782,6 +1782,131 @@ def api_verify_payment():
     return jsonify({"ok": True, "brand": brand, "consumed": already})
 
 
+# ---------------------------------------------------------------------------
+# Monitoring subscriptions (Étage 0 of the plan: the recurring floor).
+#
+# Three tiers, each capping how many brands are monitored and how many AI runs
+# each weekly measurement spends (the per-tier cap is what keeps the API cost
+# BOUNDED BY CONTRACT — the one identified way this product can go cash-negative).
+#
+# ARCHITECTURE: Stripe is the source of truth. The tier/brand/market metadata is
+# stamped on the SUBSCRIPTION object itself (subscription_data[metadata]), so the
+# monitoring cron can simply list active subscriptions from Stripe and needs no
+# webhook and no local registry to survive restarts. The D1 insert below is a
+# best-effort mirror for our own archive, never load-bearing.
+# ---------------------------------------------------------------------------
+SUB_TIERS = {
+    # tier      display        env var holding the Stripe recurring price   caps
+    "starter": {"label": "Starter", "env": "STRIPE_PRICE_MONITOR_STARTER", "brands": 1,  "n_runs": 3},
+    "pro":     {"label": "Pro",     "env": "STRIPE_PRICE_MONITOR_PRO",     "brands": 3,  "n_runs": 5},
+    "agency":  {"label": "Agency",  "env": "STRIPE_PRICE_MONITOR_AGENCY",  "brands": 10, "n_runs": 8},
+}
+
+
+def _sub_price(tier):
+    t = SUB_TIERS.get(tier)
+    return os.environ.get(t["env"]) if t else None
+
+
+@app.route("/api/subscribe", methods=["POST"])
+def api_subscribe():
+    """Create a Stripe Checkout session in subscription mode for a monitoring
+    tier. Returns {url}. Clean 502 when the tier's recurring price is not
+    configured, so the free flow is never impacted."""
+    secret_key, _ = _stripe_config()
+    data = _read_json()
+    tier = (data.get("tier") or "").strip().lower()
+    brand = (data.get("brand") or "").strip()
+    email = (data.get("email") or "").strip()
+    market = (data.get("market") or "").strip()
+    price_id = _sub_price(tier)
+    if not secret_key or not price_id:
+        return jsonify({"error": "subscriptions not configured"}), 502
+    if not brand:
+        return jsonify({"error": "Type a brand name."}), 400
+    if len(brand) > MAX_BRAND_LEN:
+        return jsonify({"error": "Brand name is too long (max " + str(MAX_BRAND_LEN) + " chars)."}), 400
+
+    site = _site_base()
+    form = {
+        "mode": "subscription",
+        "line_items[0][price]": price_id,
+        "line_items[0][quantity]": "1",
+        "success_url": site + "/?sub={CHECKOUT_SESSION_ID}",
+        "cancel_url": site + "/",
+        # Stamp the operating metadata on the SUBSCRIPTION itself: the cron
+        # lists active subscriptions and reads these to know what to monitor.
+        "subscription_data[metadata][tier]": tier,
+        "subscription_data[metadata][brand]": brand[:MAX_BRAND_LEN],
+    }
+    if market:
+        form["subscription_data[metadata][market]"] = market[:40]
+    if email and "@" in email:
+        form["customer_email"] = email[:200]
+
+    try:
+        session = _stripe_request("POST", "/checkout/sessions", secret_key, form)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+    url = session.get("url")
+    if not url:
+        logger.error("Stripe subscription session created without a url")
+        return jsonify({"error": "Stripe did not return a checkout URL"}), 502
+    return jsonify({"url": url})
+
+
+@app.route("/api/verify-subscription", methods=["POST"])
+def api_verify_subscription():
+    """Confirm a returned subscription Checkout session is active/paid. Returns
+    {ok, brand, tier} for the confirmation banner. Also mirrors the subscriber
+    into D1 (best-effort, never load-bearing: Stripe stays the registry)."""
+    secret_key, _ = _stripe_config()
+    if not secret_key:
+        return jsonify({"error": "subscriptions not configured"}), 502
+    data = _read_json()
+    session_id = (data.get("session_id") or "").strip()
+    if not session_id or not re.fullmatch(r"[A-Za-z0-9_]+", session_id):
+        return jsonify({"ok": False, "error": "Missing session_id"}), 400
+    try:
+        session = _stripe_request(
+            "GET", "/checkout/sessions/" + urllib.parse.quote(session_id)
+            + "?expand[]=subscription", secret_key)
+    except RuntimeError as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+    sub = session.get("subscription")
+    paid = (session.get("mode") == "subscription"
+            and session.get("status") == "complete"
+            and isinstance(sub, dict)
+            and sub.get("status") in ("active", "trialing"))
+    if not paid:
+        return jsonify({"ok": False})
+
+    meta = sub.get("metadata") or {}
+    brand = str(meta.get("brand") or "")[:MAX_BRAND_LEN]
+    tier = str(meta.get("tier") or "")
+    email = str((session.get("customer_details") or {}).get("email") or "")
+
+    # Best-effort archive mirror (auto-creates its table; failure never surfaces).
+    if _history_enabled():
+        try:
+            _d1_query("CREATE TABLE IF NOT EXISTS subscribers ("
+                      "id INTEGER PRIMARY KEY AUTOINCREMENT, created TEXT, "
+                      "stripe_subscription_id TEXT UNIQUE, email TEXT, tier TEXT, "
+                      "brand TEXT, market TEXT, status TEXT)")
+            _d1_query("INSERT OR IGNORE INTO subscribers "
+                      "(created, stripe_subscription_id, email, tier, brand, market, status) "
+                      "VALUES (?,?,?,?,?,?,?)",
+                      [datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                       str(sub.get("id") or ""), email[:200], tier, brand,
+                       str(meta.get("market") or "")[:40],
+                       str(sub.get("status") or "")])
+        except Exception:
+            logger.warning("subscriber D1 mirror failed (non-fatal)", exc_info=True)
+
+    return jsonify({"ok": True, "brand": brand, "tier": tier})
+
+
 def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE, has_evidence=True):
     """Shared sanitation for a raw infer_strategy() result: strip stray
     characters from competitor names, cap list sizes, and make sure the
