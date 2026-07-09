@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Nadelio Settlement Agreement, template</title>
+<meta name="description" content="The open contract template that lets a brand and an agency price AI-visibility work on results: a fixed question set, a control group, a 95% confidence threshold, settled for a flat fee, never a percentage.">
+<link rel="canonical" href="https://www.nadelio.com/arbitration-agreement">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://www.nadelio.com/arbitration-agreement">
+<meta property="og:title" content="The Nadelio Settlement Agreement">
+<meta property="og:description" content="The open template for AI-visibility contracts settled on results, not promises.">
+<meta property="og:image" content="https://www.nadelio.com/demo-nadelio.gif">
+<meta name="theme-color" content="#f4f2ec">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>N</text></svg>">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{--ink:#15140f;--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--card:#fbfaf6;--line:#e8e6dd;--muted:#6f6d64;--faint:#918f84;--amber:#b5722e;--rust:#a4552f;}
+  html,body{height:100%;}
+  body{font-family:"Inter","Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.6;position:relative;overflow-x:hidden;background:var(--paper);}
+  .aurora{position:fixed;inset:0;z-index:-2;background:var(--paper);overflow:hidden;}
+  .aurora::before{content:"";position:absolute;width:55vw;height:55vw;border-radius:50%;filter:blur(90px);opacity:.42;background:radial-gradient(circle,#cfe0d7,transparent 65%);top:-16vw;left:-12vw;}
+  .grain{position:fixed;inset:0;z-index:-1;opacity:.03;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .wrap{max-width:700px;margin:0 auto;padding:56px 22px 96px;}
+  .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--sage);text-decoration:none;margin-bottom:34px;transition:opacity .15s;}
+  .back:hover{opacity:.65;}
+  .eyebrow{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--sage-d);margin-bottom:16px;}
+  h1{font-size:36px;font-weight:600;letter-spacing:-1.1px;line-height:1.1;margin-bottom:18px;max-width:20ch;}
+  .lede{font-size:17px;color:var(--muted);margin-bottom:14px;max-width:58ch;}
+  .lede strong{color:var(--ink);font-weight:600;}
+  .status{display:inline-flex;align-items:center;gap:8px;font-family:ui-monospace,monospace;font-size:12px;letter-spacing:.04em;color:var(--sage-d);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 14px;margin-top:6px;}
+  .status .dot{width:7px;height:7px;border-radius:50%;background:var(--sage);}
+  section{margin-top:44px;}
+  h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sage-d);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--line);}
+  p{font-size:15.5px;color:#2c2a24;margin-bottom:14px;max-width:64ch;}
+  p.small{font-size:13.5px;color:var(--muted);}
+  strong{font-weight:600;}
+  .clauses{list-style:none;counter-reset:c;margin:6px 0 8px;}
+  .clauses li{counter-increment:c;position:relative;padding:0 0 20px 44px;font-size:15px;color:#2c2a24;max-width:62ch;}
+  .clauses li::before{content:counter(c);position:absolute;left:0;top:-2px;width:28px;height:28px;border-radius:8px;background:var(--card);border:1px solid var(--line);font-family:ui-monospace,monospace;font-size:13px;font-weight:600;color:var(--sage-d);display:flex;align-items:center;justify-content:center;}
+  .clauses li b{display:block;color:var(--ink);margin-bottom:4px;font-size:15.5px;}
+  .clauses li .why{display:block;margin-top:8px;font-size:13.5px;color:var(--muted);border-left:2px solid var(--line);padding-left:12px;}
+  .clauses li .why b{display:inline;color:var(--sage-d);font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:0;}
+  .ex{font-family:ui-monospace,"SF Mono",Menlo,monospace;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:2px 7px;font-size:13px;color:var(--sage-d);white-space:nowrap;}
+  .roles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:16px 0 8px;}
+  .role{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;}
+  .role .t{font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sage-d);margin-bottom:8px;}
+  .role p{font-size:13.5px;margin:0;color:#2c2a24;}
+  .never{background:linear-gradient(180deg,#f7f0ea,#fbfaf6);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:0 12px 12px 0;padding:20px 22px;margin:18px 0;}
+  .never h2{border:none;color:var(--amber);margin-bottom:10px;padding-bottom:0;}
+  .never ul{list-style:none;}
+  .never li{position:relative;padding:0 0 10px 20px;font-size:14.5px;color:#2c2a24;}
+  .never li::before{content:"\00D7";position:absolute;left:0;top:0;color:var(--amber);font-weight:700;}
+  .cta{margin-top:46px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+  .cta a.go{font-size:15px;font-weight:500;text-decoration:none;border-radius:12px;padding:14px 26px;background:var(--ink);color:#fff;transition:transform .12s,opacity .2s;}
+  .cta a.go:hover{opacity:.9;}
+  .cta a.go:active{transform:scale(.97);}
+  .cta a.alt{font-size:14px;color:var(--sage);text-decoration:none;}
+  .cta a.alt:hover{opacity:.7;}
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--faint);}
+  footer a{color:var(--sage);text-decoration:none;}
+  @media(max-width:540px){
+    .wrap{padding:40px 18px 72px;}
+    h1{font-size:28px;}
+    .lede{font-size:16px;}
+    .roles{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="aurora"></div><div class="grain"></div>
+<div class="wrap">
+  <a href="/" class="back"><span aria-hidden="true">&larr;</span> Back to Nadelio</a>
+
+  <div class="eyebrow">The Settlement Agreement</div>
+  <h1>The contract that makes AI-visibility work payable on results.</h1>
+  <p class="lede">Agencies want to sell performance. Brands want to pay for it. Nobody can write that contract, because nobody can prove, without dispute, whether an AI mentioning a brand more often this month is a real gain or noise. This is the template that fixes that: <strong>a fixed question set, a control group, a 95% confidence threshold, and a flat settlement fee, never a cut of the outcome.</strong></p>
+  <span class="status"><span class="dot"></span>Version 1, open template, first agreements signing now</span>
+
+  <section>
+    <h2>Why this contract could not exist before</h2>
+    <p>AI answers vary run to run. A vendor can always claim a win that is pure chance. A client can always dispute it. That is why performance deals in this category have stayed rare, informal, and dispute-prone: nobody had an instrument that separates a real change from the model's own noise. Nadelio's bounded score, the same one behind every free audit on this site, is that instrument. This agreement is what it makes possible.</p>
+  </section>
+
+  <section>
+    <h2>The three parties</h2>
+    <div class="roles">
+      <div class="role"><div class="t">The brand</div><p>Fixes the question set at signature and pays the bonus only if the gain clears the threshold. Never pays for noise.</p></div>
+      <div class="role"><div class="t">The agency</div><p>Delivers the work: content, PR, structured data, whatever earns citations. Its retainer is unchanged by this agreement.</p></div>
+      <div class="role"><div class="t">Nadelio</div><p>Measures and settles. Paid a flat fee regardless of the verdict. Never a percentage of the result.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The clauses</h2>
+    <ol class="clauses">
+      <li><b>Fixed question set</b>The brand selects up to 25 buyer-intent questions at signature, chosen for business value, not ease of winning. The set cannot change during the measurement window.
+        <span class="why"><b>Why</b> Pay-for-performance SEO died mostly from agencies chasing whatever was cheapest to move, not from measurement disputes. Fixing the set at signature, by the paying party, closes that door before it opens.</span>
+      </li>
+      <li><b>Control group</b>A set of untreated competitor brands is measured on the same schedule, in parallel. A shared swing across the whole group (a model update, a seasonal shift) is attributed to the model, not the campaign.
+        <span class="why"><b>Why</b> AI models get updated without notice. A score can move for everyone at once. Without a control group, that looks exactly like a win or a loss it is not.</span>
+      </li>
+      <li><b>95% confidence threshold</b>A gain is recognized only when the post-campaign interval and the pre-campaign interval no longer overlap: <span class="ex">before 44&plusmn;9</span>, <span class="ex">after 61&plusmn;5</span> clears; <span class="ex">before 44&plusmn;9</span>, <span class="ex">after 48&plusmn;11</span> does not.
+        <span class="why"><b>Why</b> This is the same bound published on <a href="/methodology" style="color:var(--sage-d)">every Nadelio measurement</a>. Nobody pays on a coin flip, and nobody can dispute a rule accepted in writing before the campaign started.</span>
+      </li>
+      <li><b>Model-version lock</b>If the assistant being measured ships a material update mid-window, the window pauses and restarts. A dependency the agreement points at, not one either party has to argue about after the fact.
+        <span class="why"><b>Why</b> The clearest way this contract could become unarbitrable is a model update landing mid-campaign. Locking the window removes the argument before it starts.</span>
+      </li>
+      <li><b>Source quality</b>Citations traced to link farms, paid placements not disclosed as such, or sources unrelated to the fixed question set do not count toward the gain.
+        <span class="why"><b>Why</b> The other cause of death for old performance-SEO deals was gaming the metric with junk sources. This clause exists so the instrument cannot be fed noise dressed up as signal.</span>
+      </li>
+      <li><b>Settlement window</b>60 to 90 days, set at signature. At the end of the window, Nadelio publishes the verdict: cleared or not, with the full measurement trail, timestamped.
+        <span class="why"><b>Why</b> Open-ended windows invite renegotiation. A fixed date makes the verdict a fact, not a discussion.</span>
+      </li>
+      <li><b>Flat settlement fee</b>Nadelio is paid <span class="ex">300&ndash;500&euro;/month</span> per brand measured, for the act of measuring and settling, regardless of whether the gain clears. Never a percentage of the bonus, the retainer, or the outcome.
+        <span class="why"><b>Why</b> A referee paid on the verdict is not a referee. This is the one clause that cannot be negotiated away without the whole agreement losing its point.</span>
+      </li>
+    </ol>
+  </section>
+
+  <div class="never">
+    <h2>What this agreement will never include</h2>
+    <ul>
+      <li>A success fee paid to Nadelio, in cash or in kind, tied to the outcome.</li>
+      <li>Execution work of any kind. Nadelio measures and settles, it does not write content or run campaigns.</li>
+      <li>A guarantee of outcome. The agreement prices the measurement, never promises a result.</li>
+      <li>A private or undisclosed methodology. The scoring behind every verdict is the same one published at <a href="/methodology" style="color:#2c2a24">nadelio.com/methodology</a>.</li>
+    </ul>
+  </div>
+
+  <section>
+    <h2>Where this stands today</h2>
+    <p>This is version 1 of an open template, published so any brand or agency can read exactly what they would be signing before a conversation starts. The first agreements are being signed now, in one sector, in France. Every settlement, cleared or not, becomes part of a public record: the point of an arbitrator is a track record nobody can fake retroactively.</p>
+    <p class="small">Not legal advice. Intended as the commercial skeleton of the deal; your counsel adapts the language to your jurisdiction and adds what your situation requires.</p>
+  </section>
+
+  <div class="cta">
+    <a href="mailto:adam.chabbi94@gmail.com?subject=Settlement%20Agreement" class="go">Discuss an agreement</a>
+    <a href="/methodology" class="alt">How the measurement works</a>
+  </div>
+
+  <footer>Nadelio, the AI visibility score you can show your board. <a href="/roadmap">Roadmap</a>. Built by <a href="https://github.com/arochab">Adam Chabbi</a>.</footer>
+</div>
+</body>
+</html>

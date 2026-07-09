@@ -1812,6 +1812,13 @@ def roadmap():
     return resp
 
 
+@app.route("/arbitration-agreement", strict_slashes=False)
+def arbitration_agreement():
+    resp = send_from_directory("web", "arbitration-agreement.html")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 @app.route("/api/providers")
 def api_providers():
     """The AI assistants currently available to measure against (only those with
