@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#ffffff"/>
+  <g fill="#3d6b5c">
+    <rect x="300" y="292" width="92" height="440" rx="6"/>
+    <rect x="632" y="292" width="92" height="440" rx="6"/>
+    <polygon points="392,292 484,292 724,732 632,732" />
+  </g>
+  <!-- Deep Audit: one wide confidence bar, a single deliberate measurement. -->
+  <rect x="340" y="600" width="344" height="16" rx="8" fill="#5b8c7e"/>
+  <circle cx="512" cy="608" r="40" fill="#6e5696"/>
+</svg>

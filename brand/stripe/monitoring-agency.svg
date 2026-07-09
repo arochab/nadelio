@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#ffffff"/>
+  <g fill="#3d6b5c">
+    <rect x="300" y="292" width="92" height="440" rx="6"/>
+    <rect x="632" y="292" width="92" height="440" rx="6"/>
+    <polygon points="392,292 484,292 724,732 632,732" />
+  </g>
+  <!-- Agency: 10 brands tracked, a dense row of points spanning the bar. -->
+  <rect x="300" y="600" width="424" height="14" rx="7" fill="#5b8c7e"/>
+  <circle cx="320" cy="607" r="15" fill="#6e5696"/>
+  <circle cx="360" cy="607" r="15" fill="#6e5696"/>
+  <circle cx="400" cy="607" r="15" fill="#6e5696"/>
+  <circle cx="440" cy="607" r="15" fill="#6e5696"/>
+  <circle cx="480" cy="607" r="15" fill="#6e5696"/>
+  <circle cx="520" cy="607" r="15" fill="#6e5696"/>
+  <circle cx="560" cy="607" r="15" fill="#6e5696"/>
+  <circle cx="600" cy="607" r="15" fill="#6e5696"/>
+  <circle cx="640" cy="607" r="15" fill="#6e5696"/>
+  <circle cx="680" cy="607" r="15" fill="#6e5696"/>
+</svg>

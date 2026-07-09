@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#ffffff"/>
+  <g fill="#3d6b5c">
+    <rect x="300" y="292" width="92" height="440" rx="6"/>
+    <rect x="632" y="292" width="92" height="440" rx="6"/>
+    <polygon points="392,292 484,292 724,732 632,732" />
+  </g>
+  <!-- Pro: 3 brands tracked, 3 points on the bar. -->
+  <rect x="392" y="600" width="240" height="14" rx="7" fill="#5b8c7e"/>
+  <circle cx="452" cy="607" r="24" fill="#6e5696"/>
+  <circle cx="512" cy="607" r="24" fill="#6e5696"/>
+  <circle cx="572" cy="607" r="24" fill="#6e5696"/>
+</svg>
