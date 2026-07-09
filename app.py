@@ -1819,6 +1819,13 @@ def arbitration_agreement():
     return resp
 
 
+@app.route("/settlement", strict_slashes=False)
+def settlement():
+    resp = send_from_directory("web", "settlement.html")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 @app.route("/api/providers")
 def api_providers():
     """The AI assistants currently available to measure against (only those with

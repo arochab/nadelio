@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nadelio settles AI-visibility work on results</title>
+<meta name="description" content="AI-visibility budgets are spent on faith. Nadelio is the neutral referee that makes them payable on proof: a fixed question set, a control group, a 95% confidence threshold, settled for a flat fee, never a cut of the outcome.">
+<link rel="canonical" href="https://www.nadelio.com/settlement">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://www.nadelio.com/settlement">
+<meta property="og:title" content="Nadelio settles AI-visibility work on results">
+<meta property="og:description" content="A neutral referee for AI-visibility contracts, paid a flat fee, never a cut of the outcome.">
+<meta property="og:image" content="https://www.nadelio.com/demo-nadelio.gif">
+<meta name="theme-color" content="#f4f2ec">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>N</text></svg>">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{--ink:#15140f;--sage:#5b8c7e;--sage-d:#3d6b5c;--paper:#f4f2ec;--card:#fbfaf6;--line:#e8e6dd;--muted:#6f6d64;--faint:#918f84;--amber:#b5722e;--rust:#a4552f;}
+  html,body{height:100%;}
+  body{font-family:"Inter","Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.6;position:relative;overflow-x:hidden;background:var(--paper);}
+  .aurora{position:fixed;inset:0;z-index:-2;background:var(--paper);overflow:hidden;}
+  .aurora::before{content:"";position:absolute;width:55vw;height:55vw;border-radius:50%;filter:blur(90px);opacity:.42;background:radial-gradient(circle,#cfe0d7,transparent 65%);top:-16vw;left:-12vw;}
+  .grain{position:fixed;inset:0;z-index:-1;opacity:.03;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .wrap{max-width:700px;margin:0 auto;padding:56px 22px 96px;}
+  .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--sage);text-decoration:none;margin-bottom:34px;transition:opacity .15s;}
+  .back:hover{opacity:.65;}
+  .eyebrow{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--sage-d);margin-bottom:16px;}
+  h1{font-size:40px;font-weight:600;letter-spacing:-1.3px;line-height:1.06;margin-bottom:20px;max-width:15ch;}
+  .lede{font-size:17.5px;color:var(--muted);margin-bottom:14px;max-width:56ch;}
+  .lede strong{color:var(--ink);font-weight:600;}
+  section{margin-top:48px;}
+  h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sage-d);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--line);}
+  p{font-size:15.5px;color:#2c2a24;margin-bottom:14px;max-width:62ch;}
+  p.small{font-size:13.5px;color:var(--muted);}
+  strong{font-weight:600;}
+
+  /* The problem, told as a stalemate between two parties who both lose. */
+  .stalemate{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center;margin:20px 0 8px;}
+  .side{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;}
+  .side .who{font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:6px;}
+  .side p{font-size:14px;margin:0;color:#2c2a24;}
+  .vs{font-family:ui-monospace,monospace;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;}
+
+  .thesis{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--sage);border-radius:0 14px 14px 0;padding:24px 26px;margin:20px 0;}
+  .thesis p{font-size:18px;line-height:1.45;color:var(--ink);margin:0;max-width:46ch;font-weight:500;}
+  .thesis .tag{font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--sage-d);margin-bottom:10px;}
+
+  .roles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:6px 0 8px;}
+  .role{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;}
+  .role .t{display:flex;align-items:center;gap:6px;font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sage-d);margin-bottom:8px;}
+  .role .dot{width:7px;height:7px;border-radius:50%;background:var(--sage);}
+  .role p{font-size:13.5px;margin:0;color:#2c2a24;}
+
+  .ex{font-family:ui-monospace,"SF Mono",Menlo,monospace;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:2px 7px;font-size:13px;color:var(--sage-d);white-space:nowrap;}
+  .callout{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--sage);border-radius:0 12px 12px 0;padding:18px 20px;margin:18px 0;font-size:15px;color:#2c2a24;max-width:62ch;}
+  .callout strong{color:var(--sage-d);}
+
+  .steps{list-style:none;counter-reset:s;margin:6px 0 8px;}
+  .steps li{counter-increment:s;position:relative;padding:0 0 16px 40px;font-size:15px;color:#2c2a24;max-width:60ch;}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:-2px;width:26px;height:26px;border-radius:8px;background:var(--card);border:1px solid var(--line);font-family:ui-monospace,monospace;font-size:13px;font-weight:600;color:var(--sage-d);display:flex;align-items:center;justify-content:center;}
+
+  .never{background:linear-gradient(180deg,#f7f4ec,#fbfaf6);border:1px solid var(--line);border-radius:16px;padding:26px 26px 8px;margin-top:10px;}
+  .never h2{border:none;color:var(--sage-d);}
+  .never ul{list-style:none;}
+  .never li{position:relative;padding:0 0 14px 24px;font-size:14.5px;color:#2c2a24;max-width:58ch;}
+  .never li::before{content:"\00D7";position:absolute;left:2px;top:-1px;color:var(--amber);font-weight:700;}
+
+  .status{display:inline-flex;align-items:center;gap:8px;font-family:ui-monospace,monospace;font-size:12px;letter-spacing:.03em;color:var(--sage-d);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:7px 14px 7px 12px;margin-top:6px;}
+  .status .dot{width:7px;height:7px;border-radius:50%;background:var(--sage);}
+
+  .cta{margin-top:46px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+  .cta a.go{font-size:15px;font-weight:500;text-decoration:none;border-radius:12px;padding:14px 26px;background:var(--ink);color:#fff;transition:transform .12s,opacity .2s;}
+  .cta a.go:hover{opacity:.9;}
+  .cta a.go:active{transform:scale(.97);}
+  .cta a.alt{font-size:14px;color:var(--sage);text-decoration:none;}
+  .cta a.alt:hover{opacity:.7;}
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--faint);}
+  footer a{color:var(--sage);text-decoration:none;}
+  @media(max-width:540px){
+    .wrap{padding:40px 18px 72px;}
+    h1{font-size:31px;}
+    .lede{font-size:16px;}
+    .stalemate{grid-template-columns:1fr;}
+    .vs{text-align:center;}
+    .roles{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="aurora"></div><div class="grain"></div>
+<div class="wrap">
+  <a href="/" class="back"><span aria-hidden="true">&larr;</span> Back to Nadelio</a>
+
+  <div class="eyebrow">Settlement</div>
+  <h1>Every AI-visibility budget is spent on faith. We settle it on proof.</h1>
+  <p class="lede">Agencies want to sell results. Brands want to pay for results. Nobody can write that contract, because nobody can prove, without dispute, whether an AI mentioning a brand more this month is a real gain or noise. Nadelio is the neutral instrument that makes the deal signable.</p>
+  <span class="status"><span class="dot"></span>First agreements signing now, one sector, France</span>
+
+  <section>
+    <h2>The stalemate nobody talks about</h2>
+    <div class="stalemate">
+      <div class="side"><div class="who">The brand</div><p>Pays 1,500&ndash;50,000&euro;/month for content and PR aimed at AI visibility, with no way to verify whether any of it worked.</p></div>
+      <span class="vs">vs</span>
+      <div class="side"><div class="who">The agency</div><p>Wants to sell performance, not just hours, but has no instrument that survives a dispute over what "worked" means.</p></div>
+    </div>
+    <p style="margin-top:18px;">Both sides want the same thing: a number they can both trust. It has to come from someone with nothing to gain either way. That role, on this market, has been empty.</p>
+  </section>
+
+  <section>
+    <div class="thesis">
+      <div class="tag">The thesis</div>
+      <p>Nadelio does not sell AI-visibility tools. It settles AI-visibility contracts, for a flat fee, never a percentage of the outcome.</p>
+    </div>
+    <p>Every measurement we publish, on every free audit on this site, is a <strong>bounded score</strong>: a number with its margin of error, and an honest verdict on whether it can be trusted. That same instrument, applied to a before-and-after, is what makes a performance contract possible for the first time. <a href="/methodology" style="color:var(--sage-d)">Read how the score is built</a>.</p>
+  </section>
+
+  <section>
+    <h2>How a settlement works</h2>
+    <div class="roles">
+      <div class="role"><div class="t"><span class="dot"></span>The brand</div><p>Fixes 25 buyer-intent questions at signature. Pays a bonus only if the gain clears the threshold.</p></div>
+      <div class="role"><div class="t"><span class="dot"></span>The agency</div><p>Delivers the work, unchanged retainer. Finally has a number it can point to.</p></div>
+      <div class="role"><div class="t"><span class="dot"></span>Nadelio</div><p>Measures both sides against a control group, rules on the outcome, for a flat fee.</p></div>
+    </div>
+    <ol class="steps" style="margin-top:22px;">
+      <li>A question set worth measuring is fixed before the campaign starts, so nobody can chase easy wins after the fact.</li>
+      <li>Competitor brands are measured in parallel as a control group, so a model update cannot be mistaken for a campaign win.</li>
+      <li>A gain is recognized only when the score moves outside the 95% confidence band, not on a single lucky sample.</li>
+      <li>At the settlement date, Nadelio publishes the verdict, timestamped, with the full measurement trail.</li>
+    </ol>
+    <div class="callout">Example: a campaign moves a brand from <strong class="ex">44&plusmn;9</strong> to <strong class="ex">48&plusmn;11</strong>. A bare-number tool calls that a win. Nadelio does not: the bands overlap, the gain is inside the noise, no bonus is owed. Move it to <strong class="ex">61&plusmn;5</strong> instead, and the bands are clean apart: that one is real, and now provably so.</div>
+    <p><a href="/arbitration-agreement" style="color:var(--sage-d)">Read the full settlement agreement template &rarr;</a>, the open document both sides sign.</p>
+  </section>
+
+  <div class="never">
+    <h2>What Nadelio will never do</h2>
+    <ul>
+      <li>Take a cut of the outcome. A referee paid on the verdict is not a referee.</li>
+      <li>Execute the work. We measure and settle; agencies write the content, run the PR.</li>
+      <li>Guarantee a result. We price the measurement, never promise the number will move.</li>
+      <li>Compete on the free audit. Anyone can run a snapshot; almost nobody can settle a contract on it.</li>
+    </ul>
+  </div>
+
+  <section>
+    <h2>Where this stands</h2>
+    <p>This is early, on purpose. The first settlement agreements are being signed now, in a single sector, in France, so the model is proven on real disputes before it is scaled. Every settlement, cleared or not, becomes part of a public record: an arbitrator's only asset is a track record nobody can fake after the fact.</p>
+    <p class="small">Building or buying AI-visibility work right now and want the first agreement written for your case? That conversation is open.</p>
+  </section>
+
+  <div class="cta">
+    <a href="mailto:adam.chabbi94@gmail.com?subject=Settlement%20Agreement" class="go">Talk to us about a settlement</a>
+    <a href="/arbitration-agreement" class="alt">Read the contract template</a>
+  </div>
+
+  <footer>Nadelio, the AI visibility score you can show your board. <a href="/roadmap">Roadmap</a>. Built by <a href="https://github.com/arochab">Adam Chabbi</a>.</footer>
+</div>
+</body>
+</html>
