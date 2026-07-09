@@ -1138,13 +1138,12 @@
     render(data);btn.disabled=false;
   }
 
-  // Email capture BEFORE the paywall + a single pre-sell monitoring line.
-  // Subscription tiers deliberately NOT surfaced here yet: pricing needs its
-  // own page and story before it is shown, not three buttons bolted under a
-  // free audit. See notifyMonitoring() below for the interest-capture path.
+  // Email capture BEFORE the paywall + a single line pointing at the settlement
+  // story. Deliberately a link, not a price: pricing lives on /settlement, next
+  // to the thesis that gives it meaning, not as bare buttons under a free audit.
   function proCta(){
     return '<div class="pro-cta"><span class="label">Receive this diagnosis and your 3 blind spots by email.</span><input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Send it to me</button><span class="ok" id="proOk">You\'re on the list.</span>'+
-      '<span class="monitor">Ongoing monitoring is coming. <a onclick="notifyMonitoring(this)" tabindex="0" onkeydown="if(event.key===\'Enter\')notifyMonitoring(this)">Keep me posted</a></span></div>';
+      '<span class="monitor">Nadelio also settles AI-visibility contracts on results. <a href="/settlement">See how</a></span></div>';
   }
   async function resumeSubscription(sessionId){
     var out=document.getElementById('out');
