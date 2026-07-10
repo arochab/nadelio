@@ -123,7 +123,10 @@
   /* ---- WORK: 12-col grid, max 1200, anchored LEFT (air lives right) ---- */
   .work{grid-column:work;min-width:0;}
   .work-inner{max-width:1200px;margin:0;padding:56px 32px 40px 48px;
-    display:grid;grid-template-columns:repeat(12,1fr);gap:24px;align-content:start;}
+    display:grid;grid-template-columns:repeat(12,1fr);gap:24px;align-content:start;
+    /* Compose the idle void: hero, results (grows), footer pinned to the fold.
+       An empty page is a designed state, not leftover space under a floater. */
+    min-height:100vh;grid-template-rows:auto 1fr auto;}
   .work-inner > *{grid-column:1/-1;}
 
   /* ============================================================
@@ -184,12 +187,22 @@
   #hintRow.compact #hint,#hintRow.compact .refine-row{display:none;}
   #hintRow .more-opts{display:none;font-size:12px;color:var(--muted-dark);cursor:pointer;text-decoration:underline;text-underline-offset:3px;width:fit-content;}
   #hintRow.compact .more-opts{display:inline-block;}
-  /* The one-line measurement plan shown under the resolver in the ambiguous
-     state. Quiet by design: it informs, the resolver card decides. */
-  .plan-strip{font-size:12.5px;color:var(--muted-dark);line-height:1.6;padding:10px 14px;
-    margin-top:10px;border:1px solid var(--hairline-dark);border-radius:10px;
-    background:rgba(255,255,255,.02);max-width:60ch;}
-  .plan-strip .k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--sage-signal);margin-right:8px;}
+  /* The measurement plan: a row of unbreakable chips, each a control, not a
+     label. Tappable chips open the matching refine field, so removing the old
+     refine block cost the user nothing. */
+  .plan-strip{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;
+    padding:10px 14px;margin-top:10px;border:1px solid var(--hairline-dark);
+    border-radius:10px;background:rgba(255,255,255,.02);max-width:640px;}
+  /* Author display:flex would defeat the hidden attribute's UA display:none,
+     leaving an empty bordered shell at idle. The strip has NO material
+     existence until its first chip is born. */
+  .plan-strip[hidden]{display:none;}
+  .plan-strip .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--sage-signal);margin-right:4px;white-space:nowrap;}
+  .plan-chip{font-size:12.5px;color:var(--muted-dark);white-space:nowrap;
+    padding:3px 10px;border:1px solid var(--hairline-dark);border-radius:20px;background:rgba(255,255,255,.03);}
+  .plan-chip.tap{cursor:pointer;border-style:dashed;transition:border-color var(--d-ui),color var(--d-ui);}
+  .plan-chip.tap:hover{border-color:var(--sage-signal);color:var(--paper-ink);}
+  a.plan-chip{text-decoration:none;}
   .dial-rest{width:100%;max-width:230px;display:block;margin:6px auto 10px;}
   .refine-field{width:100%;font-family:var(--body);font-size:14px;color:#fff;background:var(--ground-2);
     border:1px solid var(--hairline-2);border-radius:12px;padding:12px 14px;outline:none;transition:border-color var(--d-ui);}
@@ -641,10 +654,10 @@
   <aside class="rail" aria-label="Instrument channels">
     <div class="rail-mono" aria-label="Nadelio">Na</div>
     <div class="rail-channels">
-      <div class="chan" id="chan01"><span class="cno mono">01</span><span class="cdot"></span><span class="clabel">SERP</span></div>
+      <div class="chan" id="chan01"><span class="cno mono">01</span><span class="cdot"></span><span class="clabel">GOOGLE</span></div>
       <div class="chan" id="chan02"><span class="cno mono">02</span><span class="cdot"></span><span class="clabel">AI</span></div>
     </div>
-    <div class="rail-state" id="railState"><span class="sdot"></span><span class="slabel" id="railStateLabel">Idle</span></div>
+    <div class="rail-state" id="railState"><span class="sdot"></span><span class="slabel" id="railStateLabel">Ready</span></div>
   </aside>
 
   <!-- ============ WORK: 12-col grid, anchored left ============ -->
@@ -693,7 +706,7 @@
         <aside class="hero-r" aria-hidden="true">
           <div class="cartouche">
             <div class="cartouche-plate">
-              <span class="lab">GEO Index</span>
+              <span class="lab">Your AI visibility score</span>
               <span class="range mono">0 to 100</span>
             </div>
             <!-- A drawn dial at rest, not a loading skeleton: graduated 0-100 arc,
@@ -731,7 +744,7 @@
           <span class="sep"></span>
           <a href="/methodology">How we measure</a>
           <span class="sep"></span>
-          <a href="/settlement">Settlement</a>
+          <a href="/settlement">Pay on results</a>
           <span class="sep"></span>
           <a href="/roadmap">Roadmap</a>
           <span class="sep"></span>
@@ -782,7 +795,7 @@
     el.classList.remove('live');
     if(mode==='live'){el.classList.add('live');if(lab)lab.textContent='Live';}
     else if(mode==='cached'){if(lab)lab.textContent='Cached';}
-    else{if(lab)lab.textContent='Idle';}
+    else{if(lab)lab.textContent='Ready';}
   }
 
   // ============ ENTITY RESOLVER ,  persistent identity card ============
@@ -1092,16 +1105,23 @@
       renderResolver('low',{brand:data.brand,identified_as:identifiedAs,name:(ev0.site_name||data.og_site_name||''),official_url:officialUrl,desc:dispDesc},gen);
     }
 
-    // ONE compact plan strip, right under the card. The resolver owns the
-    // decision; this line only states what would be measured and how honestly:
-    // sample size shown before the click, never discovered after.
+    // The plan as tappable chips: every parameter is a control that opens the
+    // matching refine field. Sample size and method are declared BEFORE the
+    // click, with the methodology one tap away, never discovered after.
     var rivals=competitors.filter(function(c){return c.toLowerCase()!==(data.brand||'').toLowerCase();}).slice(0,4);
-    showPlan('<span class="mono k">The plan</span> '+
-      esc(data.sector||'Sector to confirm')+(market?' &middot; '+esc(market):'')+
-      (rivals.length?' &middot; vs '+esc(rivals.join(', ')):'')+
-      ' &middot; '+queries.length+' buyer '+(queries.length>1?'queries':'query')+
-      ' &times; 3 AI runs, score with its &plusmn; interval');
+    showPlan('<span class="k">The plan</span>'+
+      '<span class="plan-chip tap" onclick="openRefineField(\'hint\')" title="Adjust the sector">'+esc(data.sector||'Sector to confirm')+'</span>'+
+      (market?'<span class="plan-chip tap" onclick="openRefineField(\'market\')" title="Change the market">'+esc(market)+'</span>':'')+
+      (rivals.length?'<span class="plan-chip tap" onclick="openRefineField(\'hint\')" title="Adjust who you are measured against">vs '+esc(rivals.join(', '))+'</span>':'')+
+      '<span class="plan-chip">'+queries.length+' '+(queries.length>1?'queries':'query')+' &times; 3 runs</span>'+
+      '<a class="plan-chip" href="/methodology" title="How the interval is computed">95% confidence interval</a>');
     out.innerHTML='';
+  }
+  // A plan chip was tapped: open the FULL refine row and focus the matching field.
+  function openRefineField(id){
+    var row=document.getElementById('hintRow');
+    if(row){row.classList.remove('compact');row.style.display='flex';}
+    var f=document.getElementById(id);if(f)f.focus();
   }
 
   function renderResolverPlateau(d,gen){
