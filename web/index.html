@@ -178,6 +178,19 @@
     text-underline-offset:3px;text-decoration-color:rgba(138,150,143,.5);cursor:pointer;}
   .refine-toggle a:hover{color:var(--paper-ink);}
   #hintRow{display:none;margin-top:12px;flex-direction:column;gap:8px;max-width:60ch;}
+  /* Compact refine: when the resolver asks for the official site, show ONLY the
+     URL field. Description + market stay one click away behind "More options",
+     so the ambiguous-identity state never shows three empty fields at once. */
+  #hintRow.compact #hint,#hintRow.compact .refine-row{display:none;}
+  #hintRow .more-opts{display:none;font-size:12px;color:var(--muted-dark);cursor:pointer;text-decoration:underline;text-underline-offset:3px;width:fit-content;}
+  #hintRow.compact .more-opts{display:inline-block;}
+  /* The one-line measurement plan shown under the resolver in the ambiguous
+     state. Quiet by design: it informs, the resolver card decides. */
+  .plan-strip{font-size:12.5px;color:var(--muted-dark);line-height:1.6;padding:10px 14px;
+    margin-top:10px;border:1px solid var(--hairline-dark);border-radius:10px;
+    background:rgba(255,255,255,.02);max-width:60ch;}
+  .plan-strip .k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--sage-signal);margin-right:8px;}
+  .dial-rest{width:100%;max-width:230px;display:block;margin:6px auto 10px;}
   .refine-field{width:100%;font-family:var(--body);font-size:14px;color:#fff;background:var(--ground-2);
     border:1px solid var(--hairline-2);border-radius:12px;padding:12px 14px;outline:none;transition:border-color var(--d-ui);}
   .refine-field::placeholder{color:#5c6660;}
@@ -641,26 +654,24 @@
       <!-- ACT 1 ,  THE PROBE (7/5 asymmetric hero) -->
       <section class="hero">
         <div class="hero-l">
-          <div class="eyebrow"><span class="dot" aria-hidden="true"></span> GEO Visibility Index</div>
-          <h1>When a buyer asks AI what to choose, it names one brand. Measure whether it is <span class="pivot">yours</span>.</h1>
-          <p class="lede">One brand is enough. See who owns the answers your buyers follow, on <span class="strong">Google and on ChatGPT/Claude</span>, in 10 seconds.</p>
+          <div class="eyebrow"><span class="dot" aria-hidden="true"></span> The AI visibility instrument</div>
+          <h1>When a buyer asks AI, one brand gets named. Measure whether it is <span class="pivot">yours</span>.</h1>
+          <p class="lede">See who owns the answers on <span class="strong">Google and ChatGPT</span>. Ten seconds, free, no signup.</p>
 
           <div class="bar-input">
-            <input id="brand" type="text" placeholder="e.g. Notion, Stripe, Figma" onkeydown="if(event.key==='Enter')run(true)" aria-label="Your brand"/>
+            <input id="brand" type="text" placeholder="Your brand, e.g. Notion" onkeydown="if(event.key==='Enter')run(true)" aria-label="Your brand"/>
             <button id="goBtn" onclick="run(true)">Measure</button>
           </div>
 
           <!-- PERSISTENT ENTITY RESOLVER: one card, never destroyed. -->
           <div id="resolver" class="resolver" hidden></div>
 
-          <div class="trustline mono"><b>21</b> brands mapped <span class="sep"></span> dual engine <span class="sep"></span> sources cited</div>
+          <!-- The measurement plan, one quiet line, right under the card. -->
+          <div id="planStrip" class="plan-strip" hidden></div>
 
-          <div class="refine-toggle">
-            <a id="hintToggle" onclick="toggleHint()" tabindex="0" onkeydown="if(event.key==='Enter')toggleHint()">Have the exact website? Get a pinpoint diagnosis</a>
-          </div>
           <div id="hintRow">
-            <input id="officialUrl" class="refine-field" type="text" placeholder="Paste the official site for an exact read, e.g. steritech.eu.com" oninput="onUrlInput()" onkeydown="if(event.key==='Enter')preview()"/>
-            <input id="hint" class="refine-field" type="text" placeholder="Or a short description, e.g. 'French techno record label' or 'AP automation for finance teams'" onkeydown="if(event.key==='Enter')preview()"/>
+            <input id="officialUrl" class="refine-field" type="text" placeholder="Official website, locks the exact company" oninput="onUrlInput()" onkeydown="if(event.key==='Enter')preview()"/>
+            <input id="hint" class="refine-field" type="text" placeholder="Or a few words: 'French techno label', 'AP automation'" onkeydown="if(event.key==='Enter')preview()"/>
             <div class="refine-row">
               <label for="market">Market</label>
               <select id="market">
@@ -670,11 +681,12 @@
                 <option value="dach">DACH</option>
                 <option value="uk">UK</option>
               </select>
-              <button id="previewBtn" class="refine-run" onclick="preview()">Preview sector and competitors</button>
+              <button id="previewBtn" class="refine-run" onclick="preview()">Update identification</button>
             </div>
+            <a class="more-opts" onclick="expandHint()" tabindex="0" onkeydown="if(event.key==='Enter')expandHint()">More options</a>
           </div>
 
-          <div class="sample-line">Not your brand yet? <a onclick="run(false)" tabindex="0" onkeydown="if(event.key==='Enter')run(false)">See a sample measurement</a></div>
+          <div class="sample-line">Just looking? <a onclick="run(false)" tabindex="0" onkeydown="if(event.key==='Enter')run(false)">See a sample measurement</a></div>
         </div>
 
         <!-- ACT 1 right: instrument cartridge (idle heatmap filigree) -->
@@ -684,12 +696,25 @@
               <span class="lab">GEO Index</span>
               <span class="range mono">0 to 100</span>
             </div>
-            <div class="sk-grid">
-              <i></i><i></i><i></i><i></i><i></i>
-              <i></i><i></i><i></i><i></i><i></i>
-              <i></i><i></i><i></i><i></i><i></i>
-            </div>
-            <div class="cartouche-await"><span class="pulse"></span> Awaiting signal</div>
+            <!-- A drawn dial at rest, not a loading skeleton: graduated 0-100 arc,
+                 needle parked at zero. The wait is a designed state. -->
+            <svg class="dial-rest" viewBox="0 0 220 130" aria-hidden="true">
+              <path d="M 20 115 A 90 90 0 0 1 200 115" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10" stroke-linecap="round"/>
+              <g stroke="rgba(255,255,255,.18)" stroke-width="2">
+                <line x1="20" y1="115" x2="28" y2="115"/>
+                <line x1="35.9" y1="70.5" x2="42.8" y2="74.5"/>
+                <line x1="74.5" y1="35.9" x2="78.5" y2="42.8"/>
+                <line x1="110" y1="25" x2="110" y2="33"/>
+                <line x1="145.5" y1="35.9" x2="141.5" y2="42.8"/>
+                <line x1="184.1" y1="70.5" x2="177.2" y2="74.5"/>
+                <line x1="200" y1="115" x2="192" y2="115"/>
+              </g>
+              <line x1="110" y1="115" x2="32" y2="113" stroke="var(--sage-signal)" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>
+              <circle cx="110" cy="115" r="5" fill="var(--sage-signal)" opacity=".55"/>
+              <text x="14" y="128" font-family="var(--mono)" font-size="10" fill="rgba(255,255,255,.35)">0</text>
+              <text x="188" y="128" font-family="var(--mono)" font-size="10" fill="rgba(255,255,255,.35)">100</text>
+            </svg>
+            <div class="cartouche-await"><span class="pulse"></span> Your reading appears here</div>
           </div>
         </aside>
       </section>
@@ -711,11 +736,6 @@
           <a href="/roadmap">Roadmap</a>
           <span class="sep"></span>
           <a href="mailto:adam.chabbi94@gmail.com">Legal and terms</a>
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <span class="stripe-badge">&#128274; Secure payment by Stripe</span>
-          <span class="sep"></span>
-          <span class="count">21+ brands analysed</span>
         </div>
       </footer>
 
@@ -871,13 +891,19 @@
     if(hasIdentity){
       domainHtml=host?'<div class="rz-domain"><span class="dot"></span><a href="'+esc('https://'+host)+'" target="_blank" rel="noopener">'+esc(host)+'</a></div>':'';
       descHtml=desc?'<div class="rz-desc">'+esc(truncDesc(desc,150))+'</div>':'';
-      q='<div class="rz-q">Which '+esc(brand)+' is yours?</div>';
     }else{
-      descHtml='<div class="rz-desc">Common name, many companies share it. Paste your official site and I lock the exact one.</div>';
+      descHtml='<div class="rz-desc">Common name, several companies share it. Paste your official site and the read locks onto the right one.</div>';
     }
     var nameCls=hasIdentity&&name?'rz-name':'rz-name muted';
     var nameTxt=hasIdentity&&name?name:brand;
-    var ghostLabel=hasIdentity?'Measure my best guess anyway':'Measure '+brand+' anyway';
+    // ONE branch, one primary. With a credible guess the primary IS the measure
+    // (a single tap keeps going); doubting it is the quiet secondary path. With
+    // no guess at all, the primary is the one thing that unblocks: the site.
+    var actions=hasIdentity
+      ?'<button class="btn-primary" onclick="confirmAnalyze()">Yes, measure '+esc(host||brand)+'</button>'+
+       '<button class="btn-ghost" onclick="openHintCompact()">Not this one?</button>'
+      :'<button class="btn-primary" onclick="openHintCompact()">Paste your site</button>'+
+       '<button class="btn-ghost" onclick="confirmAnalyze()">Measure on the name anyway</button>';
     el.innerHTML=
       '<div class="rz-fav">'+faviconImg(host,nameTxt||brand)+'</div>'+
       '<div class="rz-meta">'+
@@ -885,13 +911,7 @@
         '<div class="'+nameCls+'">'+esc(nameTxt||'Best guess')+'</div>'+
         domainHtml+descHtml+
       '</div>'+
-      q+
-      (hasIdentity?'<div class="rz-hint">One paste locks the right company. I will re-read the site live and rewrite this card.</div>':'')+
-      '<div class="rz-exmode">Exactitude mode</div>'+
-      '<div class="rz-actions">'+
-        '<button class="btn-primary" onclick="refinePreview()">Lock the exact site</button>'+
-        '<button class="btn-ghost" onclick="confirmAnalyze()">'+esc(ghostLabel)+'</button>'+
-      '</div>';
+      '<div class="rz-actions">'+actions+'</div>';
   }
 
   function cancelAutoChain(){
@@ -899,9 +919,7 @@
     var el=document.getElementById('resolver');
     var brand=el&&el.dataset.rzBrand?el.dataset.rzBrand:document.getElementById('brand').value.trim();
     renderResolver('low',{brand:brand,identified_as:'',name:'',official_url:'',desc:''},_rzGen);
-    var row=document.getElementById('hintRow');
-    if(row&&(row.style.display==='none'||row.style.display===''))row.style.display='flex';
-    var u=document.getElementById('officialUrl');if(u)u.focus();
+    openHintCompact();
   }
 
   // LIVE REWARD: as the user types a plausible domain, show its real favicon now.
@@ -943,20 +961,33 @@
   function toggleHint(){
     var row=document.getElementById('hintRow');
     var open=row.style.display!=='none'&&row.style.display!=='';
+    row.classList.remove('compact'); // manual open always shows every option
     row.style.display=open?'none':'flex';
     if(!open)document.getElementById('hint').focus();
+  }
+  // Opens the refine row in COMPACT mode: URL field only. Used when the
+  // resolver asks for the official site, so the user faces one field, not three.
+  function openHintCompact(){
+    var row=document.getElementById('hintRow');
+    if(row){row.classList.add('compact');row.style.display='flex';}
+    var u=document.getElementById('officialUrl');if(u)u.focus();
+  }
+  function expandHint(){
+    var row=document.getElementById('hintRow');
+    if(row)row.classList.remove('compact');
   }
 
   // Drawn empty state: filigree heatmap skeleton. No auto-run.
   function hideResolver(){var el=document.getElementById('resolver');if(el){el.hidden=true;el.dataset.rzBrand='';}}
   function drawEmptyState(){
+    // At rest the page shows nothing below the hero: no skeleton theater. The
+    // right-rail dial (drawn, needle at zero) is the only "waiting" material.
     hideResolver();
-    var out=document.getElementById('out');if(!out)return;
-    var cells='';for(var i=0;i<15;i++)cells+='<i></i>';
-    out.innerHTML='<div class="skeleton"><div class="sk-label mono">Signal grid, idle</div>'+
-      '<div class="sk-grid" aria-hidden="true">'+cells+'</div>'+
-      '<div class="sk-copy">Type a brand to light up the grid.</div></div>';
+    hidePlan();
+    var out=document.getElementById('out');if(out)out.innerHTML='';
   }
+  function hidePlan(){var p=document.getElementById('planStrip');if(p){p.hidden=true;p.innerHTML='';}}
+  function showPlan(html){var p=document.getElementById('planStrip');if(p){p.innerHTML=html;p.hidden=false;}}
 
   async function run(live){
     var out=document.getElementById('out'),btn=document.getElementById('goBtn');
@@ -1061,17 +1092,16 @@
       renderResolver('low',{brand:data.brand,identified_as:identifiedAs,name:(ev0.site_name||data.og_site_name||''),official_url:officialUrl,desc:dispDesc},gen);
     }
 
-    var compList=competitors.map(function(c){return '<span style="font-family:var(--mono);font-size:12px;color:var(--paper-ink);background:rgba(255,255,255,.05);border:1px solid var(--hairline-dark);padding:5px 11px;border-radius:8px;display:inline-block;margin:0 4px 4px 0;">'+esc(c)+'</span>';}).join('');
-    var queryList=queries.map(function(q){return '<li style="font-family:var(--mono);font-size:13px;">'+esc(q)+'</li>';}).join('');
-    out.innerHTML='<div class="card">'+
-      '<div class="badge demo">Best guess, refine for an exact read</div>'+
-      '<div class="prompt" style="font-size:13px;color:var(--muted-dark);margin-bottom:6px;">Best guess: <b style="color:#fff">'+esc(data.brand)+'</b> in <b style="color:#fff">'+esc(data.sector||'an unclear sector')+'</b>'+(market?', market <b style="color:#fff">'+esc(market)+'</b>':'')+', <b style="color:#fff">'+queries.length+'</b> buyer '+(queries.length>1?'queries':'query')+'.</div>'+
-      (compList?'<div style="margin:14px 0;"><div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:8px;">Competitors</div><div>'+compList+'</div></div>':'')+
-      (queryList?'<div style="margin:14px 0;"><div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:8px;">Buyer queries'+(lang?' <span style="text-transform:none;letter-spacing:0;color:var(--muted-dark)">('+esc(lang)+')</span>':'')+'</div><ul style="padding-left:18px;line-height:1.7;color:var(--paper-ink);">'+queryList+'</ul></div>':'')+
-      '</div>';
-    var row=document.getElementById('hintRow');
-    if(row&&(row.style.display==='none'||row.style.display==='')){row.style.display='flex';}
-    var u=document.getElementById('officialUrl');if(u)u.focus();
+    // ONE compact plan strip, right under the card. The resolver owns the
+    // decision; this line only states what would be measured and how honestly:
+    // sample size shown before the click, never discovered after.
+    var rivals=competitors.filter(function(c){return c.toLowerCase()!==(data.brand||'').toLowerCase();}).slice(0,4);
+    showPlan('<span class="mono k">The plan</span> '+
+      esc(data.sector||'Sector to confirm')+(market?' &middot; '+esc(market):'')+
+      (rivals.length?' &middot; vs '+esc(rivals.join(', ')):'')+
+      ' &middot; '+queries.length+' buyer '+(queries.length>1?'queries':'query')+
+      ' &times; 3 AI runs, score with its &plusmn; interval');
+    out.innerHTML='';
   }
 
   function renderResolverPlateau(d,gen){
@@ -1095,17 +1125,16 @@
   }
 
   function refinePreview(){
-    var row=document.getElementById('hintRow');
-    if(row&&(row.style.display==='none'||row.style.display==='')){row.style.display='flex';}
     var u=document.getElementById('officialUrl');
     var h=document.getElementById('hint');
     var haveUrl=u&&u.value.trim();
     var haveHint=h&&h.value.trim();
     if(haveUrl||haveHint){preview(true);return;}
-    if(u)u.focus();
+    openHintCompact();
   }
 
   async function confirmAnalyze(){
+    hidePlan(); // measuring starts: the plan line handed its job to the progress card
     var out=document.getElementById('out'),btn=document.getElementById('goBtn');
     var brand=out.dataset.previewBrand||document.getElementById('brand').value.trim();
     var sector=out.dataset.previewSector||'';
