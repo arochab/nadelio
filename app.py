@@ -480,6 +480,38 @@ def _urlopen_json_with_retry(req, timeout, max_attempts=3, what="upstream API"):
     raise RuntimeError(what + " temporarily unavailable after " + str(max_attempts) + " attempts")
 
 
+def _anthropic_message(model, max_tokens, prompt, api_key, timeout=40,
+                       what="Claude API", temperature=None):
+    """One NON-THINKING Anthropic Messages call. Returns (text, stop_reason).
+
+    thinking is explicitly disabled because Claude 5 models reason ADAPTIVELY
+    by default and the thinking block spends from max_tokens: on a 500-token
+    budget the model could burn 400+ tokens thinking and return a JSON object
+    cut mid-array, which surfaced to users as "Claude did not return valid
+    JSON for this brand" (Carglass, 2026-07-09). Every call in this app wants
+    a cheap, complete, machine-parseable reply — never visible reasoning."""
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "thinking": {"type": "disabled"},
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if temperature is not None:
+        payload["temperature"] = temperature
+    req = urllib.request.Request(
+        ANTHROPIC_ENDPOINT, data=json.dumps(payload).encode(),
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        method="POST",
+    )
+    data = _urlopen_json_with_retry(req, timeout=timeout, what=what)
+    text = "".join(b.get("text", "") for b in data.get("content", []))
+    return text, data.get("stop_reason", "")
+
+
 # ---------------------------------------------------------------------------
 # Step 1: Claude infers sector, competitors, queries from a single brand
 # ---------------------------------------------------------------------------
@@ -650,27 +682,20 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
             "\n\nAdditional context to disambiguate the brand (use this to identify the CORRECT "
             "company, especially if the name is ambiguous): " + hint.strip()
         )
-    body = json.dumps({
-        "model": INFER_MODEL,
-        "max_tokens": 500,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode()
-    req = urllib.request.Request(
-        ANTHROPIC_ENDPOINT, data=body,
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        method="POST",
-    )
-    data = _urlopen_json_with_retry(req, timeout=40, what="Claude API")
-
-    text = "".join(b.get("text", "") for b in data.get("content", []))
+    text, stop = _anthropic_message(INFER_MODEL, 900, prompt, api_key, what="Claude API")
     parsed = _extract_json_object(text)
     if parsed is None:
-        logger.error("Claude returned no parseable JSON in: %s", text[:300])
-        raise RuntimeError("Claude did not return valid JSON for this brand")
+        # Identification replies are non-deterministic: one regenerate rescues
+        # the audit far more often than not, and the call costs a fraction of a
+        # cent. Only after a second unparseable reply do we fail the request.
+        logger.warning("infer_strategy unparseable (stop_reason=%s), retrying once: %s",
+                       stop, text[:200])
+        text, stop = _anthropic_message(INFER_MODEL, 900, prompt, api_key, what="Claude API")
+        parsed = _extract_json_object(text)
+    if parsed is None:
+        logger.error("Claude returned no parseable JSON (stop_reason=%s) in: %s", stop, text[:300])
+        raise RuntimeError("The identification step failed on this run. "
+                           "Running the measure again usually works.")
     return parsed
 
 # ---------------------------------------------------------------------------
@@ -1120,19 +1145,10 @@ def _ai_visibility_prompt(brands, queries):
 
 
 def _call_claude(prompt, api_key):
-    body = json.dumps({
-        "model": ANTHROPIC_MODEL,
-        "max_tokens": 600,
-        "temperature": AI_RUN_TEMPERATURE,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode()
-    req = urllib.request.Request(
-        ANTHROPIC_ENDPOINT, data=body,
-        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
-                 "content-type": "application/json"},
-        method="POST")
-    data = _urlopen_json_with_retry(req, timeout=40, what="Claude API (AI visibility)")
-    return "".join(b.get("text", "") for b in data.get("content", []))
+    text, _ = _anthropic_message(ANTHROPIC_MODEL, 600, prompt, api_key,
+                                 what="Claude API (AI visibility)",
+                                 temperature=AI_RUN_TEMPERATURE)
+    return text
 
 
 def _call_openai(prompt, api_key):
@@ -1454,26 +1470,12 @@ def _build_remediation(ranking, queries, identified_as, evidence, brand, llm_key
         "the EXACT queries above (reference the real query text and the real competitors named). "
         "Keep every action grounded in the data; no generic filler."
     )
-    body = json.dumps({
-        "model": INFER_MODEL,
-        "max_tokens": 700,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode()
-    req = urllib.request.Request(
-        ANTHROPIC_ENDPOINT, data=body,
-        headers={
-            "x-api-key": llm_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        method="POST",
-    )
     try:
-        data = _urlopen_json_with_retry(req, timeout=40, what="Claude API (remediation)")
+        text, _ = _anthropic_message(INFER_MODEL, 900, prompt, llm_key,
+                                     what="Claude API (remediation)")
     except Exception:
         logger.exception("remediation call failed")
         return None
-    text = "".join(b.get("text", "") for b in data.get("content", []))
     parsed = _extract_json_object(text)
     if parsed is None:
         return None
