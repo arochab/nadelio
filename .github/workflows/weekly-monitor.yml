@@ -1,0 +1,29 @@
+name: Weekly monitoring run
+
+# Triggers the bounded-score measurement for every active Stripe monitoring
+# subscription, once a week. The endpoint itself (/api/cron/monitor) is the
+# source of truth for who gets measured — it lists active Stripe subscriptions
+# directly, so this workflow only needs to know WHEN to call it, never WHO.
+#
+# Runs Monday 06:00 UTC (07:00 or 08:00 Paris time depending on DST) — early
+# enough that a subscriber's weekly alert, if any, lands before their workday.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {} # lets Adam trigger a run manually from the Actions tab
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the monitoring endpoint
+        run: |
+          status=$(curl -s -o response.json -w "%{http_code}" -X POST \
+            "https://www.nadelio.com/api/cron/monitor" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}")
+          echo "HTTP status: $status"
+          cat response.json
+          if [ "$status" -ne 200 ]; then
+            echo "::error::Monitoring run failed with status $status"
+            exit 1
+          fi
