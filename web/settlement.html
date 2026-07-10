@@ -68,6 +68,23 @@
   .status{display:inline-flex;align-items:center;gap:8px;font-family:ui-monospace,monospace;font-size:12px;letter-spacing:.03em;color:var(--sage-d);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:7px 14px 7px 12px;margin-top:6px;}
   .status .dot{width:7px;height:7px;border-radius:50%;background:var(--sage);}
 
+  /* Monitoring checkout: the one tier that is genuinely self-serve. Settlement
+     and the Gap Report stay a direct conversation (mailto), on purpose. */
+  .sub-form{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 14px;}
+  .sub-form input{font-family:inherit;font-size:14px;padding:11px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);outline:none;flex:1;min-width:180px;transition:border-color .15s;}
+  .sub-form input:focus{border-color:var(--sage);}
+  .sub-form input::placeholder{color:var(--faint);}
+  .sub-tiers{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
+  .sub-tier{font-family:inherit;text-align:left;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;color:var(--ink);transition:border-color .15s,transform .1s;}
+  .sub-tier:hover{border-color:var(--sage);}
+  .sub-tier:active{transform:scale(.98);}
+  .sub-tier:disabled{opacity:.5;cursor:not-allowed;}
+  .sub-tier .tn{font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sage-d);}
+  .sub-tier .tp{font-family:ui-monospace,monospace;font-size:19px;font-weight:600;margin-top:3px;}
+  .sub-tier .tp span{font-size:11px;color:var(--faint);font-weight:400;}
+  .sub-tier .td{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.4;}
+  .sub-msg{font-size:13px;color:var(--amber);display:none;margin-top:2px;}
+
   .cta{margin-top:46px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
   .cta a.go{font-size:15px;font-weight:500;text-decoration:none;border-radius:12px;padding:14px 26px;background:var(--ink);color:#fff;transition:transform .12s,opacity .2s;}
   .cta a.go:hover{opacity:.9;}
@@ -134,13 +151,49 @@
   <section>
     <h2>What it costs</h2>
     <p>A settlement needs a weekly measurement to rule on, that is the monitoring underneath it. The fee structure is simple on purpose: <strong>the referee is always paid flat, never a share of what you win.</strong></p>
-    <div class="roles">
-      <div class="role"><div class="t"><span class="dot"></span>Monitoring</div><p><strong style="font-size:15px;color:var(--ink)">99&ndash;499&euro;/mo</strong><br>Weekly bounded measurement, 1 to 10 brands. The evidence base a settlement rules on.</p></div>
+
+    <h2 style="margin-top:32px;border:none;padding-bottom:0;">Start monitoring a brand</h2>
+    <div class="sub-form">
+      <input id="subBrand" type="text" placeholder="Brand to monitor" maxlength="120">
+      <input id="subEmail" type="email" placeholder="you@company.com" maxlength="200">
+    </div>
+    <div class="sub-tiers">
+      <button class="sub-tier" onclick="startSubscribe('starter')"><div class="tn">Starter</div><div class="tp">99&euro;<span>/mo</span></div><div class="td">1 brand, weekly bounded score</div></button>
+      <button class="sub-tier" onclick="startSubscribe('pro')"><div class="tn">Pro</div><div class="tp">249&euro;<span>/mo</span></div><div class="td">3 brands, tighter interval</div></button>
+      <button class="sub-tier" onclick="startSubscribe('agency')"><div class="tn">Agency</div><div class="tp">499&euro;<span>/mo</span></div><div class="td">10 brands, white-label ready</div></button>
+    </div>
+    <span class="sub-msg" id="subMsg"></span>
+
+    <div class="roles" style="margin-top:28px;">
       <div class="role"><div class="t"><span class="dot"></span>Settlement</div><p><strong style="font-size:15px;color:var(--ink)">300&ndash;500&euro;/mo</strong><br>Per brand under an active performance agreement. Flat, regardless of the verdict.</p></div>
       <div class="role"><div class="t"><span class="dot"></span>Citation Gap Report</div><p><strong style="font-size:15px;color:var(--ink)">990&euro;</strong><br>One-off: where your category gets cited, and where you are absent. Paid either way.</p></div>
     </div>
-    <p class="small">Monitoring starts on its own; a settlement agreement is set up with your counsel and Nadelio directly, not a self-serve checkout. <a href="mailto:adam.chabbi94@gmail.com?subject=Settlement%20Agreement" style="color:var(--sage-d)">Start that conversation</a>.</p>
+    <p class="small">A settlement agreement is set up with your counsel and Nadelio directly, not a self-serve checkout. <a href="mailto:adam.chabbi94@gmail.com?subject=Settlement%20Agreement" style="color:var(--sage-d)">Start that conversation</a>.</p>
   </section>
+
+  <script>
+    async function startSubscribe(tier){
+      var brandEl=document.getElementById('subBrand');
+      var emailEl=document.getElementById('subEmail');
+      var msg=document.getElementById('subMsg');
+      var brand=(brandEl&&brandEl.value||'').trim();
+      var email=(emailEl&&emailEl.value||'').trim();
+      if(!brand){
+        if(msg){msg.textContent='Type the brand name you want monitored first.';msg.style.display='inline';}
+        if(brandEl)brandEl.focus();
+        return;
+      }
+      if(msg)msg.style.display='none';
+      try{
+        var res=await fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier:tier,brand:brand,email:email})});
+        var d=await res.json();
+        if(d&&d.url){window.location.href=d.url;return;}
+        if(msg){msg.textContent=(d&&d.error)?d.error:'Subscriptions are not available yet.';msg.style.display='inline';}
+      }catch(e){
+        if(msg){msg.textContent='Could not reach the payment service. Try again in a moment.';msg.style.display='inline';}
+      }
+    }
+  </script>
 
   <div class="never">
     <h2>What Nadelio will never do</h2>
