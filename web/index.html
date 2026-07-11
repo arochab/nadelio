@@ -126,7 +126,7 @@
     display:grid;grid-template-columns:repeat(12,1fr);gap:24px;align-content:start;
     /* Compose the idle void: hero, results (grows), footer pinned to the fold.
        An empty page is a designed state, not leftover space under a floater. */
-    min-height:100vh;grid-template-rows:auto 1fr auto;}
+    min-height:100vh;grid-template-rows:auto 1fr auto auto;}
   .work-inner > *{grid-column:1/-1;}
 
   /* ============================================================
@@ -407,6 +407,7 @@
 
   /* progress stage ,  left aligned, worked loader */
   .stage{color:var(--muted-dark);font-size:14px;padding:26px 0;}
+  .stage-slow{margin-top:12px;font-size:12.5px;color:var(--muted);}
   .stage b{color:var(--sage-signal);}
   .stage .bar{height:3px;background:rgba(255,255,255,.08);border-radius:2px;max-width:300px;margin:18px 0 0;overflow:hidden;}
   .stage .bar i{display:block;height:100%;width:32%;background:var(--sage-signal);border-radius:2px;animation:slide 1.3s ease-in-out infinite;}
@@ -521,6 +522,28 @@
   .support-link{color:var(--sage-signal);text-decoration:underline;text-underline-offset:2px;}
 
   /* ============================================================
+     ACT 4 ,  THE PAID INSTRUMENT (quiet strip above the footer)
+     ============================================================ */
+  .offers{grid-column:1/-1;margin-top:44px;padding-top:26px;border-top:1px solid var(--hairline-dark);}
+  .offers-k{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:20px;}
+  .offers-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;}
+  .offer{min-width:0;}
+  .offer .on{font-family:var(--display);font-size:16px;font-weight:600;color:var(--paper-ink);letter-spacing:-.01em;}
+  .offer .op{font-family:var(--mono);font-size:14px;color:var(--sage-signal);margin-top:4px;}
+  .offer .op span{font-size:11px;color:var(--muted-dark);}
+  .offer .od{font-size:13px;color:var(--muted-dark);line-height:1.6;margin-top:8px;max-width:38ch;}
+  /* Secondary on purpose: "Measure" stays the page's only filled primary. */
+  .offer-cta{margin-top:14px;font-family:var(--body);font-size:13px;font-weight:600;cursor:pointer;border-radius:10px;padding:10px 16px;border:1px solid var(--action);background:transparent;color:var(--sage-signal);}
+  .offer-cta:hover{background:rgba(79,209,165,.08);}
+  .mtx-flat{margin-top:26px;padding-top:20px;border-top:1px dashed var(--hairline-2);font-size:13px;color:var(--muted-dark);line-height:1.6;}
+  .offer-link{display:inline-block;margin-top:14px;font-size:13px;color:var(--sage-signal);text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
+  /* author display beats the [hidden] UA rule (same lesson as .plan-strip) */
+  .offer-link[hidden],.offers[hidden]{display:none;}
+  .offer-msg{font-size:12px;color:var(--amber);margin-top:8px;display:none;}
+  .pro-cta .upsell-note{font-size:12px;color:var(--muted-dark);}
+  .pro-cta .upsell-link{width:100%;font-size:13px;color:var(--sage-signal);text-decoration:underline;text-underline-offset:3px;}
+
+  /* ============================================================
      FOOTER ,  left aligned
      ============================================================ */
   footer.site{grid-column:1/-1;margin-top:44px;padding-top:24px;border-top:1px solid var(--hairline-dark);font-size:12px;color:var(--muted-dark);line-height:1.9;}
@@ -620,6 +643,7 @@
     .doc-side{order:-1;}
     .work-inner{grid-template-columns:1fr;gap:20px;}
     .work-inner > *{grid-column:auto;}
+    .offers-grid{grid-template-columns:1fr;gap:24px;}
   }
   @media(max-width:640px){
     .work-inner{padding:28px 16px 36px;}
@@ -722,18 +746,47 @@
                 <line x1="184.1" y1="70.5" x2="177.2" y2="74.5"/>
                 <line x1="200" y1="115" x2="192" y2="115"/>
               </g>
-              <line x1="110" y1="115" x2="32" y2="113" stroke="var(--sage-signal)" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>
-              <circle cx="110" cy="115" r="5" fill="var(--sage-signal)" opacity=".55"/>
+              <line id="dialNeedle" x1="110" y1="115" x2="32" y2="113" stroke="var(--sage-signal)" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>
+              <circle id="dialHub" cx="110" cy="115" r="5" fill="var(--sage-signal)" opacity=".55"/>
               <text x="14" y="128" font-family="var(--mono)" font-size="10" fill="rgba(255,255,255,.35)">0</text>
               <text x="188" y="128" font-family="var(--mono)" font-size="10" fill="rgba(255,255,255,.35)">100</text>
             </svg>
-            <div class="cartouche-await"><span class="pulse"></span> Your reading appears here</div>
+            <div class="cartouche-await" id="cartAwait"><span class="pulse"></span> Your reading appears here</div>
           </div>
         </aside>
       </section>
 
       <!-- ACT 2 + ACT 3 render into #out -->
       <div id="out"></div>
+
+      <!-- ACT 4 ,  THE PAID INSTRUMENT. Three ways past the free sample, one
+           quiet typographic strip above the footer. The free measure keeps the
+           hero to itself; this answers "then what" without shouting. -->
+      <section class="offers" aria-label="Paid measurements">
+        <div class="offers-k">When the sample is not enough</div>
+        <div class="offers-grid">
+          <div class="offer">
+            <div class="on">Deep Audit</div>
+            <div class="op mono">79&euro; <span>one time</span></div>
+            <div class="od">Five buyer queries at triple runs, a tighter interval, your blind spots against named rivals, and the action plan.</div>
+            <span id="offerDeepBtn"><button class="offer-cta" data-deepcta onclick="startCheckout()">Run a Deep Audit</button></span>
+            <a id="offerDeepLink" class="offer-link" hidden onclick="scrollToPlanche()" tabindex="0" onkeydown="if(event.key==='Enter')scrollToPlanche()">Open the dossier preview above</a>
+            <div class="offer-msg" data-deepmsg></div>
+          </div>
+          <div class="offer">
+            <div class="on">Monitoring</div>
+            <div class="op mono">from 99&euro; <span>per month</span></div>
+            <div class="od">The same bounded score, measured every week. You are alerted when movement clears the noise, never on the noise itself.</div>
+            <a class="offer-link" href="/settlement#pricing">See the three plans</a>
+          </div>
+          <div class="offer">
+            <div class="on">Settlement</div>
+            <div class="op mono">flat fee <span>never a percentage</span></div>
+            <div class="od">Nadelio referees performance contracts between brands and agencies. A gain counts only when it clears the 95% band.</div>
+            <a class="offer-link" href="/settlement">How settlement works</a>
+          </div>
+        </div>
+      </section>
 
       <footer class="site">
         <div class="brandline">Nadelio</div>
@@ -789,6 +842,41 @@
   // Light up a rail channel (voyant d'instrument).
   function litChannel(id){var el=document.getElementById(id);if(el)el.classList.add('lit');}
   function resetChannels(){['chan01','chan02'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove('lit');});}
+  // The hero cartouche promises "your reading appears here": when a measurement
+  // lands, the instrument itself must receive it. The needle swings to the
+  // score on the 0-100 arc (center 110,115, needle length 78) and the await
+  // line becomes the reading, margin included. Reset parks it back at zero.
+  function setDialReading(score,geo){
+    var nd=document.getElementById('dialNeedle'),hub=document.getElementById('dialHub'),aw=document.getElementById('cartAwait');
+    var s=Math.max(0,Math.min(100,Number(score)||0));
+    if(nd){
+      var th=Math.PI*(1-s/100);
+      nd.setAttribute('x2',(110+78*Math.cos(th)).toFixed(1));
+      nd.setAttribute('y2',(115-78*Math.sin(th)).toFixed(1));
+      nd.setAttribute('opacity','1');
+    }
+    if(hub)hub.setAttribute('opacity','1');
+    if(aw)aw.innerHTML='<span class="pulse"></span> Reading: <b style="color:var(--sage-signal)">'+s+
+      (geo&&geo.half_width!=null?' &plusmn;'+geo.half_width:'')+'</b> of 100';
+  }
+  function resetDialReading(){
+    var nd=document.getElementById('dialNeedle'),hub=document.getElementById('dialHub'),aw=document.getElementById('cartAwait');
+    if(nd){nd.setAttribute('x2','32');nd.setAttribute('y2','113');nd.setAttribute('opacity','.55');}
+    if(hub)hub.setAttribute('opacity','.55');
+    if(aw)aw.innerHTML='<span class="pulse"></span> Your reading appears here';
+  }
+  // The offers strip is state-aware: hidden while an error card asks the user
+  // to recover (never pitch payment on a failed free read), and once a result
+  // planche owns the Deep Audit sell the strip's button collapses to a link
+  // (one button per product per screen).
+  function offersMode(mode){
+    var s=document.querySelector('.offers');if(!s)return;
+    s.hidden=(mode==='error');
+    var b=document.getElementById('offerDeepBtn'),l=document.getElementById('offerDeepLink');
+    if(b)b.hidden=(mode==='result');
+    if(l)l.hidden=(mode!=='result');
+  }
+  function scrollToPlanche(){var doc=document.querySelector('#out .doc');if(doc)doc.scrollIntoView({behavior:reduceMotion()?'auto':'smooth',block:'start'});}
   function setRailState(mode){
     var el=document.getElementById('railState'),lab=document.getElementById('railStateLabel');
     if(!el)return;
@@ -1029,26 +1117,61 @@
     var officialUrl=urlEl?urlEl.value.trim():'';
     var market=getMarket(),deep=isDeep();
     btn.disabled=true;if(pbtn)pbtn.disabled=true;
-    resetChannels();setRailState('idle');
+    resetChannels();setRailState('idle');resetDialReading();offersMode('idle');
     var myGen=++_rzGen;
     var seedHost=hostOf(officialUrl)||(function(){var b=document.getElementById('brand').value.trim();return hostOf(b);})();
     renderResolver('resolving',{host:seedHost,brand:brand},myGen);
     out.innerHTML='<div class="card"><div class="stage">Identifying <b>'+esc(brand)+'</b> on the web…<div class="bar"><i></i></div>'+
       '<div class="beats"><span class="active">Identification</span><span class="sep">&#8594;</span><span>SERP</span><span class="sep">&#8594;</span><span>AI</span></div></div></div>';
+    // Honest slow-path note: the free-tier server sleeps when idle and the
+    // first request of a quiet period can take up to a minute to answer. Tell
+    // the user instead of letting a silent bar read as "broken".
+    var slowNote=setTimeout(function(){
+      if(myGen!==_rzGen)return;
+      var st=out.querySelector('.stage');
+      if(st){var n=document.createElement('div');n.className='stage-slow';
+        n.textContent='Still reading. The first measure after a quiet period can take up to a minute while the instrument wakes.';
+        st.appendChild(n);}
+    },8000);
     var data,res;
     try{
       res=await fetch('/api/infer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:brand,hint:hint,official_url:officialUrl,market:market,deep:deep,force_web:!!forceWeb})});
       data=await res.json();
     }catch(e){
-      out.innerHTML='<div class="card"><div class="stage">Could not reach the instrument. Try again in a moment.</div></div>';
+      clearTimeout(slowNote);
+      renderResolverError(brand,myGen,'Could not reach the instrument. Nothing was measured.');
+      out.innerHTML='';
       btn.disabled=false;if(pbtn)pbtn.disabled=false;return;
     }
+    clearTimeout(slowNote);
     if(!res.ok||data.error){
-      out.innerHTML='<div class="card"><div class="stage">'+esc(typeof data.error==='string'?data.error:'Could not identify this brand.')+'</div></div>';
+      renderResolverError(brand,myGen,typeof data.error==='string'?data.error:'Could not identify this brand.');
+      out.innerHTML='';
       btn.disabled=false;if(pbtn)pbtn.disabled=false;return;
     }
     renderPreview(data,myGen);
     btn.disabled=false;if(pbtn)pbtn.disabled=false;
+  }
+
+  // The identification call failed: the resolver card must NEVER stay parked on
+  // the Reading… skeleton (it reads as an infinite wait). Show what happened in
+  // the card itself, with the one action that unblocks.
+  function renderResolverError(brand,gen,msg){
+    var el=document.getElementById('resolver');if(!el)return;
+    if(typeof gen==='number'&&gen!==_rzGen)return;
+    offersMode('error');
+    el.hidden=false;el.classList.remove('rz-high');el.classList.add('rz-low');
+    el.innerHTML=
+      '<div class="rz-fav">'+fallbackSlot(brand)+'</div>'+
+      '<div class="rz-meta">'+
+        '<span class="rz-badge low">Read failed</span>'+
+        '<div class="rz-name">'+esc(brand||'This brand')+'</div>'+
+        '<div class="rz-desc">'+esc(msg||'The identification step failed. Nothing was measured.')+'</div>'+
+      '</div>'+
+      '<div class="rz-actions">'+
+        '<button class="btn-primary" onclick="preview()">Try again</button>'+
+        '<button class="btn-ghost" onclick="openHintCompact()">Paste your site</button>'+
+      '</div>';
   }
 
   function renderPreview(data,gen){
@@ -1187,11 +1310,17 @@
     render(data);btn.disabled=false;
   }
 
-  // Email capture BEFORE the paywall + a single line pointing at the settlement
-  // story. Deliberately a link, not a price: pricing lives on /settlement, next
-  // to the thesis that gives it meaning, not as bare buttons under a free audit.
+  // The money moment: the user just read their bounded score on the free
+  // 2-query sample. Each paid product gets exactly ONE strong moment on this
+  // screen: the Deep Audit planche below owns the 79 euro sell, so this block
+  // carries the RECURRING product (monitoring, priced), then the email capture.
   function proCta(){
-    return '<div class="pro-cta"><span class="label">Receive this diagnosis and your 3 blind spots by email.</span><input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Send it to me</button><span class="ok" id="proOk">You\'re on the list.</span>'+
+    return '<div class="pro-cta">'+
+      '<span class="label">This free read is a 2 query sample. A score moves week to week, the margin tells you when it matters.</span>'+
+      '<a class="upsell-link" href="/settlement#pricing">Monitor this brand weekly, from 99&euro;/mo</a>'+
+      '<span class="upsell-note">Alerts only when movement clears the noise.</span>'+
+      '<span class="label" style="margin-top:12px;">Receive this diagnosis and your 3 blind spots by email.</span>'+
+      '<input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Send it to me</button><span class="ok" id="proOk">You\'re on the list.</span>'+
       '<span class="monitor">Nadelio also settles AI-visibility contracts on results. <a href="/settlement">See how</a></span></div>';
   }
   async function resumeSubscription(sessionId){
@@ -1222,21 +1351,28 @@
   }
 
   // ---- Deep Audit (paid, Stripe Checkout) ----
+  // Status lines and CTA locks address every [data-deepmsg]/[data-deepcta] on
+  // the page: the offer strip and the post-result upsell both carry one.
   function deepMsg(text,isError){
-    var el=document.getElementById('deepAuditMsg');if(!el)return;
-    el.textContent=text||'';
-    el.style.display=text?'block':'none';
-    el.style.color=isError?'var(--amber)':'var(--muted-light)';
+    var els=document.querySelectorAll('[data-deepmsg]');
+    for(var i=0;i<els.length;i++){
+      els[i].textContent=text||'';
+      els[i].style.display=text?'block':'none';
+      els[i].style.color=isError?'var(--amber)':'var(--muted-light)';
+    }
+  }
+  function deepCtaLock(locked){
+    var els=document.querySelectorAll('[data-deepcta]');
+    for(var i=0;i<els.length;i++)els[i].style.pointerEvents=locked?'none':'';
   }
 
   async function startCheckout(){
     var brand=document.getElementById('brand').value.trim();
-    if(!brand){document.getElementById('brand').focus();return;}
+    if(!brand){document.getElementById('brand').focus();deepMsg('Type your brand above first, the audit needs a subject.',true);return;}
     var hintEl=document.getElementById('hint');
     var hint=hintEl?hintEl.value.trim():'';
     var market=getMarket();
-    var cta=document.getElementById('deepAuditCta');
-    if(cta)cta.style.pointerEvents='none';
+    deepCtaLock(true);
     deepMsg('Opening secure checkout…',false);
     var data,res;
     try{
@@ -1244,14 +1380,14 @@
       data=await res.json();
     }catch(e){
       deepMsg('Could not reach the server. Try again in a moment.',true);
-      if(cta)cta.style.pointerEvents='';return;
+      deepCtaLock(false);return;
     }
     if(!res.ok||!data.url){
       var msg=data&&data.error==='payments not configured'
         ?'Deep Audit checkout is not available yet.'
         :(data&&typeof data.error==='string'?data.error:'Could not start checkout.');
       deepMsg(msg,true);
-      if(cta)cta.style.pointerEvents='';return;
+      deepCtaLock(false);return;
     }
     window.location=data.url;
   }
@@ -1357,13 +1493,14 @@
     var present=r.filter(function(x){return x.share_of_voice>0;});if(present.length===0)return null;
     var leader=present[0],second=present[1];
     var you=r.find(function(x){return x.brand.toLowerCase()===String(brandName).toLowerCase();});
-    var parts=['<b>'+esc(leader.brand)+'</b> leads with '+leader.share_of_voice+'% share of voice'];
-    if(second){var gap=Math.round((leader.share_of_voice-second.share_of_voice)*10)/10;parts.push(gap<8?'with <b>'+esc(second.brand)+'</b> right behind ('+second.share_of_voice+'%)':'well ahead of <b>'+esc(second.brand)+'</b> ('+second.share_of_voice+'%)');}
+    var rp=function(v){return Math.round(Number(v)||0);};
+    var parts=['<b>'+esc(leader.brand)+'</b> leads with '+rp(leader.share_of_voice)+'% share of voice'];
+    if(second){var gap=leader.share_of_voice-second.share_of_voice;parts.push(gap<8?'with <b>'+esc(second.brand)+'</b> right behind ('+rp(second.share_of_voice)+'%)':'well ahead of <b>'+esc(second.brand)+'</b> ('+rp(second.share_of_voice)+'%)');}
     var tail='';
     if(you){var rank=r.indexOf(you)+1;
+      // When YOU are the leader, the sentence already says it: no sewn-on tail.
       if(you.share_of_voice===0)tail=' <b>'+esc(you.brand)+'</b> is invisible here, the clearest place to win.';
-      else if(rank===1)tail=' <b>'+esc(you.brand)+'</b> already leads.';
-      else tail=' <b>'+esc(you.brand)+'</b> sits at #'+rank+', room to climb.';}
+      else if(rank!==1)tail=' <b>'+esc(you.brand)+'</b> sits at #'+rank+', room to climb.';}
     return parts.join(', ')+'.'+tail;
   }
 
@@ -1405,6 +1542,14 @@
       else if(inSerp)quads.serpOnly.push(x);
       else quads.invisible.push(x);
     });
+    // A one-quadrant map carries zero information: say it in one honest line
+    // instead of rendering four boxes where three read "none".
+    var filled=Object.keys(quads).filter(function(k){return quads[k].length;});
+    if(filled.length<2){
+      var flatLabel={dominant:'present on both floors, Google and AI',aiOnly:'visible on the AI floor only',
+                     serpOnly:'visible on Google only',invisible:'invisible on both floors'}[filled[0]||'invisible'];
+      return '<div class="mtx-flat">All '+r.length+' brands measured sit in the same quadrant: '+flatLabel+'. The SERP x AI map appears when positions diverge.</div>';
+    }
     function names(list){return list.length?list.map(function(x){return esc(x.brand)+(x.brand.toLowerCase()===brandName.toLowerCase()?' <span class="you">you</span>':'');}).join(', '):'<span style="color:var(--muted-dark)">none</span>';}
     var you=r.find(function(x){return x.brand.toLowerCase()===brandName.toLowerCase();});
     var youQuad=you?(you.share_of_voice>0&&you.ai_avg_rank!=null?'dominant':you.ai_avg_rank!=null?'aiOnly':you.share_of_voice>0?'serpOnly':'invisible'):null;
@@ -1452,6 +1597,7 @@
     var sector=d.sector?'<div class="sector">Sector pegged as <b>'+esc(d.sector)+'</b>'+mkt+', '+r.length+' rivals across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>':'';
 
     if(present.length===0){
+      offersMode('idle');
       document.getElementById('out').innerHTML='<div class="card">'+badge+guarantee+notice+sector+
         '<div class="empty-state"><div class="big">No one shows up, including '+esc(brandName)+'</div>'+
         '<div class="desc">None of these brands appear for these searches. Either the category is wide open, or the queries are too niche.</div></div>'+proCta()+'</div>';
@@ -1495,8 +1641,10 @@
     });
 
     if(hasAI){
-      var runsN=(r[0]&&r[0].ai_cells&&Object.values(r[0].ai_cells)[0]?Object.values(r[0].ai_cells)[0].runs||1:1);
-      body+='<div class="hm-section ai"><span>AI floor, ChatGPT/Claude</span> <span class="sub">across '+runsN+' runs</span></div>';
+      // One counting vocabulary per screen: "measures", sourced from the same
+      // geo block the score cites, so the floor and the score always agree.
+      var runsN=(d.geo&&d.geo.n)||(r[0]&&r[0].ai_cells&&Object.values(r[0].ai_cells)[0]?Object.values(r[0].ai_cells)[0].runs||1:1);
+      body+='<div class="hm-section ai"><span>AI floor, ChatGPT/Claude</span> <span class="sub">'+(runsN>1?'across '+runsN+' AI measures':'single AI measure')+'</span></div>';
       body+='<div class="hm-corner"></div>'+queries.map(function(q){return '<div class="hm-qh">'+esc(shortQ(q))+'</div>';}).join('');
       r.forEach(function(x,ri){
         var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
@@ -1551,6 +1699,9 @@
     // d.geo_score; free results compute the same number client-side from the
     // ranking (zero API), so ACT 2 and ACT 3 always show the same hero.
     var verdictH2,bizLine='',vsent='',dialSubTxt='';
+    // Display precision matches sample size: "33.3%" on 2 queries reads as
+    // false precision, so every share of voice prints rounded.
+    var pct=function(v){return Math.round(Number(v)||0);};
     var scoreEntry=youData.found?youData.you:leader;
     var geoHero=(d.geo_score!=null)?Math.max(0,Math.min(100,parseInt(d.geo_score,10)||0))
                                     :computeGeoScore(scoreEntry,queries.length);
@@ -1559,23 +1710,23 @@
       dialSov=youData.sov;
       if(youData.rank===1){
         verdictH2='You own the conversation in '+esc(d.sector||'your market')+'.';
-        bizLine='<div class="biz">You lead at <b>#1 of '+youData.total+'</b> with <b>'+youData.sov+'% share of voice</b>. Now defend it before AI shifts the ground.</div>';
+        bizLine='<div class="biz">You lead at <b>#1 of '+youData.total+'</b> with <b>'+pct(youData.sov)+'% share of voice</b>. Now defend it before AI shifts the ground.</div>';
       } else if(youData.sov===0){
         verdictH2='You are invisible where your buyers ask.';
-        bizLine='<div class="biz"><b>'+youBrand+'</b> does not appear for these buyer queries. '+(youData.leader?'<b>'+esc(youData.leader.brand)+'</b> owns the answers ('+youData.leader.share_of_voice+'%).':'')+' The clearest place to win.</div>';
+        bizLine='<div class="biz"><b>'+youBrand+'</b> does not appear for these buyer queries. '+(youData.leader?'<b>'+esc(youData.leader.brand)+'</b> owns the answers ('+pct(youData.leader.share_of_voice)+'%).':'')+' The clearest place to win.</div>';
       } else {
         verdictH2='You are #'+youData.rank+' of '+youData.total+', someone else owns the answer.';
-        bizLine='<div class="biz"><b>'+youBrand+'</b> holds <b>'+youData.sov+'%</b> of the conversation'+(youData.leader?', while <b>'+esc(youData.leader.brand)+'</b> takes <b>'+youData.leader.share_of_voice+'%</b>':'')+'. Room to climb.</div>';
+        bizLine='<div class="biz"><b>'+youBrand+'</b> holds <b>'+pct(youData.sov)+'%</b> of the conversation'+(youData.leader?', while <b>'+esc(youData.leader.brand)+'</b> takes <b>'+pct(youData.leader.share_of_voice)+'%</b>':'')+'. Room to climb.</div>';
       }
       // secondary context under the score: this brand's share of voice, inline
-      dialSubTxt=youData.sov+'% share of voice'+((youData.leader&&youData.leader.brand.toLowerCase()!==youData.you.brand.toLowerCase())?', leader '+esc(youData.leader.brand)+' at '+youData.leader.share_of_voice+'%':'');
+      dialSubTxt=pct(youData.sov)+'% share of voice'+((youData.leader&&youData.leader.brand.toLowerCase()!==youData.you.brand.toLowerCase())?', leader '+esc(youData.leader.brand)+' at '+pct(youData.leader.share_of_voice)+'%':'');
       if(youData.leader&&youData.leader.brand.toLowerCase()!==youData.you.brand.toLowerCase()){
-        vsent='<div class="vsent">You own <b>'+youData.sov+'%</b> of the answers. '+esc(youData.leader.brand)+' owns <b>'+youData.leader.share_of_voice+'%</b>.</div>';
+        vsent='<div class="vsent">You own <b>'+pct(youData.sov)+'%</b> of the answers. '+esc(youData.leader.brand)+' owns <b>'+pct(youData.leader.share_of_voice)+'%</b>.</div>';
       }
     } else {
       verdictH2=esc(leader.brand)+' owns the conversation.';
       bizLine='<div class="biz">'+r.length+' brands measured across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>';
-      dialSubTxt='leader '+esc(leader.brand)+', '+leader.share_of_voice+'% share of voice';
+      dialSubTxt='leader '+esc(leader.brand)+', '+pct(leader.share_of_voice)+'% share of voice';
     }
     var geoCol=geoScoreColorDark(geoHero);
     var geoLbl=geoScoreLabel(geoHero);
@@ -1585,10 +1736,10 @@
     // naked. Falls back to the plain number for legacy/absent geo objects.
     var geoObj=(d.geo&&youData.found)?d.geo:null;
     var pmHtml=(geoObj&&geoObj.half_width!=null)?'<span class="pm">&plusmn;'+geoObj.half_width+'</span>':'';
-    var ciHtml=geoObj?'<div class="ci">'+esc(ciText(geoObj))+'</div>':'';
+    var ciHtml=(geoObj&&ciText(geoObj))?'<div class="ci">'+esc(ciText(geoObj))+'</div>':'';
     var badgeHtml=geoObj?verdictBadge(geoObj):'';
     var dialBlock='<div class="dial" id="geoDial">'+
-      '<div class="cap">'+(youData.found?'Your GEO score':'Leader GEO score')+'</div>'+
+      '<div class="cap">'+(youData.found?'Your AI visibility score':'Leader AI visibility score')+'</div>'+
       '<div class="n mono" style="color:'+geoCol+'"><span id="heroNum">0</span>'+pmHtml+'<span class="p">/100</span></div>'+
       '<div class="dial-tag" style="color:'+geoCol+'">'+geoLbl+'</div>'+
       badgeHtml+
@@ -1630,6 +1781,9 @@
     function finalize(){
       var hn=document.getElementById('heroNum');
       if(hn)countUp(hn,geoHero,600);
+      // The instrument receives its own measurement: needle up, reading printed.
+      setDialReading(geoHero,geoObj);
+      offersMode(isDeepTier?'idle':'result');
       var dial=document.getElementById('geoDial');if(dial)dial.classList.add('glow');
       var vs=document.querySelector('#out .vsent');
       if(vs){if(reduceMotion())vs.classList.add('in');else setTimeout(function(){vs.classList.add('in');},700);}
@@ -1674,14 +1828,20 @@
   function verdictClass(v){var m={STABLE:'stable',MODERE:'modere',VOLATIL:'volatil',SINGLE_RUN:'single'};return m[v]||'single';}
   function verdictLabel(v){var m={STABLE:'Stable',MODERE:'Moderate',VOLATIL:'Volatile',SINGLE_RUN:'Single run'};return m[v]||'';}
   // The interval text shown under the score. Never invents a bound on n=1.
+  // When a verdict badge already carries the measure count, this line only
+  // appears to WARN (wide band) or to flag the unbounded single measure: one
+  // annotation fewer around the number (Ive, round 6).
   function ciText(geo){
     if(!geo||geo.half_width==null){return 'single measure, reliability not bounded';}
-    return 'based on '+geo.n+' AI measures';
+    if(geo.half_width>=15){return 'band too wide to call a trend, more measures tighten it';}
+    return '';
   }
-  // The verdict badge markup.
+  // The verdict badge markup, measure count fused in ("Stable across 3 measures").
   function verdictBadge(geo){
     if(!geo||!geo.verdict)return '';
-    return '<div class="vbadge '+verdictClass(geo.verdict)+'">'+esc(verdictLabel(geo.verdict))+'</div>';
+    var lbl=verdictLabel(geo.verdict);
+    if(geo.n>1)lbl+=' across '+geo.n+' measures';
+    return '<div class="vbadge '+verdictClass(geo.verdict)+'">'+esc(lbl)+'</div>';
   }
 
   // The killer side-by-side: you vs the rival, each with its interval, plus the
@@ -1736,7 +1896,7 @@
         '<path class="arcfill" d="'+fill+'" fill="none" stroke="'+col+'" stroke-width="11" stroke-linecap="round" stroke-dasharray="'+arcLen.toFixed(1)+'" stroke-dashoffset="'+arcLen.toFixed(1)+'"/>'+
       '</svg>'+
       '<div class="meta">'+
-        '<div class="lab">GEO score, '+label+'</div>'+
+        '<div class="lab">AI visibility score, '+label+'</div>'+
         '<div class="num" style="color:'+col+';">'+s+'<span class="o">/100</span></div>'+
         '<div class="desc">SERP share of voice, AI coverage and AI rank quality. Re-measurable any time.</div>'+
       '</div>'+
@@ -1791,34 +1951,70 @@
   }
 
   // ---- Free tier deliverable preview (light surface, planche register) ----
+  // Every sentence here is DERIVED from the measurement above it: same score,
+  // same leader, real query names. One brand, one score, one story per screen.
   function freeTeaser(d){
     var brandName=d.brand||'your brand';
-    // Same GEO score the ACT 2 dial shows, so the free teaser gauge agrees with
-    // the hero (no rival number). Computed client-side from the ranking.
     var rr=d.ranking||[],qq=d.queries||[];
-    var teaserEntry=rr.find(function(x){return x.brand.toLowerCase()===String(brandName).toLowerCase();})
-      ||rr.filter(function(x){return x.share_of_voice>0;})[0]||rr[0];
+    var you=rr.find(function(x){return x.brand.toLowerCase()===String(brandName).toLowerCase();});
+    var present=rr.filter(function(x){return x.share_of_voice>0;});
+    var lead=present[0]||null;
+    var teaserEntry=you||lead||rr[0];
     var teaserScore=(d.geo_score!=null)?d.geo_score:(teaserEntry?computeGeoScore(teaserEntry,qq.length):42);
     var fileName='nadelio-deep-audit-'+esc(brandName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''))+'.html';
+
+    // The verdict line agrees with the verdict the user just read above.
+    var youLeads=!!(you&&lead&&you.brand===lead.brand&&(you.share_of_voice||0)>0);
+    var youAbsent=!you||(you.share_of_voice||0)===0;
+    var insightT;
+    if(youLeads){
+      insightT=esc(brandName)+' leads these buyer queries today. The Deep Audit stress-tests that lead across 5 queries at triple runs and hands you the defense plan before AI shifts the ground.';
+    }else if(youAbsent){
+      insightT=esc(brandName)+' does not appear on these buyer queries'+(lead?' while '+esc(lead.brand)+' captures the answers':'')+'. The dossier maps exactly where the answers go instead, and how to enter.';
+    }else{
+      insightT=esc(brandName)+' trails '+esc(lead.brand)+' on these queries. The dossier names every gap that is real rather than noise, and what closes it.';
+    }
+
+    // First moves drafted from THIS measurement: blind queries by name, with
+    // the brand that holds each answer today. Falls back to defense moves when
+    // the brand covers everything.
+    var blindQ=qq.filter(function(q){return !(you&&you.cells&&you.cells[q]);});
+    function holder(q){
+      var h=rr.filter(function(x){return x.cells&&x.cells[q];}).sort(function(a,b){return a.cells[q].rank-b.cells[q].rank;})[0];
+      return h?h.brand:null;
+    }
+    var moves=[];
+    blindQ.slice(0,2).forEach(function(q){
+      var h=holder(q);
+      moves.push('Publish a comparison page for "'+esc(q)+'"'+(h?', where '+esc(h)+' holds the answer today':'')+'.');
+    });
+    if(moves.length<3&&qq.length){
+      moves.push('Add a citable FAQ answering "'+esc(qq[0])+'" so AI assistants can quote you directly.');
+    }
+    if(moves.length<3){
+      moves.push('Earn a mention on the third party listicles AI already cites for this category.');
+    }
+    var movesHtml=moves.slice(0,3).map(function(m){return '<li>'+m+'</li>';}).join('');
+
     var main='<div class="doc-main">'+
-      '<h3>Your board-ready GEO dossier</h3>'+
-      '<div class="doc-sub">A written verdict, a defensible GEO score and a concrete action plan, forwardable to your board as a single HTML file.</div>'+
-      '<div class="insight">'+esc(brandName)+' is losing ground on its highest-intent buyer queries while two named competitors capture the AI recommendation. The written verdict, a defensible GEO score and a concrete 4 to 6 step action plan are included in the Deep Audit.</div>'+
-      '<div class="k" style="margin:0 0 8px;">First 3 actions (real, from the data)</div>'+
-      '<ol style="font-size:14px;"><li>Publish a comparison page targeting the exact buyer query you are absent from.</li><li>Earn a mention on the third-party listicle your rival already dominates.</li><li>Restructure your homepage so AI assistants can cite you as the primary answer.</li></ol>'+
+      '<h3>Your board-ready visibility dossier</h3>'+
+      '<div class="doc-sub">A written verdict, a defensible AI visibility score and a concrete action plan, forwardable to your board as a single HTML file.</div>'+
+      '<div class="insight">'+insightT+'</div>'+
+      '<div class="k" style="margin:0 0 8px;">First moves, drafted from this measurement</div>'+
+      '<ol style="font-size:14px;">'+movesHtml+'</ol>'+
       '<div class="thumb"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="8" x2="16" y2="8" stroke="#8B6FE8" stroke-width="1.6"/><line x1="8" y1="12" x2="16" y2="12" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="16" x2="13" y2="16" stroke="#4FD1A5" stroke-width="1.6"/></svg></div>'+
-        '<div><div class="t">'+fileName+'</div><div class="d">Self-contained HTML, two-territory heatmap, GEO gauge, forwardable</div></div></div>'+
+        '<div><div class="t">'+fileName+'</div><div class="d">Self-contained HTML, two-territory heatmap, score gauge, forwardable</div></div></div>'+
       '</div>';
     var side='<div class="doc-side">'+
       geoScoreBlock(teaserScore)+
       '<div class="anchor">'+
-        '<div class="col"><div class="lab">Agency GEO audit</div><div class="big">3000 to 5000&euro;</div><div class="sm">3 weeks, slide deck</div></div>'+
+        '<div class="col"><div class="lab">Agency visibility audit</div><div class="big">3000 to 5000&euro;</div><div class="sm">3 weeks, slide deck</div></div>'+
         '<div class="col hi"><div class="lab">Nadelio Deep Audit</div><div class="big">79&euro;</div><div class="sm">60 seconds, forwardable to your board</div></div>'+
       '</div>'+
-      '<div class="doc-cta" id="deepAuditCta">'+
-        '<div class="actionbar"><button class="go" onclick="startCheckout()">Run the Deep Audit</button><span class="doc-price">79<span class="eu">&euro;</span></span></div>'+
-        '<div id="deepAuditMsg" style="font-size:12px;color:var(--muted-light);margin-top:8px;display:none;"></div>'+
-        '<div class="bene">Written verdict, GEO score 0 to 100, top blind spots, action plan, downloadable HTML dossier.</div>'+
+      '<div class="doc-cta">'+
+        '<div class="actionbar"><button class="go" data-deepcta onclick="startCheckout()">Run the Deep Audit</button><span class="doc-price">79<span class="eu">&euro;</span></span></div>'+
+        '<div data-deepmsg style="font-size:12px;color:var(--muted-light);margin-top:8px;display:none;"></div>'+
+        '<div class="bene">Written verdict, AI visibility score 0 to 100 with its margin, top blind spots, action plan, downloadable HTML dossier.</div>'+
         '<div class="stripe"><span class="lock">&#128274;</span> Secure payment by Stripe</div>'+
       '</div>'+
       '</div>';
@@ -1875,7 +2071,7 @@
       '<div class="meta">Generated '+esc2(when)+(d.market?', market '+esc2(d.market):'')+', '+queries.length+' buyer queries, '+r.length+' brands tracked.</div>'+
       (d.identified_as?'<h2>Identity verification</h2><p>'+esc2(d.identified_as)+'</p>'+(srcUrl?'<p class="meta">Official source: <a href="'+esc2(srcUrl)+'">'+esc2(srcUrl)+'</a></p>':''):'')+
       (evHtml?'<ul>'+evHtml+'</ul>':'')+'</div>'+
-      '<div class="card"><h2>GEO score</h2><div class="geo">'+geo+geoPm+'<span style="font-size:22px;color:var(--muted)">/100</span></div>'+geoVerdict+
+      '<div class="card"><h2>AI visibility score</h2><div class="geo">'+geo+geoPm+'<span style="font-size:22px;color:var(--muted)">/100</span></div>'+geoVerdict+
       '<p class="meta" style="margin-top:10px">'+geoNote+'</p></div>'+
       '<div class="card"><h2>SERP and AI visibility</h2><table><thead><tr><th>Brand</th><th>SERP coverage</th><th>Avg rank</th><th>Share of voice</th><th>AI coverage</th><th>AI avg rank</th></tr></thead><tbody>'+rows()+'</tbody></table></div>'+
       ((rep.verdict||bsHtml||actHtml)?'<div class="card"><h2>Remediation report</h2><p class="ai-note">AI-generated recommendations, grounded in the data above.</p>'+

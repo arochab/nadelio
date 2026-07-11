@@ -424,6 +424,12 @@ SAMPLE = {
      "evidence":[{"title":"Coda: Your all-in-one workspace","link":"https://coda.io","query":"notion alternative","rank":6}]}
   ],
   "mode":"demo",
+  # The sample must demo the WHOLE product, bounds included: a naked score in
+  # the demo contradicts the "never a number without its margin" promise the
+  # plan chips make before the click. 78 matches what the client-side
+  # computeGeoScore derives from this ranking, so every surface agrees.
+  "geo_score":78,
+  "geo":{"point":78,"half_width":4,"low":74,"high":82,"n":3,"verdict":"STABLE"},
   "cost":0.00312
 }
 
