@@ -60,6 +60,10 @@ def _to_html(text):
     return "".join(out)
 
 FROM_EMAIL = os.environ.get("OUTREACH_FROM_EMAIL", "Adam Chabbi <adam@nadelio.com>")
+# Every outreach mail is blind-copied here so Adam gets a copy in his own Gmail
+# inbox (these are sent by Resend, not from Gmail, so they never appear in
+# Gmail's Sent folder otherwise). Override with OUTREACH_BCC in the env.
+BCC_EMAIL = os.environ.get("OUTREACH_BCC", "adam.chabbi94@gmail.com")
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 
@@ -79,6 +83,10 @@ def send(to_email, subject, body_text, api_key, reply_to=None, dry_run=True, att
         "html": html,
         "text": body_text,
     }
+    # BCC Adam so a copy lands in his Gmail. Skip it when the recipient IS the
+    # bcc address (a self-test), to avoid a pointless duplicate.
+    if BCC_EMAIL and BCC_EMAIL.lower() != to_email.lower():
+        payload["bcc"] = [BCC_EMAIL]
     if reply_to:
         payload["reply_to"] = reply_to
     # Attachments: Resend takes each file base64-encoded with its filename.
