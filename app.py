@@ -430,6 +430,31 @@ SAMPLE = {
   # computeGeoScore derives from this ranking, so every surface agrees.
   "geo_score":78,
   "geo":{"point":78,"half_width":4,"low":74,"high":82,"n":3,"verdict":"STABLE"},
+  # The rival's bounded score too: the anti-noise head-to-head ("the gap is not
+  # noise") is the product's moat and must be IN the shop window, not only on
+  # real runs. Disjoint from Notion's band, so the demo shows a real lead.
+  "geo_rival":{"brand":"Asana","point":52,"half_width":6,"low":46,"high":58,"n":3,"verdict":"STABLE"},
+  "ai_provider":"claude",
+  "ai_provider_label":"Claude",
+  # Landscape mirrors what analyze(return_landscape=True) yields on a real run:
+  # who owns the floor beyond the tracked brands. The demo must show it too.
+  # Landscape ranks live in the SAME SERP as the tracked cells: a landscape
+  # rank may never collide with a tracked rank on the same query, and when no
+  # tracked brand holds #1 the line must open on the #1 owner. Tracked here:
+  # q1 Asana #2 / Notion #3 / ClickUp #4 (free: #1, #5, #7), q2 Notion #1 /
+  # Obsidian #2 / Coda #6 (free: #3, #4).
+  "serp_landscape":{
+    "owners":[{"host":"zapier.com","hits":2,"best_rank":1},
+              {"host":"reddit.com","hits":2,"best_rank":4},
+              {"host":"pcmag.com","hits":1,"best_rank":5}],
+    "queries":{
+      "best project management tool":[
+        {"rank":1,"host":"zapier.com","title":"The best project management software in 2026","link":"https://zapier.com/blog/best-project-management-software/"},
+        {"rank":5,"host":"pcmag.com","title":"The Best Project Management Software for 2026","link":"https://www.pcmag.com/picks/the-best-project-management-software"},
+        {"rank":7,"host":"reddit.com","title":"What project management tool do you actually use?","link":"https://www.reddit.com/r/projectmanagement/"}],
+      "notion alternative":[
+        {"rank":3,"host":"zapier.com","title":"The 8 best Notion alternatives","link":"https://zapier.com/blog/notion-alternatives/"},
+        {"rank":4,"host":"reddit.com","title":"Best Notion alternative in 2026?","link":"https://www.reddit.com/r/Notion/"}]}},
   "cost":0.00312
 }
 
@@ -639,6 +664,14 @@ def infer_strategy(brand, api_key, hint=None, market=None, max_queries=MAX_QUERI
         "Queries must be the searches a real buyer would type when shopping in this category "
         "(e.g. 'best CRM for startups', 'salesforce alternative'). "
         "Exactly " + str(n) + " queries.\n\n"
+        "LOCAL & NICHE BUSINESSES (critical): if the brand is a physical or local business (a shop, "
+        "record store, restaurant, venue, studio, local agency) or a small niche independent brand, "
+        "then (a) every competitor MUST compete in the brand's OWN market and country. Never list "
+        "foreign category giants a local buyer would not actually compare against (for a Paris record "
+        "shop, list other French/Paris record shops, not London or Amsterdam ones), and (b) queries "
+        "MUST carry the qualifier a real local buyer types, usually the city or country (e.g. "
+        "'disquaire techno Paris', not 'acheter vinyles en ligne'). Generic category queries that only "
+        "global giants can win produce empty, useless audits for local brands.\n\n"
         "MARKET & LANGUAGE (important): determine the brand's PRIMARY market and the language "
         "its buyers actually search in, then write ALL queries in THAT language. Infer the market "
         "from the brand name, from any hint (e.g. a country TLD like .fr / .de signals a "
@@ -1038,27 +1071,57 @@ def _result_kind(brand, result):
     return "citation" if _brand_slug(brand) in host.replace("-", "").replace(".", "") else "mention"
 
 
-def analyze(brands, queries, api_key, gl=None, hl=None):
+def analyze(brands, queries, api_key, gl=None, hl=None, return_landscape=False):
     stats = {b: {"mentions": 0, "appearances": 0, "ranks": [], "evidence": [], "cells": {}} for b in brands}
+    # The SERP results are already paid for: everything that is NOT a tracked
+    # brand is the "landscape" — who actually owns these answers. Without it, a
+    # niche/local brand whose rivals are absent too yields an empty, useless
+    # grid; with it, the same audit says WHO to displace. Collected per query
+    # (top untracked results) and aggregated per host across queries.
+    landscape_q = {}
+    host_stats = {}
     for query in queries:
         results = run_query(query, api_key, gl=gl, hl=hl)
         hit = {b: False for b in brands}
+        untracked = []
         for pos, result in enumerate(results, 1):
+            matched = False
             for b in brands:
-                if brand_in(b, result) and query not in stats[b]["cells"]:
-                    stats[b]["appearances"] += 1
-                    stats[b]["ranks"].append(pos)
-                    hit[b] = True
-                    stats[b]["cells"][query] = {
-                        "rank": pos,
-                        "title": result.get("title", ""),
-                        "link": result.get("link", ""),
-                        "kind": _result_kind(b, result),
-                    }
+                if brand_in(b, result):
+                    matched = True
+                    if query not in stats[b]["cells"]:
+                        stats[b]["appearances"] += 1
+                        stats[b]["ranks"].append(pos)
+                        hit[b] = True
+                        stats[b]["cells"][query] = {
+                            "rank": pos,
+                            "title": result.get("title", ""),
+                            "link": result.get("link", ""),
+                            "kind": _result_kind(b, result),
+                        }
+            if not matched and len(untracked) < 3:
+                host = urllib.parse.urlparse(str(result.get("link", ""))).netloc.lower()
+                host = host[4:] if host.startswith("www.") else host
+                if host:
+                    untracked.append({"rank": pos, "host": host,
+                                      "title": str(result.get("title", ""))[:120],
+                                      "link": str(result.get("link", ""))[:300]})
+            if not matched:
+                host2 = urllib.parse.urlparse(str(result.get("link", ""))).netloc.lower()
+                host2 = host2[4:] if host2.startswith("www.") else host2
+                if host2:
+                    st = host_stats.setdefault(host2, {"hits": 0, "best_rank": pos})
+                    st["hits"] += 1
+                    st["best_rank"] = min(st["best_rank"], pos)
+        landscape_q[query] = untracked
         for b in brands:
             if hit[b]:
                 stats[b]["mentions"] += 1
         time.sleep(1)
+    owners = sorted(({"host": h, "hits": s["hits"], "best_rank": s["best_rank"]}
+                     for h, s in host_stats.items()),
+                    key=lambda o: (-o["hits"], o["best_rank"]))[:5]
+    landscape = {"queries": landscape_q, "owners": owners}
     total = sum(s["appearances"] for s in stats.values()) or 1
     ranking = []
     for b, s in stats.items():
@@ -1077,6 +1140,8 @@ def analyze(brands, queries, api_key, gl=None, hl=None):
         })
     ranking.sort(key=lambda r: (-int(r["query_coverage"].split("/")[0]),
                                  r["avg_rank"] if r["avg_rank"] else 999))
+    if return_landscape:
+        return ranking, landscape
     return ranking
 
 # ---------------------------------------------------------------------------
@@ -1412,7 +1477,18 @@ def _geo_bounded(ranking, queries, brand, per_run_maps):
     high = min(100, point + half_width)
 
     ratio = half_width / max(point, 1)
-    if half_width <= STABLE_MAX_HALFWIDTH and ratio <= STABLE_MAX_RATIO:
+    if sd == 0:
+        # Every run produced the same score: the read IS stable, whatever the
+        # level. A brand measured absent 3 times out of 3 is stably absent —
+        # calling that VOLATIL (as the ratio test did at point=0) is nonsense.
+        verdict = "STABLE"
+    elif point < 10:
+        # Near zero the relative ratio is meaningless (hw 1 / point 1 = 100%):
+        # judge the band on its absolute width only.
+        verdict = ("STABLE" if half_width <= STABLE_MAX_HALFWIDTH
+                   else "VOLATIL" if half_width >= VOLATIL_MIN_HALFWIDTH
+                   else "MODERE")
+    elif half_width <= STABLE_MAX_HALFWIDTH and ratio <= STABLE_MAX_RATIO:
         verdict = "STABLE"
     elif half_width >= VOLATIL_MIN_HALFWIDTH or ratio >= VOLATIL_MIN_RATIO:
         verdict = "VOLATIL"
@@ -2158,9 +2234,22 @@ def _sanitize_strategy(brand, strat, max_queries=MAX_QUERIES_FREE, has_evidence=
     cap = MAX_QUERIES_PAID if int(max_queries or MAX_QUERIES_FREE) >= MAX_QUERIES_PAID else MAX_QUERIES_FREE
     competitors = [re.sub(r'[^\w\s\-\.\&]', '', c.strip())[:MAX_BRAND_LEN]
                    for c in strat.get("competitors", []) if c.strip()][:MAX_BRANDS]
+    # When the model has no idea who the company is, it can emit PLACEHOLDER
+    # competitors ("Company A", "Brand B", "Competitor 1"). Auditing those would
+    # measure fictional brands against real SERPs. Drop them: an empty list then
+    # makes the caller refuse ("Could not infer competitors"), which forces the
+    # URL/hint path instead of a fake audit.
+    _placeholder = re.compile(r"^(company|brand|competitor|business|example)\s*[a-z0-9]{0,2}$", re.I)
+    competitors = [c for c in competitors if not _placeholder.match(c.strip())]
     queries = [q.strip() for q in strat.get("queries", []) if q.strip()][:cap]
     if brand not in competitors:
         competitors = [brand] + competitors
+    # An inferred strategy whose only "competitor" is the brand itself (every
+    # rival was a placeholder) is a degenerate audit: refuse it so the UI asks
+    # for the official site or a hint. Confirmed client strategies
+    # (has_evidence=True) are human-vetted and pass through.
+    if not has_evidence and len(competitors) <= 1:
+        competitors = []
     market = str(strat.get("market", "") or "").strip()[:60]
     query_language = str(strat.get("query_language", "") or "").strip()[:10]
     identified_as = str(strat.get("identified_as", "") or "").strip()[:400]
@@ -2575,7 +2664,8 @@ def api_analyze():
         # French market both map to google.fr in French. Falls back to US/English
         # when the market is unknown, so this never worsens the prior behavior.
         gl, hl = _market_locale(market or market_out)
-        ranking = analyze(competitors, queries, serp_key, gl=gl, hl=hl)
+        ranking, landscape = analyze(competitors, queries, serp_key, gl=gl, hl=hl,
+                                     return_landscape=True)
         # Bounded score needs the per-run distribution: request return_runs. The
         # paid Deep Audit buys more runs (tighter interval); the free tier gets a
         # smaller n (honest but wider interval), protecting unit economics while
@@ -2656,6 +2746,10 @@ def api_analyze():
             # is never mistaken for a cross-assistant average.
             "ai_provider": ai_provider,
             "ai_provider_label": (_AI_PROVIDERS.get(ai_provider) or {}).get("label", ""),
+            # Who ACTUALLY owns these answers beyond the tracked brands: per-query
+            # top untracked results + hosts aggregated across queries. Turns an
+            # empty grid (niche/local brand) into an actionable SEO read.
+            "serp_landscape": landscape,
         }
         # Bounded GEO score on BOTH tiers: the object carries point, half_width,
         # low/high, n, verdict. geo_score (the bare point) is kept alongside for

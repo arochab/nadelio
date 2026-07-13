@@ -4,20 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nadelio, the AI visibility score you can show your board</title>
-<meta name="description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and on ChatGPT/Claude, in 10 seconds. A bounded GEO visibility score, not noise.">
+<meta name="description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and in AI assistants, in 10 seconds. A bounded AI visibility score, not noise.">
 <link rel="canonical" href="https://www.nadelio.com/">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.nadelio.com/">
 <meta property="og:title" content="Nadelio, the AI visibility score you can show your board">
-<meta property="og:description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and on ChatGPT/Claude. A bounded GEO visibility score, not noise.">
+<meta property="og:description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and in AI assistants. A bounded AI visibility score, not noise.">
 <meta property="og:image" content="https://www.nadelio.com/demo-nadelio.gif">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Nadelio, the AI visibility score you can show your board">
-<meta name="twitter:description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and on ChatGPT/Claude.">
+<meta name="twitter:description" content="Type one brand. Measure who owns the answers your buyers follow, on Google and in AI assistants.">
 <meta name="twitter:image" content="https://www.nadelio.com/demo-nadelio.gif">
 
 <meta name="theme-color" content="#0E1512">
@@ -536,6 +536,25 @@
   .offer-cta{margin-top:14px;font-family:var(--body);font-size:13px;font-weight:600;cursor:pointer;border-radius:10px;padding:10px 16px;border:1px solid var(--action);background:transparent;color:var(--sage-signal);}
   .offer-cta:hover{background:rgba(79,209,165,.08);}
   .mtx-flat{margin-top:26px;padding-top:20px;border-top:1px dashed var(--hairline-2);font-size:13px;color:var(--muted-dark);line-height:1.6;}
+  /* What this means: three plain-language lines, the human summary of the grid */
+  .readout{margin-top:26px;padding-top:20px;border-top:1px dashed var(--hairline-2);}
+  .readout .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:10px;}
+  .readout ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px;}
+  .readout li{font-size:14.5px;line-height:1.6;color:var(--paper-ink);padding-left:18px;position:relative;max-width:72ch;}
+  .readout li::before{content:"";position:absolute;left:0;top:.62em;width:7px;height:7px;border-radius:50%;background:var(--sage-signal);opacity:.75;}
+  .readout li b{font-weight:600;color:#fff;}
+  /* Also on this floor: the untracked hosts that own the rest of the SERP */
+  .floor-rest{margin-top:12px;font-size:12.5px;color:var(--muted-dark);line-height:1.7;}
+  .floor-rest .fk{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-right:10px;}
+  .floor-rest b{color:var(--paper-ink);font-weight:600;}
+  .floor-rest .mono{color:var(--sage-signal);}
+  /* Who owns these answers (empty-grid state) */
+  .owners{margin:6px 0 18px;}
+  .owners .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:10px;}
+  .own-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--hairline-dark);max-width:560px;}
+  .own-row .oh{font-size:14.5px;font-weight:600;color:var(--paper-ink);}
+  .own-row .om{font-size:12px;color:var(--sage-signal);}
+  .owners .own-note{margin-top:12px;font-size:13px;color:var(--muted-dark);line-height:1.6;max-width:62ch;}
   .offer-link{display:inline-block;margin-top:14px;font-size:13px;color:var(--sage-signal);text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
   /* author display beats the [hidden] UA rule (same lesson as .plan-strip) */
   .offer-link[hidden],.offers[hidden]{display:none;}
@@ -693,7 +712,7 @@
         <div class="hero-l">
           <div class="eyebrow"><span class="dot" aria-hidden="true"></span> The AI visibility instrument</div>
           <h1>When a buyer asks AI, one brand gets named. Measure whether it is <span class="pivot">yours</span>.</h1>
-          <p class="lede">See who owns the answers on <span class="strong">Google and ChatGPT</span>. Ten seconds, free, no signup.</p>
+          <p class="lede">See who owns the answers on <span class="strong">Google and in AI assistants</span>. Ten seconds, free, no signup.</p>
 
           <div class="bar-input">
             <input id="brand" type="text" placeholder="Your brand, e.g. Notion" onkeydown="if(event.key==='Enter')run(true)" aria-label="Your brand"/>
@@ -849,20 +868,22 @@
   function setDialReading(score,geo){
     var nd=document.getElementById('dialNeedle'),hub=document.getElementById('dialHub'),aw=document.getElementById('cartAwait');
     var s=Math.max(0,Math.min(100,Number(score)||0));
+    var col=geoScoreColorDark(s); // same band color as the score card: one language
     if(nd){
       var th=Math.PI*(1-s/100);
       nd.setAttribute('x2',(110+78*Math.cos(th)).toFixed(1));
       nd.setAttribute('y2',(115-78*Math.sin(th)).toFixed(1));
+      nd.setAttribute('stroke',col);
       nd.setAttribute('opacity','1');
     }
-    if(hub)hub.setAttribute('opacity','1');
-    if(aw)aw.innerHTML='<span class="pulse"></span> Reading: <b style="color:var(--sage-signal)">'+s+
+    if(hub){hub.setAttribute('fill',col);hub.setAttribute('opacity','1');}
+    if(aw)aw.innerHTML='<span class="pulse"></span> Reading: <b style="color:'+col+'">'+s+
       (geo&&geo.half_width!=null?' &plusmn;'+geo.half_width:'')+'</b> of 100';
   }
   function resetDialReading(){
     var nd=document.getElementById('dialNeedle'),hub=document.getElementById('dialHub'),aw=document.getElementById('cartAwait');
-    if(nd){nd.setAttribute('x2','32');nd.setAttribute('y2','113');nd.setAttribute('opacity','.55');}
-    if(hub)hub.setAttribute('opacity','.55');
+    if(nd){nd.setAttribute('x2','32');nd.setAttribute('y2','113');nd.setAttribute('stroke','var(--sage-signal)');nd.setAttribute('opacity','.55');}
+    if(hub){hub.setAttribute('fill','var(--sage-signal)');hub.setAttribute('opacity','.55');}
     if(aw)aw.innerHTML='<span class="pulse"></span> Your reading appears here';
   }
   // The offers strip is state-aware: hidden while an error card asks the user
@@ -1494,6 +1515,14 @@
     var leader=present[0],second=present[1];
     var you=r.find(function(x){return x.brand.toLowerCase()===String(brandName).toLowerCase();});
     var rp=function(v){return Math.round(Number(v)||0);};
+    // Equality rule: at equal share of voice nobody "leads with" anything, the
+    // gap is position. Say exactly that, with the top-spot claim only if true.
+    if(second&&rp(leader.share_of_voice)===rp(second.share_of_voice)){
+      var cellsL=leader.cells||{},nL=0,topAll=true;
+      for(var kq in cellsL){nL++;if(cellsL[kq].rank!==1)topAll=false;}
+      return 'Equal share of voice, '+rp(leader.share_of_voice)+'/'+rp(second.share_of_voice)+'. <b>'+esc(leader.brand)+'</b> '+
+        (topAll&&nL>0?'holds the top spot on every query':'holds the better positions')+'.';
+    }
     var parts=['<b>'+esc(leader.brand)+'</b> leads with '+rp(leader.share_of_voice)+'% share of voice'];
     if(second){var gap=leader.share_of_voice-second.share_of_voice;parts.push(gap<8?'with <b>'+esc(second.brand)+'</b> right behind ('+rp(second.share_of_voice)+'%)':'well ahead of <b>'+esc(second.brand)+'</b> ('+rp(second.share_of_voice)+'%)');}
     var tail='';
@@ -1560,7 +1589,7 @@
       '<button onclick="copyMatrix(this,'+"'"+esc(brandName).replace(/'/g,"\\'")+"'"+')" style="font-family:var(--mono);font-size:11px;padding:6px 11px;border:1px solid var(--hairline-2);border-radius:8px;background:transparent;color:var(--muted-dark);cursor:pointer">Copy summary</button>'+
       '</div>'+
       '<div id="matrixGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-        '<div style="'+cellStyle('dominant')+'background:rgba(79,209,165,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--sage-signal);margin-bottom:4px">Dominant, SERP and AI</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.dominant)+'</div></div>'+
+        '<div style="'+cellStyle('dominant')+'background:rgba(79,209,165,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--sage-signal);margin-bottom:4px">Present on both floors</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.dominant)+'</div></div>'+
         '<div style="'+cellStyle('aiOnly')+'background:rgba(139,111,232,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--violet-ai);margin-bottom:4px">AI only</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.aiOnly)+'</div></div>'+
         '<div style="'+cellStyle('serpOnly')+'background:rgba(255,255,255,.05);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--paper-ink);margin-bottom:4px">SERP only</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.serpOnly)+'</div></div>'+
         '<div style="'+cellStyle('invisible')+'background:rgba(255,255,255,.03);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--muted-dark);margin-bottom:4px">Invisible</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.invisible)+'</div></div>'+
@@ -1590,7 +1619,10 @@
     var guarantee='';
     if(d.identified_as||d.official_url){
       var gsrc=d.official_url?' <a href="'+esc(d.official_url)+'" target="_blank" rel="noopener">official source</a>':'';
-      guarantee='<div class="guarantee"><span class="chk">&#10003;</span> Identified as <b style="font-weight:600">'+esc(d.identified_as||brandName)+'</b>'+(gsrc?', '+gsrc:'')+', verified on the web</div>';
+      // Say only what is true: web evidence backs "verified on the web", a
+      // human confirmation without evidence is "confirmed by you".
+      var gTail=(String(d.confidence||'').toLowerCase()==='high')?'verified on the web':'confirmed by you';
+      guarantee='<div class="guarantee"><span class="chk">&#10003;</span> Identified as <b style="font-weight:600">&ldquo;'+esc(d.identified_as||brandName)+'&rdquo;</b>'+(gsrc?', '+gsrc:'')+', '+gTail+'</div>';
     }
     var notice=d.notice?'<div style="background:rgba(217,164,65,.1);border:1px solid rgba(217,164,65,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--amber);margin-bottom:16px">'+esc(d.notice)+'</div>':'';
     var mkt=d.market?', market <b>'+esc(d.market)+'</b>':'';
@@ -1598,9 +1630,22 @@
 
     if(present.length===0){
       offersMode('idle');
+      // The tracked brands are absent, but the SERP was not empty: show WHO
+      // owns these answers instead. An empty grid is a dead end, a named list
+      // of the real owners is the insight the user came for.
+      var L0=d.serp_landscape;
+      var ownersHtml='';
+      if(L0&&L0.owners&&L0.owners.length){
+        ownersHtml='<div class="owners"><div class="k">Who owns these answers today</div>'+
+          L0.owners.slice(0,5).map(function(o){
+            return '<div class="own-row"><span class="oh">'+esc(o.host)+'</span><span class="om mono">best #'+o.best_rank+(o.hits>1?', seen '+o.hits+' times':'')+'</span></div>';
+          }).join('')+
+          '<div class="own-note">These are the sites Google hands your buyers instead. Earning a mention on one of them is usually the shortest path in.</div></div>';
+      }
       document.getElementById('out').innerHTML='<div class="card">'+badge+guarantee+notice+sector+
-        '<div class="empty-state"><div class="big">No one shows up, including '+esc(brandName)+'</div>'+
-        '<div class="desc">None of these brands appear for these searches. Either the category is wide open, or the queries are too niche.</div></div>'+proCta()+'</div>';
+        '<div class="empty-state"><div class="big">No tracked brand shows up, including '+esc(brandName)+'</div>'+
+        '<div class="desc">'+(ownersHtml?'The buyer searches are real, but the answers belong to other sites entirely.':'None of these brands appear for these searches. Either the category is wide open, or the queries are too niche.')+'</div></div>'+
+        ownersHtml+proCta()+'</div>';
       return;
     }
     var leader=present[0];
@@ -1611,6 +1656,19 @@
     var youData=buildYou(r,brandName);
 
     var hasAI=r.some(function(x){return x.ai_cells&&Object.keys(x.ai_cells).length>0;});
+
+    // Also on Google: the untracked hosts that own the rest of the SERP,
+    // anchored to the ONE query where they rank best (never print an untracked
+    // #1 without naming the query it happens on). Sits under the Google band.
+    var floorRest=(function(){
+      var Lf=d.serp_landscape;
+      if(!Lf||!Lf.queries)return '';
+      var bestQ=null,bestRank=99;
+      queries.forEach(function(q){var lst=Lf.queries[q]||[];if(lst.length&&lst[0].rank<bestRank){bestRank=lst[0].rank;bestQ=q;}});
+      if(!bestQ)return '';
+      var tops=(Lf.queries[bestQ]||[]).slice(0,3).map(function(o){return '<b>'+esc(o.host)+'</b> <span class="mono">#'+o.rank+'</span>';}).join(', ');
+      return '<div class="floor-rest"><span class="fk">Also on Google, &ldquo;'+esc(shortQ(bestQ))+'&rdquo;</span>'+tops+'</div>';
+    })();
 
     // ---- Build heatmap: desktop grid (two territories) ----
     var cols='170px repeat('+queries.length+',minmax(64px,1fr))';
@@ -1640,11 +1698,12 @@
       });
     });
 
+    if(floorRest)body+='<div style="grid-column:1/-1">'+floorRest+'</div>';
     if(hasAI){
       // One counting vocabulary per screen: "measures", sourced from the same
       // geo block the score cites, so the floor and the score always agree.
       var runsN=(d.geo&&d.geo.n)||(r[0]&&r[0].ai_cells&&Object.values(r[0].ai_cells)[0]?Object.values(r[0].ai_cells)[0].runs||1:1);
-      body+='<div class="hm-section ai"><span>AI floor, ChatGPT/Claude</span> <span class="sub">'+(runsN>1?'across '+runsN+' AI measures':'single AI measure')+'</span></div>';
+      body+='<div class="hm-section ai"><span>AI floor, '+esc(d.ai_provider_label||'AI assistants')+'</span> <span class="sub">'+(runsN>1?'across '+runsN+' AI measures':'single AI measure')+'</span></div>';
       body+='<div class="hm-corner"></div>'+queries.map(function(q){return '<div class="hm-qh">'+esc(shortQ(q))+'</div>';}).join('');
       r.forEach(function(x,ri){
         var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
@@ -1680,7 +1739,7 @@
         else if(isYou){mob+='<div class="hm-brow you-row"><span class="bn">'+esc(x.brand)+'<span class="you">you</span></span><span class="rk absent">absent</span></div>';}
       });
       if(hasAI){
-        mob+='<div class="terr ai">AI floor, ChatGPT/Claude</div>';
+        mob+='<div class="terr ai">AI floor, '+esc(d.ai_provider_label||'AI assistants')+'</div>';
         r.forEach(function(x){
           var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
           var aiCell=(x.ai_cells||{})[q];
@@ -1690,6 +1749,7 @@
       }
       mob+='</div>';
     });
+    if(floorRest)mob+=floorRest;
     mob+='</div>';
 
     // ---- YOU-centred verdict + single GEO score hero dial ----
@@ -1716,7 +1776,11 @@
         bizLine='<div class="biz"><b>'+youBrand+'</b> does not appear for these buyer queries. '+(youData.leader?'<b>'+esc(youData.leader.brand)+'</b> owns the answers ('+pct(youData.leader.share_of_voice)+'%).':'')+' The clearest place to win.</div>';
       } else {
         verdictH2='You are #'+youData.rank+' of '+youData.total+', someone else owns the answer.';
-        bizLine='<div class="biz"><b>'+youBrand+'</b> holds <b>'+pct(youData.sov)+'%</b> of the conversation'+(youData.leader?', while <b>'+esc(youData.leader.brand)+'</b> takes <b>'+pct(youData.leader.share_of_voice)+'%</b>':'')+'. Room to climb.</div>';
+        if(youData.leader&&pct(youData.sov)===pct(youData.leader.share_of_voice)){
+          bizLine='<div class="biz"><b>'+youBrand+'</b> matches <b>'+esc(youData.leader.brand)+'</b> on share of voice, <b>'+pct(youData.sov)+'%</b> each. The gap is position, not presence.</div>';
+        }else{
+          bizLine='<div class="biz"><b>'+youBrand+'</b> holds <b>'+pct(youData.sov)+'%</b> of the conversation'+(youData.leader?', while <b>'+esc(youData.leader.brand)+'</b> takes <b>'+pct(youData.leader.share_of_voice)+'%</b>':'')+'. Room to climb.</div>';
+        }
       }
       // secondary context under the score: this brand's share of voice, inline
       dialSubTxt=pct(youData.sov)+'% share of voice'+((youData.leader&&youData.leader.brand.toLowerCase()!==youData.you.brand.toLowerCase())?', leader '+esc(youData.leader.brand)+' at '+pct(youData.leader.share_of_voice)+'%':'');
@@ -1747,29 +1811,99 @@
       (dialSubTxt?'<div class="sub">'+dialSubTxt+'</div>':'')+
       '</div>';
 
-    var legend='<div class="hm-legend">Full cell = present, dotted = absent, white ring = AI primary pick, <span style="color:var(--amber)">amber outline</span> = your row. <b>Green</b> = Google, <span class="vi">violet</span> = AI.</div>';
+    var legend='<div class="hm-legend"><b>Green</b> = Google rank, <span class="vi">violet</span> = AI rank, dotted = absent, <span style="color:var(--amber)">amber outline</span> = you.</div>';
 
-    var insightsBlock=(function(){var aiLeader=null,avgConsist=null;if(hasAI){var aiSorted=r.filter(function(x){return x.ai_avg_rank!=null;}).sort(function(a,b){return a.ai_avg_rank-b.ai_avg_rank;});if(aiSorted.length)aiLeader=aiSorted[0];
-      var consistVals=r.map(function(x){return x.ai_consistency;}).filter(function(v){return v!=null;});
-      if(consistVals.length)avgConsist=Math.round(consistVals.reduce(function(a,b){return a+b;},0)/consistVals.length);}
-      return '<div class="insights">'+
-      '<div><div class="k">Coverage leader</div><div class="v">'+esc(leader.brand)+' <span class="mono">'+esc(leader.query_coverage)+'</span></div></div>'+
-      '<div><div class="k">Best avg. rank</div><div class="v">'+(bestRank?esc(bestRank.brand)+' <span class="mono">'+bestRank.avg_rank+'</span>':'none')+'</div></div>'+
-      '<div><div class="k">Blind spot</div><div class="v">'+esc(blind.brand)+' <span class="mono">'+esc(blind.query_coverage)+'</span></div></div>'+
-      (aiLeader?'<div><div class="k">AI engine leader</div><div class="v">'+esc(aiLeader.brand)+' <span class="mono">avg #'+aiLeader.ai_avg_rank+'</span></div></div>':'')+
-      (avgConsist!=null?'<div><div class="k">AI consistency</div><div class="v"><span class="mono">'+avgConsist+'%</span> <span style="color:var(--muted-dark);font-size:12px">across runs</span></div></div>':'')+
-      '</div>';})();
+    // "What this means": three plain-language lines ANYONE can read, derived
+    // from the same data the grid shows. Replaces the old five mono stat chips
+    // (jargon density without a decision in it). One line per floor plus the
+    // single clearest gap, each naming real brands and real queries.
+    var readoutBlock=(function(){
+      var provider=d.ai_provider_label||'AI assistants';
+      var aiLeader=null;
+      if(hasAI){var aiSorted=r.filter(function(x){return x.ai_avg_rank!=null;}).sort(function(a,b){return a.ai_avg_rank-b.ai_avg_rank;});if(aiSorted.length)aiLeader=aiSorted[0];}
+      var lines=[];
+      var L=d.serp_landscape||null;
+      if(youData.found){
+        var you=youData.you;
+        var gCov=parseInt(you.query_coverage)||0;
+        var gBest=null;Object.values(you.cells||{}).forEach(function(c){if(gBest==null||c.rank<gBest)gBest=c.rank;});
+        if(gCov>0){
+          // Derivation rule: "shows more often" ONLY on higher coverage. At
+          // equal coverage the gap is rank, and the sentence must say rank.
+          var gTail='. No tracked rival shows more.';
+          if(leader&&leader.brand.toLowerCase()!==you.brand.toLowerCase()){
+            var leadCov=parseInt(leader.query_coverage)||0;
+            if(leadCov>gCov){gTail='. '+esc(leader.brand)+' shows more often.';}
+            else{
+              var shared=0,outN=0;
+              queries.forEach(function(q){var yc=you.cells&&you.cells[q],lc=leader.cells&&leader.cells[q];if(yc&&lc){shared++;if(lc.rank<yc.rank)outN++;}});
+              if(shared>0&&outN===shared)gTail='. '+esc(leader.brand)+' outranks you on '+(shared===1?'it':shared===2?'both':'every query')+'.';
+              else if(outN>0)gTail='. '+esc(leader.brand)+' outranks you on '+outN+' of '+shared+'.';
+              else gTail='. You hold the better positions.';
+            }
+          }
+          lines.push('<b>Google</b>: you show on '+gCov+' of '+queries.length+' buyer '+(queries.length>1?'searches':'search')+(gBest!=null?', best at #'+gBest:'')+gTail);
+        }else{
+          var ownTxt=(L&&L.owners&&L.owners.length)?' The answers go to '+esc(L.owners[0].host)+(L.owners[1]?' and '+esc(L.owners[1].host):'')+' instead.':'';
+          lines.push('<b>Google</b>: you do not appear on these buyer searches yet.'+ownTxt);
+        }
+        if(hasAI){
+          var aCov=parseInt(String(you.ai_coverage||'0').split('/')[0])||0;
+          if(aCov>0){
+            lines.push('<b>'+esc(provider)+'</b>: you are cited on '+aCov+' of '+queries.length+' '+(queries.length>1?'questions':'question')+(you.ai_avg_rank!=null?', around position '+Math.round(you.ai_avg_rank):'')+
+              (aiLeader&&aiLeader.brand.toLowerCase()!==you.brand.toLowerCase()?'. The preferred answer is '+esc(aiLeader.brand)+'.':'. You are the preferred answer.'));
+          }else{
+            lines.push('<b>'+esc(provider)+'</b>: you are never cited on these questions yet'+(aiLeader?'. The preferred answer is '+esc(aiLeader.brand)+'.':'.'));
+          }
+        }
+        // The single clearest gap: first query where YOU are absent from both
+        // floors, with whoever holds that answer today (tracked rival first,
+        // else the landscape's top host).
+        // Blind-spot rule: if ANY dotted cell exists on your row, the third
+        // line names it, floor by floor. "No blind spot" only when the row is
+        // truly full on every floor measured.
+        var gapBoth=null,gapAI=null,gapSerp=null;
+        queries.forEach(function(q){
+          var inS=!!(you.cells&&you.cells[q]);
+          var inA=hasAI?!!(you.ai_cells&&you.ai_cells[q]):true;
+          if(!inS&&!inA){if(!gapBoth)gapBoth=q;}
+          else if(inS&&!inA){if(!gapAI)gapAI=q;}
+          else if(!inS&&inA){if(!gapSerp)gapSerp=q;}
+        });
+        var serpHolder=function(q){var h=null,hr=99;r.forEach(function(x){if(x.brand.toLowerCase()===you.brand.toLowerCase())return;var c=x.cells&&x.cells[q];if(c&&c.rank<hr){hr=c.rank;h=x.brand;}});if(!h&&L&&L.queries&&L.queries[q]&&L.queries[q][0])h=L.queries[q][0].host;return h;};
+        var aiHolder=function(q){var h=null,hr=99;r.forEach(function(x){if(x.brand.toLowerCase()===you.brand.toLowerCase())return;var c=x.ai_cells&&x.ai_cells[q];if(c&&c.rank<hr){hr=c.rank;h=x.brand;}});return h;};
+        if(gapBoth){
+          var hb=serpHolder(gapBoth)||aiHolder(gapBoth);
+          lines.push('<b>Your clearest gap</b>: &ldquo;'+esc(gapBoth)+'&rdquo;, invisible on both floors'+(hb?'. '+esc(hb)+' holds the answer today.':'.'));
+        }else if(gapAI){
+          var ha=aiHolder(gapAI);
+          lines.push('<b>Your blind spot</b>: &ldquo;'+esc(gapAI)+'&rdquo; on the AI floor. '+esc(provider)+' answers it today without naming you'+(ha?'. '+esc(ha)+' is the answer.':'.'));
+        }else if(gapSerp){
+          var hs=serpHolder(gapSerp);
+          lines.push('<b>Your blind spot</b>: &ldquo;'+esc(gapSerp)+'&rdquo; on Google'+(hs?', where '+esc(hs)+' holds the answer today.':'.'));
+        }else{
+          lines.push('<b>No blind spot on this sample</b>: you are present everywhere measured. The game is now defending it.');
+        }
+      }else{
+        lines.push('<b>Google</b>: '+esc(leader.brand)+' shows most often on these buyer searches.');
+        if(hasAI&&aiLeader)lines.push('<b>'+esc(provider)+'</b>: its preferred answer is '+esc(aiLeader.brand)+'.');
+      }
+      return '<div class="readout"><div class="k">What this means</div><ul>'+
+        lines.map(function(l){return '<li>'+l+'</li>';}).join('')+'</ul></div>';
+    })();
+
+
 
     // Bounded head-to-head: only when the audited brand was found and the backend
     // returned both bounded scores. This is the sentence a rival cannot produce.
     var cmpBlock=(youData.found&&d.geo&&d.geo_rival)
       ?boundedCompare(d.geo,d.geo_rival,youData.you.brand,d.geo_rival.brand):'';
     var readCard='<div class="card">'+badge+guarantee+notice+sector+
-      '<div class="readhead"><div class="verdict"><h2>'+verdictH2+'</h2>'+bizLine+vsent+'</div>'+dialBlock+'</div>'+
+      '<div class="readhead"><div class="verdict"><h2>'+verdictH2+'</h2>'+bizLine+'</div>'+dialBlock+'</div>'+
       cmpBlock+
       (insight?'<div class="insight">'+insight+'</div>':'')+
       '<div class="hm hm-scope"><span class="radar" id="hmRadar" aria-hidden="true"></span><div class="hm-grid" style="grid-template-columns:'+cols+'">'+body+'</div>'+mob+legend+'</div>'+
-      insightsBlock+
+      readoutBlock+
       (hasAI?buildMatrix(r,brandName):'')+
       proCta()+'</div>'+
       (isDeepTier?deepSections(d):freeTeaser(d));
@@ -1992,7 +2126,12 @@
       moves.push('Add a citable FAQ answering "'+esc(qq[0])+'" so AI assistants can quote you directly.');
     }
     if(moves.length<3){
-      moves.push('Earn a mention on the third party listicles AI already cites for this category.');
+      var Lo=d.serp_landscape;
+      var SOCIAL=/facebook\.|instagram\.|youtube\.|tiktok\.|linkedin\.|twitter\.|(^|\.)x\.com/;
+      var ownHosts=((Lo&&Lo.owners)||[]).map(function(o){return o.host;}).filter(function(h){return !SOCIAL.test(h);}).slice(0,2);
+      moves.push(ownHosts.length
+        ?'Earn a mention on '+ownHosts.map(esc).join(' and ')+', the pages that already own these answers on Google.'
+        :'Earn a mention on the third party listicles AI already cites for this category.');
     }
     var movesHtml=moves.slice(0,3).map(function(m){return '<li>'+m+'</li>';}).join('');
 
