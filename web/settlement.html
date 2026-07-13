@@ -55,6 +55,28 @@
   .callout{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--sage);border-radius:0 12px 12px 0;padding:18px 20px;margin:18px 0;font-size:15px;color:#2c2a24;max-width:62ch;}
   .callout strong{color:var(--sage-d);}
 
+  /* Use cases: one real, measured example per product. Every number below is
+     from an actual Nadelio audit run on google.fr, not illustrative. */
+  .cases{display:grid;gap:14px;margin:8px 0 4px;}
+  .case{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 24px;position:relative;overflow:hidden;}
+  .case .prod{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+  .case .pname{font-size:16px;font-weight:600;color:var(--ink);letter-spacing:-.2px;}
+  .case .pprice{font-family:ui-monospace,monospace;font-size:13px;color:var(--sage-d);background:rgba(91,140,126,.1);border-radius:7px;padding:3px 9px;white-space:nowrap;}
+  .case .who{font-size:13px;color:var(--muted);margin-bottom:14px;}
+  .case .real{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;}
+  .case .real .d{width:5px;height:5px;border-radius:50%;background:var(--sage);}
+  .case .scene{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+  .case .box{background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:13px 15px;}
+  .case .box .k{font-family:ui-monospace,monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px;}
+  .case .box .v{font-size:14px;color:#2c2a24;line-height:1.45;}
+  .case .box .v b{font-weight:600;color:var(--ink);}
+  .case .num{font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;color:var(--sage-d);font-weight:600;}
+  .case .verdict{font-size:14.5px;color:#2c2a24;line-height:1.55;border-top:1px solid var(--line);padding-top:13px;}
+  .case .verdict b{color:var(--ink);font-weight:600;}
+  .case .verdict .win{color:var(--sage-d);font-weight:600;}
+  .case .verdict .gap{color:var(--amber);font-weight:600;}
+  @media(max-width:540px){.case .scene{grid-template-columns:1fr;}}
+
   .steps{list-style:none;counter-reset:s;margin:6px 0 8px;}
   .steps li{counter-increment:s;position:relative;padding:0 0 16px 40px;font-size:15px;color:#2c2a24;max-width:60ch;}
   .steps li::before{content:counter(s);position:absolute;left:0;top:-2px;width:26px;height:26px;border-radius:8px;background:var(--card);border:1px solid var(--line);font-family:ui-monospace,monospace;font-size:13px;font-weight:600;color:var(--sage-d);display:flex;align-items:center;justify-content:center;}
@@ -116,7 +138,7 @@
   <section>
     <h2>The stalemate nobody talks about</h2>
     <div class="stalemate">
-      <div class="side"><div class="who">The brand</div><p>Pays 1,500&ndash;50,000&euro;/month for content and PR aimed at AI visibility, with no way to verify whether any of it worked.</p></div>
+      <div class="side"><div class="who">The brand</div><p>Pays 1,500 to 50,000&euro;/month for content and PR aimed at AI visibility, with no way to verify whether any of it worked.</p></div>
       <span class="vs">vs</span>
       <div class="side"><div class="who">The agency</div><p>Wants to sell performance, not just hours, but has no instrument that survives a dispute over what "worked" means.</p></div>
     </div>
@@ -148,6 +170,47 @@
     <p><a href="/arbitration-agreement" style="color:var(--sage-d)">Read the full settlement agreement template &rarr;</a>, the open document both sides sign.</p>
   </section>
 
+  <section id="use-cases">
+    <h2>One real example per product</h2>
+    <p>Every number below comes from an actual Nadelio audit run on the real Google of the brand's market. Nothing here is illustrative.</p>
+    <div class="cases">
+
+      <div class="case">
+        <div class="prod"><span class="pname">Deep Audit</span><span class="pprice">79&euro;, one time</span></div>
+        <div class="who">For a brand that suspects it is losing the category and wants the receipts, plus the plan to fix it.</div>
+        <div class="real"><span class="d"></span>Measured, Pennylane, comptabilit&eacute; SaaS France</div>
+        <div class="scene">
+          <div class="box"><div class="k">The read</div><div class="v"><b>Pennylane</b> scores <span class="num">60 &plusmn;1</span>, behind <b>Sage</b> at <span class="num">71 &plusmn;1</span> on its own buyer queries.</div></div>
+          <div class="box"><div class="k">The blind spot</div><div class="v">On <b>meilleur logiciel comptabilit&eacute; SaaS pour PME</b>, the answers go to <b>swapn.fr</b> and <b>legalplace.fr</b>, not to Pennylane.</div></div>
+        </div>
+        <div class="verdict">The bands do not overlap, so the <span class="gap">gap to Sage is real, not noise</span>. The Deep Audit hands Pennylane the exact queries it is absent from, the sites that own them today, and a written plan to earn those citations. That is what the 79 euros buys, a defensible starting line, not a vanity number.</div>
+      </div>
+
+      <div class="case">
+        <div class="prod"><span class="pname">Monitoring</span><span class="pprice">from 99&euro;, per month</span></div>
+        <div class="who">For a brand that already knows where it stands and needs to catch movement the moment it matters, not a quarter later.</div>
+        <div class="real"><span class="d"></span>Measured, Yoyaku, disquaire techno Paris</div>
+        <div class="scene">
+          <div class="box"><div class="k">This week</div><div class="v"><b>Yoyaku</b> holds <span class="num">56 &plusmn;1</span>, verdict <b>stable</b>, tied with Superfly Records on share of voice but behind on position.</div></div>
+          <div class="box"><div class="k">Why weekly</div><div class="v">AI answers drift with every model update. A one-off read goes stale. The interval is what tells a real move from noise.</div></div>
+        </div>
+        <div class="verdict">Monitoring re-measures Yoyaku every week and stays silent until a change <b>clears the confidence band</b>. No alert on a lucky sample, no dashboard to check. The week Superfly Records pulls ahead for real, or Yoyaku closes the gap, the email lands. The card keeps charging, the cron keeps running.</div>
+      </div>
+
+      <div class="case">
+        <div class="prod"><span class="pname">Settlement</span><span class="pprice">flat fee, never a cut</span></div>
+        <div class="who">For a brand and its agency who disagree on whether the work moved the needle. Nadelio rules on it, neutrally.</div>
+        <div class="real"><span class="d"></span>Measured, Qonto vs Shine, banque pro France</div>
+        <div class="scene">
+          <div class="box"><div class="k">The claim to settle</div><div class="v"><b>Qonto</b> at <span class="num">80 &plusmn;1</span>, <b>Shine</b> at <span class="num">76 &plusmn;1</span> on shared buyer queries. Is Qonto's lead real, or inside the margin?</div></div>
+          <div class="box"><div class="k">The ruling</div><div class="v">The bands are <span class="num">79 to 81</span> against <span class="num">75 to 77</span>. They do not touch, so the lead is <b>real and provable</b>.</div></div>
+        </div>
+        <div class="verdict">Now flip it. Had the read been <b>78 &plusmn;4</b> against <b>76 &plusmn;5</b>, the bands would overlap and Nadelio would rule <span class="gap">no real gain, no bonus owed</span>, protecting the brand from paying for noise. Same instrument, opposite verdict, decided by the interval and not by whoever shouts loudest. The referee is paid the same either way.</div>
+      </div>
+
+    </div>
+  </section>
+
   <section id="pricing">
     <h2>What it costs</h2>
     <p>A settlement needs a weekly measurement to rule on, that is the monitoring underneath it. The fee structure is simple on purpose: <strong>the referee is always paid flat, never a share of what you win.</strong></p>
@@ -165,7 +228,7 @@
     <span class="sub-msg" id="subMsg"></span>
 
     <div class="roles" style="margin-top:28px;">
-      <div class="role"><div class="t"><span class="dot"></span>Settlement</div><p><strong style="font-size:15px;color:var(--ink)">300&ndash;500&euro;/mo</strong><br>Per brand under an active performance agreement. Flat, regardless of the verdict.</p></div>
+      <div class="role"><div class="t"><span class="dot"></span>Settlement</div><p><strong style="font-size:15px;color:var(--ink)">300 to 500&euro;/mo</strong><br>Per brand under an active performance agreement. Flat, regardless of the verdict.</p></div>
       <div class="role"><div class="t"><span class="dot"></span>Citation Gap Report</div><p><strong style="font-size:15px;color:var(--ink)">990&euro;</strong><br>One-off: where your category gets cited, and where you are absent. Paid either way.</p></div>
     </div>
     <p class="small">A settlement agreement is set up with your counsel and Nadelio directly, not a self-serve checkout. <a href="mailto:adam.chabbi94@gmail.com?subject=Settlement%20Agreement" style="color:var(--sage-d)">Start that conversation</a>.</p>

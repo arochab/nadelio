@@ -799,7 +799,7 @@
             <div class="on">Monitoring</div>
             <div class="op mono">from 99&euro; <span>per month</span></div>
             <div class="od">The same bounded score, measured every week. You are alerted when movement clears the noise, never on the noise itself.</div>
-            <a class="offer-link" href="/settlement#pricing">See the three plans</a>
+            <a class="offer-link" href="/settlement#pricing" onclick="track('monitor_click')">See the three plans</a>
           </div>
           <div class="offer">
             <div class="on">Settlement</div>
@@ -834,7 +834,29 @@
 <script>
   var SUPPORT_EMAIL='adam.chabbi94@gmail.com';
   var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c];});};
+
+  // ============ FUNNEL TRACKING (fail-open, own D1, no third-party analytics) ============
+  function track(name,extra){
+    try{
+      var b=document.getElementById('brand');
+      var payload={name:name,brand:(b&&b.value||'').slice(0,120)};
+      if(window.__curMarket)payload.market=String(window.__curMarket).slice(0,60);
+      if(extra&&extra.tier)payload.tier=String(extra.tier).slice(0,40);
+      var body=JSON.stringify(payload);
+      if(navigator.sendBeacon){navigator.sendBeacon('/api/event',new Blob([body],{type:'application/json'}));}
+      else{fetch('/api/event',{method:'POST',headers:{'Content-Type':'application/json'},body:body,keepalive:true}).catch(function(){});}
+    }catch(e){}
+  }
+
   function useChip(b){document.getElementById('brand').value=b;run(true);}
+
+  // ============ RESULT SCREEN i18n (copy only, zero logic change) ============
+  // French renders when the audited brand's query language is French OR its
+  // market names France. English is untouched otherwise. render() sets
+  // _curFR once per measurement; helpers that do not receive `d` (the label
+  // helpers called deep inside string-building) read it from there.
+  function isFR(d){return /^fr/i.test((d&&d.query_language)||'')||/france|\bfr\b/i.test((d&&d.market)||'');}
+  var _curFR=false;
 
   // ============ MOTION HELPERS ============
   function reduceMotion(){return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches);}
@@ -1118,6 +1140,7 @@
     var out=document.getElementById('out'),btn=document.getElementById('goBtn');
     var brand=document.getElementById('brand').value.trim();
     if(!live){
+      track('sample_seen');
       hideResolver();
       btn.disabled=true;
       out.innerHTML='<div class="card"><div class="stage">Loading a sample measurement…<div class="bar"><i></i></div></div></div>';
@@ -1301,6 +1324,7 @@
   }
 
   async function confirmAnalyze(){
+    track('input_submitted');
     hidePlan(); // measuring starts: the plan line handed its job to the progress card
     var out=document.getElementById('out'),btn=document.getElementById('goBtn');
     var brand=out.dataset.previewBrand||document.getElementById('brand').value.trim();
@@ -1339,9 +1363,19 @@
   // screen: the Deep Audit planche below owns the 79 euro sell, so this block
   // carries the RECURRING product (monitoring, priced), then the email capture.
   function proCta(){
+    var FR=_curFR;
+    if(FR){
+      return '<div class="pro-cta">'+
+        '<span class="label">Cette lecture gratuite est un échantillon de 2 requêtes. Un score bouge de semaine en semaine, la marge vous dit quand ça compte.</span>'+
+        '<a class="upsell-link" href="/settlement#pricing" onclick="track(\'monitor_click\')">Surveillez cette marque chaque semaine, dès 99&euro;/mois</a>'+
+        '<span class="upsell-note">Des alertes seulement quand le mouvement sort du bruit.</span>'+
+        '<span class="label" style="margin-top:12px;">Recevez ce diagnostic et vos 3 angles morts par email.</span>'+
+        '<input id="proEmail" type="email" placeholder="votre@email.com"><button onclick="notifyMe()">Envoyez le moi</button><span class="ok" id="proOk">Vous êtes sur la liste.</span>'+
+        '<span class="monitor">Nadelio règle aussi des contrats de visibilité IA au résultat. <a href="/settlement">Voir comment</a></span></div>';
+    }
     return '<div class="pro-cta">'+
       '<span class="label">This free read is a 2 query sample. A score moves week to week, the margin tells you when it matters.</span>'+
-      '<a class="upsell-link" href="/settlement#pricing">Monitor this brand weekly, from 99&euro;/mo</a>'+
+      '<a class="upsell-link" href="/settlement#pricing" onclick="track(\'monitor_click\')">Monitor this brand weekly, from 99&euro;/mo</a>'+
       '<span class="upsell-note">Alerts only when movement clears the noise.</span>'+
       '<span class="label" style="margin-top:12px;">Receive this diagnosis and your 3 blind spots by email.</span>'+
       '<input id="proEmail" type="email" placeholder="your@email.com"><button onclick="notifyMe()">Send it to me</button><span class="ok" id="proOk">You\'re on the list.</span>'+
@@ -1391,6 +1425,7 @@
   }
 
   async function startCheckout(){
+    track('deep_click');
     var brand=document.getElementById('brand').value.trim();
     if(!brand){document.getElementById('brand').focus();deepMsg('Type your brand above first, the audit needs a subject.',true);return;}
     var hintEl=document.getElementById('hint');
@@ -1413,6 +1448,7 @@
       deepMsg(msg,true);
       deepCtaLock(false);return;
     }
+    track('checkout_started');
     window.location=data.url;
   }
 
@@ -1514,6 +1550,7 @@
   }
 
   function buildInsight(r,brandName){
+    var FR=_curFR;
     var present=r.filter(function(x){return x.share_of_voice>0;});if(present.length===0)return null;
     var leader=present[0],second=present[1];
     var you=r.find(function(x){return x.brand.toLowerCase()===String(brandName).toLowerCase();});
@@ -1523,16 +1560,26 @@
     if(second&&rp(leader.share_of_voice)===rp(second.share_of_voice)){
       var cellsL=leader.cells||{},nL=0,topAll=true;
       for(var kq in cellsL){nL++;if(cellsL[kq].rank!==1)topAll=false;}
-      return 'Equal share of voice, '+rp(leader.share_of_voice)+'/'+rp(second.share_of_voice)+'. <b>'+esc(leader.brand)+'</b> '+
-        (topAll&&nL>0?'holds the top spot on every query':'holds the better positions')+'.';
+      return FR
+        ?('Part de voix égale, '+rp(leader.share_of_voice)+'/'+rp(second.share_of_voice)+'. <b>'+esc(leader.brand)+'</b> '+
+          (topAll&&nL>0?'occupe la première place sur chaque requête':'occupe les meilleures positions')+'.')
+        :('Equal share of voice, '+rp(leader.share_of_voice)+'/'+rp(second.share_of_voice)+'. <b>'+esc(leader.brand)+'</b> '+
+          (topAll&&nL>0?'holds the top spot on every query':'holds the better positions')+'.');
     }
-    var parts=['<b>'+esc(leader.brand)+'</b> leads with '+rp(leader.share_of_voice)+'% share of voice'];
-    if(second){var gap=leader.share_of_voice-second.share_of_voice;parts.push(gap<8?'with <b>'+esc(second.brand)+'</b> right behind ('+rp(second.share_of_voice)+'%)':'well ahead of <b>'+esc(second.brand)+'</b> ('+rp(second.share_of_voice)+'%)');}
+    var parts=FR
+      ?['<b>'+esc(leader.brand)+'</b> mène avec '+rp(leader.share_of_voice)+'% de part de voix']
+      :['<b>'+esc(leader.brand)+'</b> leads with '+rp(leader.share_of_voice)+'% share of voice'];
+    if(second){
+      var gap=leader.share_of_voice-second.share_of_voice;
+      parts.push(FR
+        ?(gap<8?'<b>'+esc(second.brand)+'</b> juste derrière ('+rp(second.share_of_voice)+'%)':'largement devant <b>'+esc(second.brand)+'</b> ('+rp(second.share_of_voice)+'%)')
+        :(gap<8?'with <b>'+esc(second.brand)+'</b> right behind ('+rp(second.share_of_voice)+'%)':'well ahead of <b>'+esc(second.brand)+'</b> ('+rp(second.share_of_voice)+'%)'));
+    }
     var tail='';
     if(you){var rank=r.indexOf(you)+1;
       // When YOU are the leader, the sentence already says it: no sewn-on tail.
-      if(you.share_of_voice===0)tail=' <b>'+esc(you.brand)+'</b> is invisible here, the clearest place to win.';
-      else if(rank!==1)tail=' <b>'+esc(you.brand)+'</b> sits at #'+rank+', room to climb.';}
+      if(you.share_of_voice===0)tail=FR?(' <b>'+esc(you.brand)+'</b> est invisible ici, l’endroit le plus clair où gagner.'):(' <b>'+esc(you.brand)+'</b> is invisible here, the clearest place to win.');
+      else if(rank!==1)tail=FR?(' <b>'+esc(you.brand)+'</b> se situe à la #'+rank+', de la marge pour progresser.'):(' <b>'+esc(you.brand)+'</b> sits at #'+rank+', room to climb.');}
     return parts.join(', ')+'.'+tail;
   }
 
@@ -1566,6 +1613,7 @@
   function geoScoreColorDark(s){return s>=71?'var(--sage-signal)':(s>=41?'var(--amber)':'#E08A5C');}
 
   function buildMatrix(r,brandName){
+    var FR=_curFR;
     var quads={dominant:[],aiOnly:[],serpOnly:[],invisible:[]};
     r.forEach(function(x){
       var inSerp=x.share_of_voice>0,inAI=x.ai_avg_rank!=null;
@@ -1578,24 +1626,29 @@
     // instead of rendering four boxes where three read "none".
     var filled=Object.keys(quads).filter(function(k){return quads[k].length;});
     if(filled.length<2){
-      var flatLabel={dominant:'present on both floors, Google and AI',aiOnly:'visible on the AI floor only',
-                     serpOnly:'visible on Google only',invisible:'invisible on both floors'}[filled[0]||'invisible'];
-      return '<div class="mtx-flat">All '+r.length+' brands measured sit in the same quadrant: '+flatLabel+'. The SERP x AI map appears when positions diverge.</div>';
+      var flatLabel=FR
+        ?{dominant:'présent sur les deux étages, Google et IA',aiOnly:'visible sur l’étage IA seulement',
+          serpOnly:'visible sur Google seulement',invisible:'invisible sur les deux étages'}[filled[0]||'invisible']
+        :{dominant:'present on both floors, Google and AI',aiOnly:'visible on the AI floor only',
+          serpOnly:'visible on Google only',invisible:'invisible on both floors'}[filled[0]||'invisible'];
+      return FR
+        ?('<div class="mtx-flat">Les '+r.length+' marques mesurées sont toutes dans le même quadrant : '+flatLabel+'. La carte SERP x IA apparaît quand les positions divergent.</div>')
+        :('<div class="mtx-flat">All '+r.length+' brands measured sit in the same quadrant: '+flatLabel+'. The SERP x AI map appears when positions diverge.</div>');
     }
-    function names(list){return list.length?list.map(function(x){return esc(x.brand)+(x.brand.toLowerCase()===brandName.toLowerCase()?' <span class="mtx-you">you</span>':'');}).join(', '):'<span style="color:var(--muted-dark)">none</span>';}
+    function names(list){return list.length?list.map(function(x){return esc(x.brand)+(x.brand.toLowerCase()===brandName.toLowerCase()?' <span class="mtx-you">'+(FR?'vous':'you')+'</span>':'');}).join(', '):'<span style="color:var(--muted-dark)">'+(FR?'aucune':'none')+'</span>';}
     var you=r.find(function(x){return x.brand.toLowerCase()===brandName.toLowerCase();});
     var youQuad=you?(you.share_of_voice>0&&you.ai_avg_rank!=null?'dominant':you.ai_avg_rank!=null?'aiOnly':you.share_of_voice>0?'serpOnly':'invisible'):null;
     function cellStyle(key){return youQuad===key?'box-shadow:inset 0 0 0 2px var(--amber);':'';}
     return '<div style="margin-top:26px;padding-top:20px;border-top:1px dashed var(--hairline-2)">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+
-      '<div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark)">SERP x AI matrix</div>'+
-      '<button onclick="copyMatrix(this,'+"'"+esc(brandName).replace(/'/g,"\\'")+"'"+')" style="font-family:var(--mono);font-size:11px;padding:6px 11px;border:1px solid var(--hairline-2);border-radius:8px;background:transparent;color:var(--muted-dark);cursor:pointer">Copy summary</button>'+
+      '<div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark)">'+(FR?'Matrice SERP x IA':'SERP x AI matrix')+'</div>'+
+      '<button onclick="copyMatrix(this,'+"'"+esc(brandName).replace(/'/g,"\\'")+"'"+')" style="font-family:var(--mono);font-size:11px;padding:6px 11px;border:1px solid var(--hairline-2);border-radius:8px;background:transparent;color:var(--muted-dark);cursor:pointer">'+(FR?'Copier le résumé':'Copy summary')+'</button>'+
       '</div>'+
       '<div id="matrixGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-        '<div style="'+cellStyle('dominant')+'background:rgba(79,209,165,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--sage-signal);margin-bottom:4px">Present on both floors</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.dominant)+'</div></div>'+
-        '<div style="'+cellStyle('aiOnly')+'background:rgba(139,111,232,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--violet-ai);margin-bottom:4px">AI only</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.aiOnly)+'</div></div>'+
-        '<div style="'+cellStyle('serpOnly')+'background:rgba(255,255,255,.05);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--paper-ink);margin-bottom:4px">SERP only</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.serpOnly)+'</div></div>'+
-        '<div style="'+cellStyle('invisible')+'background:rgba(255,255,255,.03);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--muted-dark);margin-bottom:4px">Invisible</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.invisible)+'</div></div>'+
+        '<div style="'+cellStyle('dominant')+'background:rgba(79,209,165,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--sage-signal);margin-bottom:4px">'+(FR?'Présent sur les deux étages':'Present on both floors')+'</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.dominant)+'</div></div>'+
+        '<div style="'+cellStyle('aiOnly')+'background:rgba(139,111,232,.1);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--violet-ai);margin-bottom:4px">'+(FR?'IA seulement':'AI only')+'</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.aiOnly)+'</div></div>'+
+        '<div style="'+cellStyle('serpOnly')+'background:rgba(255,255,255,.05);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--paper-ink);margin-bottom:4px">'+(FR?'Google seulement':'SERP only')+'</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.serpOnly)+'</div></div>'+
+        '<div style="'+cellStyle('invisible')+'background:rgba(255,255,255,.03);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:600;color:var(--muted-dark);margin-bottom:4px">'+(FR?'Invisible':'Invisible')+'</div><div style="font-size:13px;line-height:1.5;color:var(--paper-ink)">'+names(quads.invisible)+'</div></div>'+
       '</div></div>';
   }
 
@@ -1610,26 +1663,31 @@
 
   function render(d){
     var r=d.ranking||[],queries=d.queries||[],brandName=d.brand||'';
+    _curFR=isFR(d); // drives every result-screen sentence below and in the helpers it calls
+    var FR=_curFR;
     window.__curBrand=brandName; // the brand a monitoring subscription attaches to
+    window.__curMarket=d.market||''; // so track() can tag events with the current market
     var present=r.filter(function(x){return x.share_of_voice>0;});
     var isDeepTier=(d.tier==='deep');
     // rail state reflects the source of truth
     setRailState(d.cached?'cached':(d.mode==='live'?'live':'idle'));
     if(d.mode==='live'||isDeepTier){litChannel('chan01');litChannel('chan02');}
     var badge=isDeepTier
-      ?'<span class="badge live"><span class="lv"></span>Deep Audit, sourced</span>'
-      :(d.cached?'<span class="badge cached">Cached</span>':(d.mode==='live'?'<span class="badge live"><span class="lv"></span>Live measurement</span>':'<span class="badge demo">Sample</span>'));
+      ?'<span class="badge live"><span class="lv"></span>'+(FR?'Deep Audit, sourcé':'Deep Audit, sourced')+'</span>'
+      :(d.cached?'<span class="badge cached">'+(FR?'En cache':'Cached')+'</span>':(d.mode==='live'?'<span class="badge live"><span class="lv"></span>'+(FR?'Mesure en direct':'Live measurement')+'</span>':'<span class="badge demo">'+(FR?'Exemple':'Sample')+'</span>'));
     var guarantee='';
     if(d.identified_as||d.official_url){
-      var gsrc=d.official_url?' <a href="'+esc(d.official_url)+'" target="_blank" rel="noopener">official source</a>':'';
+      var gsrc=d.official_url?' <a href="'+esc(d.official_url)+'" target="_blank" rel="noopener">'+(FR?'source officielle':'official source')+'</a>':'';
       // Say only what is true: web evidence backs "verified on the web", a
       // human confirmation without evidence is "confirmed by you".
-      var gTail=(String(d.confidence||'').toLowerCase()==='high')?'verified on the web':'confirmed by you';
-      guarantee='<div class="guarantee"><span class="chk">&#10003;</span> Identified as <b style="font-weight:600">&ldquo;'+esc(d.identified_as||brandName)+'&rdquo;</b>'+(gsrc?', '+gsrc:'')+', '+gTail+'</div>';
+      var gTail=(String(d.confidence||'').toLowerCase()==='high')?(FR?'vérifié sur le web':'verified on the web'):(FR?'confirmé par vous':'confirmed by you');
+      guarantee='<div class="guarantee"><span class="chk">&#10003;</span> '+(FR?'Identifié comme':'Identified as')+' <b style="font-weight:600">&ldquo;'+esc(d.identified_as||brandName)+'&rdquo;</b>'+(gsrc?', '+gsrc:'')+', '+gTail+'</div>';
     }
     var notice=d.notice?'<div style="background:rgba(217,164,65,.1);border:1px solid rgba(217,164,65,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--amber);margin-bottom:16px">'+esc(d.notice)+'</div>':'';
-    var mkt=d.market?', market <b>'+esc(d.market)+'</b>':'';
-    var sector=d.sector?'<div class="sector">Sector pegged as <b>'+esc(d.sector)+'</b>'+mkt+', '+r.length+' rivals across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>':'';
+    var mkt=d.market?(FR?', marché <b>'+esc(d.market)+'</b>':', market <b>'+esc(d.market)+'</b>'):'';
+    var sector=d.sector?'<div class="sector">'+(FR
+      ?'Secteur identifié : <b>'+esc(d.sector)+'</b>'+mkt+', '+r.length+' concurrents sur '+queries.length+' '+(queries.length>1?'requêtes':'requête')+' d’acheteur.'
+      :'Sector pegged as <b>'+esc(d.sector)+'</b>'+mkt+', '+r.length+' rivals across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.')+'</div>':'';
 
     if(present.length===0){
       offersMode('idle');
@@ -1639,15 +1697,19 @@
       var L0=d.serp_landscape;
       var ownersHtml='';
       if(L0&&L0.owners&&L0.owners.length){
-        ownersHtml='<div class="owners"><div class="k">Who owns these answers today</div>'+
+        ownersHtml='<div class="owners"><div class="k">'+(FR?'Qui possède ces réponses aujourd’hui':'Who owns these answers today')+'</div>'+
           L0.owners.slice(0,5).map(function(o){
-            return '<div class="own-row"><span class="oh">'+esc(o.host)+'</span><span class="om mono">best #'+o.best_rank+(o.hits>1?', seen '+o.hits+' times':'')+'</span></div>';
+            return '<div class="own-row"><span class="oh">'+esc(o.host)+'</span><span class="om mono">'+(FR?'meilleure position #'+o.best_rank+(o.hits>1?', vue '+o.hits+' fois':''):'best #'+o.best_rank+(o.hits>1?', seen '+o.hits+' times':''))+'</span></div>';
           }).join('')+
-          '<div class="own-note">These are the sites Google hands your buyers instead. Earning a mention on one of them is usually the shortest path in.</div></div>';
+          '<div class="own-note">'+(FR
+            ?'Ce sont les sites que Google donne à vos acheteurs à votre place. Décrocher une mention sur l’un d’eux est en général le chemin le plus court.'
+            :'These are the sites Google hands your buyers instead. Earning a mention on one of them is usually the shortest path in.')+'</div></div>';
       }
       document.getElementById('out').innerHTML='<div class="card">'+badge+guarantee+notice+sector+
-        '<div class="empty-state"><div class="big">No tracked brand shows up, including '+esc(brandName)+'</div>'+
-        '<div class="desc">'+(ownersHtml?'The buyer searches are real, but the answers belong to other sites entirely.':'None of these brands appear for these searches. Either the category is wide open, or the queries are too niche.')+'</div></div>'+
+        '<div class="empty-state"><div class="big">'+(FR?'Aucune marque suivie n’apparaît, y compris '+esc(brandName):'No tracked brand shows up, including '+esc(brandName))+'</div>'+
+        '<div class="desc">'+(ownersHtml
+          ?(FR?'Les recherches d’acheteurs sont réelles, mais les réponses appartiennent entièrement à d’autres sites.':'The buyer searches are real, but the answers belong to other sites entirely.')
+          :(FR?'Aucune de ces marques n’apparaît sur ces recherches. Soit la catégorie est grande ouverte, soit les requêtes sont trop pointues.':'None of these brands appear for these searches. Either the category is wide open, or the queries are too niche.'))+'</div></div>'+
         ownersHtml+proCta()+'</div>';
       return;
     }
@@ -1670,26 +1732,26 @@
       queries.forEach(function(q){var lst=Lf.queries[q]||[];if(lst.length&&lst[0].rank<bestRank){bestRank=lst[0].rank;bestQ=q;}});
       if(!bestQ)return '';
       var tops=(Lf.queries[bestQ]||[]).slice(0,3).map(function(o){return '<b>'+esc(o.host)+'</b> <span class="mono">#'+o.rank+'</span>';}).join(', ');
-      return '<div class="floor-rest"><span class="fk">Also on Google, &ldquo;'+esc(shortQ(bestQ))+'&rdquo;</span>'+tops+'</div>';
+      return '<div class="floor-rest"><span class="fk">'+(FR?'Aussi sur Google, &ldquo;'+esc(shortQ(bestQ))+'&rdquo;':'Also on Google, &ldquo;'+esc(shortQ(bestQ))+'&rdquo;')+'</span>'+tops+'</div>';
     })();
 
     // ---- Build heatmap: desktop grid (two territories) ----
     var cols='170px repeat('+queries.length+',minmax(64px,1fr))';
     var cellIdx=0;var body='';
 
-    body+='<div class="hm-section serp"><span>Search floor, Google</span></div>';
+    body+='<div class="hm-section serp"><span>'+(FR?'Étage recherche, Google':'Search floor, Google')+'</span></div>';
     body+='<div class="hm-corner"></div>'+queries.map(function(q){return '<div class="hm-qh">'+esc(shortQ(q))+'</div>';}).join('');
 
     r.forEach(function(x,ri){
       var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
-      body+='<div class="hm-bname'+(isYou?' you-row':'')+'" style="color:'+(x.share_of_voice===0?'var(--muted-dark)':(isYou?'#fff':'var(--paper-ink)'))+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
+      body+='<div class="hm-bname'+(isYou?' you-row':'')+'" style="color:'+(x.share_of_voice===0?'var(--muted-dark)':(isYou?'#fff':'var(--paper-ink)'))+'">'+esc(x.brand)+(isYou?'<span class="you">'+(FR?'vous':'you')+'</span>':'')+'</div>';
       queries.forEach(function(q,qi){
         var cell=(x.cells||{})[q];
         if(cell){
           var c=rankColor(cell.rank);
           var kind=cell.kind||'mention';
-          var kindLabel=kind==='citation'?'their own site ranked':'mentioned by another site';
-          var tipHtml='<b>'+esc(cell.title||x.brand)+'</b><div class="q">"'+esc(q)+'", rank '+cell.rank+', '+kindLabel+'</div>';
+          var kindLabel=FR?(kind==='citation'?'leur propre site classé':'mentionné par un autre site'):(kind==='citation'?'their own site ranked':'mentioned by another site');
+          var tipHtml='<b>'+esc(cell.title||x.brand)+'</b><div class="q">"'+esc(q)+'", '+(FR?'position '+cell.rank:'rank '+cell.rank)+', '+kindLabel+'</div>';
           var tipAttr=esc(tipHtml).replace(/"/g,"&quot;");
           body+='<div class="cell has'+(isYou?' you-cell':'')+'" data-col="'+qi+'" style="background:'+c+'" '+
             'data-link="'+esc(cell.link||'')+'" tabindex="0" '+
@@ -1706,19 +1768,23 @@
       // One counting vocabulary per screen: "measures", sourced from the same
       // geo block the score cites, so the floor and the score always agree.
       var runsN=(d.geo&&d.geo.n)||(r[0]&&r[0].ai_cells&&Object.values(r[0].ai_cells)[0]?Object.values(r[0].ai_cells)[0].runs||1:1);
-      body+='<div class="hm-section ai"><span>AI floor, '+esc(d.ai_provider_label||'AI assistants')+'</span> <span class="sub">'+(runsN>1?'across '+runsN+' AI measures':'single AI measure')+'</span></div>';
+      body+='<div class="hm-section ai"><span>'+(FR?'Étage IA, ':'AI floor, ')+esc(d.ai_provider_label||(FR?'assistants IA':'AI assistants'))+'</span> <span class="sub">'+(FR?(runsN>1?'sur '+runsN+' mesures IA':'une seule mesure IA'):(runsN>1?'across '+runsN+' AI measures':'single AI measure'))+'</span></div>';
       body+='<div class="hm-corner"></div>'+queries.map(function(q){return '<div class="hm-qh">'+esc(shortQ(q))+'</div>';}).join('');
       r.forEach(function(x,ri){
         var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
-        body+='<div class="hm-bname'+(isYou?' you-row':'')+'" style="color:'+(x.ai_avg_rank==null?'var(--muted-dark)':(isYou?'#fff':'var(--paper-ink)'))+'">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</div>';
+        body+='<div class="hm-bname'+(isYou?' you-row':'')+'" style="color:'+(x.ai_avg_rank==null?'var(--muted-dark)':(isYou?'#fff':'var(--paper-ink)'))+'">'+esc(x.brand)+(isYou?'<span class="you">'+(FR?'vous':'you')+'</span>':'')+'</div>';
         queries.forEach(function(q,qi){
           var aiCell=(x.ai_cells||{})[q];
           if(aiCell){
             var c=rankColorAI(aiCell.rank);
             var isPrimary=aiCell.kind==='primary';
-            var tipHtml='<b>'+esc(x.brand)+'</b><div class="q">AI mentions for "'+esc(q)+'", avg position '+aiCell.rank+
-              (aiCell.consistency!=null?', consistent in '+aiCell.consistency+'% of runs':'')+
-              (isPrimary?', primary recommendation':', mentioned in passing')+'</div>';
+            var tipHtml=FR
+              ?('<b>'+esc(x.brand)+'</b><div class="q">Mentions IA pour "'+esc(q)+'", position moyenne '+aiCell.rank+
+                (aiCell.consistency!=null?', constant dans '+aiCell.consistency+'% des mesures':'')+
+                (isPrimary?', recommandation principale':', mentionné au passage')+'</div>')
+              :('<b>'+esc(x.brand)+'</b><div class="q">AI mentions for "'+esc(q)+'", avg position '+aiCell.rank+
+                (aiCell.consistency!=null?', consistent in '+aiCell.consistency+'% of runs':'')+
+                (isPrimary?', primary recommendation':', mentioned in passing')+'</div>');
             var tipAttr=esc(tipHtml).replace(/"/g,"&quot;");
             body+='<div class="cell ai has'+(isPrimary?' primary':'')+(isYou?' you-cell':'')+'" data-col="'+qi+'" style="background:'+c+'" tabindex="0" '+
               'onmouseenter=\'showTip(event,"'+tipAttr+'")\' onmousemove="moveTip(event)" onmouseleave="hideTip()" '+
@@ -1734,20 +1800,20 @@
     var mob='<div class="hm-cards">';
     queries.forEach(function(q){
       mob+='<div class="hm-qcard"><div class="qt">'+esc(q)+'</div>';
-      mob+='<div class="terr serp">Search floor, Google</div>';
+      mob+='<div class="terr serp">'+(FR?'Étage recherche, Google':'Search floor, Google')+'</div>';
       r.forEach(function(x){
         var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
         var cell=(x.cells||{})[q];
-        if(cell){var c=rankColor(cell.rank);mob+='<div class="hm-brow'+(isYou?' you-row':'')+'"><span class="bn">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+'</span><span class="rk" style="background:'+c+'">#'+cell.rank+(cell.kind==='citation'?'':'m')+'</span></div>';}
-        else if(isYou){mob+='<div class="hm-brow you-row"><span class="bn">'+esc(x.brand)+'<span class="you">you</span></span><span class="rk absent">absent</span></div>';}
+        if(cell){var c=rankColor(cell.rank);mob+='<div class="hm-brow'+(isYou?' you-row':'')+'"><span class="bn">'+esc(x.brand)+(isYou?'<span class="you">'+(FR?'vous':'you')+'</span>':'')+'</span><span class="rk" style="background:'+c+'">#'+cell.rank+(cell.kind==='citation'?'':'m')+'</span></div>';}
+        else if(isYou){mob+='<div class="hm-brow you-row"><span class="bn">'+esc(x.brand)+'<span class="you">'+(FR?'vous':'you')+'</span></span><span class="rk absent">'+(FR?'absent':'absent')+'</span></div>';}
       });
       if(hasAI){
-        mob+='<div class="terr ai">AI floor, '+esc(d.ai_provider_label||'AI assistants')+'</div>';
+        mob+='<div class="terr ai">'+(FR?'Étage IA, ':'AI floor, ')+esc(d.ai_provider_label||(FR?'assistants IA':'AI assistants'))+'</div>';
         r.forEach(function(x){
           var isYou=x.brand.toLowerCase()===brandName.toLowerCase();
           var aiCell=(x.ai_cells||{})[q];
-          if(aiCell){var c=rankColorAI(aiCell.rank);mob+='<div class="hm-brow'+(isYou?' you-row':'')+'"><span class="bn">'+esc(x.brand)+(isYou?'<span class="you">you</span>':'')+(aiCell.kind==='primary'?' <span style="color:var(--violet-ai);font-size:11px">primary</span>':'')+'</span><span class="rk ai" style="background:'+c+'">#'+aiCell.rank+'</span></div>';}
-          else if(isYou){mob+='<div class="hm-brow you-row"><span class="bn">'+esc(x.brand)+'<span class="you">you</span></span><span class="rk absent">absent</span></div>';}
+          if(aiCell){var c=rankColorAI(aiCell.rank);mob+='<div class="hm-brow'+(isYou?' you-row':'')+'"><span class="bn">'+esc(x.brand)+(isYou?'<span class="you">'+(FR?'vous':'you')+'</span>':'')+(aiCell.kind==='primary'?' <span style="color:var(--violet-ai);font-size:11px">'+(FR?'principale':'primary')+'</span>':'')+'</span><span class="rk ai" style="background:'+c+'">#'+aiCell.rank+'</span></div>';}
+          else if(isYou){mob+='<div class="hm-brow you-row"><span class="bn">'+esc(x.brand)+'<span class="you">'+(FR?'vous':'you')+'</span></span><span class="rk absent">'+(FR?'absent':'absent')+'</span></div>';}
         });
       }
       mob+='</div>';
@@ -1772,28 +1838,42 @@
       var youBrand=esc(youData.you.brand);
       dialSov=youData.sov;
       if(youData.rank===1){
-        verdictH2='You own the conversation in '+esc(d.sector||'your market')+'.';
-        bizLine='<div class="biz">You lead at <b>#1 of '+youData.total+'</b> with <b>'+pct(youData.sov)+'% share of voice</b>. Now defend it before AI shifts the ground.</div>';
+        verdictH2=FR?('Vous possédez la conversation dans '+esc(d.sector||'votre marché')+'.'):('You own the conversation in '+esc(d.sector||'your market')+'.');
+        bizLine=FR
+          ?('<div class="biz">Vous menez à la <b>#1 sur '+youData.total+'</b> avec <b>'+pct(youData.sov)+'% de part de voix</b>. Défendez-la maintenant, avant que l’IA ne change la donne.</div>')
+          :('<div class="biz">You lead at <b>#1 of '+youData.total+'</b> with <b>'+pct(youData.sov)+'% share of voice</b>. Now defend it before AI shifts the ground.</div>');
       } else if(youData.sov===0){
-        verdictH2='You are invisible where your buyers ask.';
-        bizLine='<div class="biz"><b>'+youBrand+'</b> does not appear for these buyer queries. '+(youData.leader?'<b>'+esc(youData.leader.brand)+'</b> owns the answers ('+pct(youData.leader.share_of_voice)+'%).':'')+' The clearest place to win.</div>';
+        verdictH2=FR?'Vous êtes invisible là où vos acheteurs posent la question.':'You are invisible where your buyers ask.';
+        bizLine=FR
+          ?('<div class="biz"><b>'+youBrand+'</b> n’apparaît pas sur ces requêtes d’acheteur. '+(youData.leader?'<b>'+esc(youData.leader.brand)+'</b> possède les réponses ('+pct(youData.leader.share_of_voice)+'%).':'')+' L’endroit le plus clair où gagner.</div>')
+          :('<div class="biz"><b>'+youBrand+'</b> does not appear for these buyer queries. '+(youData.leader?'<b>'+esc(youData.leader.brand)+'</b> owns the answers ('+pct(youData.leader.share_of_voice)+'%).':'')+' The clearest place to win.</div>');
       } else {
-        verdictH2='You are #'+youData.rank+' of '+youData.total+', someone else owns the answer.';
+        verdictH2=FR?('Vous êtes #'+youData.rank+' sur '+youData.total+', quelqu’un d’autre possède la réponse.'):('You are #'+youData.rank+' of '+youData.total+', someone else owns the answer.');
         if(youData.leader&&pct(youData.sov)===pct(youData.leader.share_of_voice)){
-          bizLine='<div class="biz"><b>'+youBrand+'</b> matches <b>'+esc(youData.leader.brand)+'</b> on share of voice, <b>'+pct(youData.sov)+'%</b> each. Same presence, but someone else owns the answer.</div>';
+          bizLine=FR
+            ?('<div class="biz"><b>'+youBrand+'</b> égale <b>'+esc(youData.leader.brand)+'</b> en part de voix, <b>'+pct(youData.sov)+'%</b> chacun. Même présence, mais quelqu’un d’autre possède la réponse.</div>')
+            :('<div class="biz"><b>'+youBrand+'</b> matches <b>'+esc(youData.leader.brand)+'</b> on share of voice, <b>'+pct(youData.sov)+'%</b> each. Same presence, but someone else owns the answer.</div>');
         }else{
-          bizLine='<div class="biz"><b>'+youBrand+'</b> holds <b>'+pct(youData.sov)+'%</b> of the conversation'+(youData.leader?', while <b>'+esc(youData.leader.brand)+'</b> takes <b>'+pct(youData.leader.share_of_voice)+'%</b>':'')+'. Room to climb.</div>';
+          bizLine=FR
+            ?('<div class="biz"><b>'+youBrand+'</b> détient <b>'+pct(youData.sov)+'%</b> de la conversation'+(youData.leader?', tandis que <b>'+esc(youData.leader.brand)+'</b> prend <b>'+pct(youData.leader.share_of_voice)+'%</b>':'')+'. De la marge pour progresser.</div>')
+            :('<div class="biz"><b>'+youBrand+'</b> holds <b>'+pct(youData.sov)+'%</b> of the conversation'+(youData.leader?', while <b>'+esc(youData.leader.brand)+'</b> takes <b>'+pct(youData.leader.share_of_voice)+'%</b>':'')+'. Room to climb.</div>');
         }
       }
       // secondary context under the score: this brand's share of voice, inline
-      dialSubTxt=pct(youData.sov)+'% share of voice'+((youData.leader&&youData.leader.brand.toLowerCase()!==youData.you.brand.toLowerCase())?', leader '+esc(youData.leader.brand)+' at '+pct(youData.leader.share_of_voice)+'%':'');
+      dialSubTxt=FR
+        ?(pct(youData.sov)+'% de part de voix'+((youData.leader&&youData.leader.brand.toLowerCase()!==youData.you.brand.toLowerCase())?', leader '+esc(youData.leader.brand)+' à '+pct(youData.leader.share_of_voice)+'%':''))
+        :(pct(youData.sov)+'% share of voice'+((youData.leader&&youData.leader.brand.toLowerCase()!==youData.you.brand.toLowerCase())?', leader '+esc(youData.leader.brand)+' at '+pct(youData.leader.share_of_voice)+'%':''));
       if(youData.leader&&youData.leader.brand.toLowerCase()!==youData.you.brand.toLowerCase()){
-        vsent='<div class="vsent">You own <b>'+pct(youData.sov)+'%</b> of the answers. '+esc(youData.leader.brand)+' owns <b>'+pct(youData.leader.share_of_voice)+'%</b>.</div>';
+        vsent=FR
+          ?('<div class="vsent">Vous possédez <b>'+pct(youData.sov)+'%</b> des réponses. '+esc(youData.leader.brand)+' en possède <b>'+pct(youData.leader.share_of_voice)+'%</b>.</div>')
+          :('<div class="vsent">You own <b>'+pct(youData.sov)+'%</b> of the answers. '+esc(youData.leader.brand)+' owns <b>'+pct(youData.leader.share_of_voice)+'%</b>.</div>');
       }
     } else {
-      verdictH2=esc(leader.brand)+' owns the conversation.';
-      bizLine='<div class="biz">'+r.length+' brands measured across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>';
-      dialSubTxt='leader '+esc(leader.brand)+', '+pct(leader.share_of_voice)+'% share of voice';
+      verdictH2=FR?(esc(leader.brand)+' possède la conversation.'):(esc(leader.brand)+' owns the conversation.');
+      bizLine=FR
+        ?('<div class="biz">'+r.length+' marques mesurées sur '+queries.length+' '+(queries.length>1?'requêtes':'requête')+' d’acheteur.</div>')
+        :('<div class="biz">'+r.length+' brands measured across '+queries.length+' buyer '+(queries.length>1?'queries':'query')+'.</div>');
+      dialSubTxt=FR?('leader '+esc(leader.brand)+', '+pct(leader.share_of_voice)+'% de part de voix'):('leader '+esc(leader.brand)+', '+pct(leader.share_of_voice)+'% share of voice');
     }
     var geoCol=geoScoreColorDark(geoHero);
     var geoLbl=geoScoreLabel(geoHero);
@@ -1806,7 +1886,7 @@
     var ciHtml=(geoObj&&ciText(geoObj))?'<div class="ci">'+esc(ciText(geoObj))+'</div>':'';
     var badgeHtml=geoObj?verdictBadge(geoObj):'';
     var dialBlock='<div class="dial" id="geoDial">'+
-      '<div class="cap">'+(youData.found?'Your AI visibility score':'Leader AI visibility score')+'</div>'+
+      '<div class="cap">'+(FR?(youData.found?'Votre score de visibilité IA':'Score de visibilité IA du leader'):(youData.found?'Your AI visibility score':'Leader AI visibility score'))+'</div>'+
       '<div class="n mono" style="color:'+geoCol+'"><span id="heroNum">0</span>'+pmHtml+'<span class="p">/100</span></div>'+
       '<div class="dial-tag" style="color:'+geoCol+'">'+geoLbl+'</div>'+
       badgeHtml+
@@ -1814,14 +1894,16 @@
       (dialSubTxt?'<div class="sub">'+dialSubTxt+'</div>':'')+
       '</div>';
 
-    var legend='<div class="hm-legend"><b>Green</b> = Google rank, <span class="vi">violet</span> = AI rank, dotted = absent, <span style="color:var(--amber)">amber outline</span> = you.</div>';
+    var legend=FR
+      ?'<div class="hm-legend"><b>Vert</b> = position Google, <span class="vi">violet</span> = position IA, pointillé = absent, <span style="color:var(--amber)">contour ambre</span> = vous.</div>'
+      :'<div class="hm-legend"><b>Green</b> = Google rank, <span class="vi">violet</span> = AI rank, dotted = absent, <span style="color:var(--amber)">amber outline</span> = you.</div>';
 
     // "What this means": three plain-language lines ANYONE can read, derived
     // from the same data the grid shows. Replaces the old five mono stat chips
     // (jargon density without a decision in it). One line per floor plus the
     // single clearest gap, each naming real brands and real queries.
     var readoutBlock=(function(){
-      var provider=d.ai_provider_label||'AI assistants';
+      var provider=d.ai_provider_label||(FR?'assistants IA':'AI assistants');
       var aiLeader=null;
       if(hasAI){var aiSorted=r.filter(function(x){return x.ai_avg_rank!=null;}).sort(function(a,b){return a.ai_avg_rank-b.ai_avg_rank;});if(aiSorted.length)aiLeader=aiSorted[0];}
       var lines=[];
@@ -1833,30 +1915,43 @@
         if(gCov>0){
           // Derivation rule: "shows more often" ONLY on higher coverage. At
           // equal coverage the gap is rank, and the sentence must say rank.
-          var gTail='. No tracked rival shows more.';
+          var gTail=FR?'. Aucun rival suivi ne montre plus souvent.':'. No tracked rival shows more.';
           if(leader&&leader.brand.toLowerCase()!==you.brand.toLowerCase()){
             var leadCov=parseInt(leader.query_coverage)||0;
-            if(leadCov>gCov){gTail='. '+esc(leader.brand)+' shows more often.';}
+            if(leadCov>gCov){gTail=FR?('. '+esc(leader.brand)+' montre plus souvent.'):('. '+esc(leader.brand)+' shows more often.');}
             else{
               var shared=0,outN=0;
               queries.forEach(function(q){var yc=you.cells&&you.cells[q],lc=leader.cells&&leader.cells[q];if(yc&&lc){shared++;if(lc.rank<yc.rank)outN++;}});
-              if(shared>0&&outN===shared)gTail='. '+esc(leader.brand)+' outranks you on '+(shared===1?'it':shared===2?'both':'every query')+'.';
-              else if(outN>0)gTail='. '+esc(leader.brand)+' outranks you on '+outN+' of '+shared+'.';
-              else gTail='. You hold the better positions.';
+              if(shared>0&&outN===shared)gTail=FR
+                ?('. '+esc(leader.brand)+' vous surclasse sur '+(shared===1?'elle':shared===2?'les deux':'chaque requête')+'.')
+                :('. '+esc(leader.brand)+' outranks you on '+(shared===1?'it':shared===2?'both':'every query')+'.');
+              else if(outN>0)gTail=FR
+                ?('. '+esc(leader.brand)+' vous surclasse sur '+outN+' sur '+shared+'.')
+                :('. '+esc(leader.brand)+' outranks you on '+outN+' of '+shared+'.');
+              else gTail=FR?'. Vous occupez les meilleures positions.':'. You hold the better positions.';
             }
           }
-          lines.push('<b>Google</b>: you show on '+gCov+' of '+queries.length+' buyer '+(queries.length>1?'searches':'search')+(gBest!=null?', best at #'+gBest:'')+gTail);
+          lines.push(FR
+            ?('<b>Google</b> : vous apparaissez sur '+gCov+' '+(queries.length>1?'recherches sur '+queries.length:'recherche sur '+queries.length)+(gBest!=null?', en meilleure position #'+gBest:'')+gTail)
+            :('<b>Google</b>: you show on '+gCov+' of '+queries.length+' buyer '+(queries.length>1?'searches':'search')+(gBest!=null?', best at #'+gBest:'')+gTail));
         }else{
-          var ownTxt=(L&&L.owners&&L.owners.length)?' The answers go to '+esc(L.owners[0].host)+(L.owners[1]?' and '+esc(L.owners[1].host):'')+' instead.':'';
-          lines.push('<b>Google</b>: you do not appear on these buyer searches yet.'+ownTxt);
+          var ownTxt=FR
+            ?((L&&L.owners&&L.owners.length)?' Les réponses vont à '+esc(L.owners[0].host)+(L.owners[1]?' et '+esc(L.owners[1].host):'')+' à votre place.':'')
+            :((L&&L.owners&&L.owners.length)?' The answers go to '+esc(L.owners[0].host)+(L.owners[1]?' and '+esc(L.owners[1].host):'')+' instead.':'');
+          lines.push(FR?('<b>Google</b> : vous n’apparaissez pas encore sur ces recherches d’acheteur.'+ownTxt):('<b>Google</b>: you do not appear on these buyer searches yet.'+ownTxt));
         }
         if(hasAI){
           var aCov=parseInt(String(you.ai_coverage||'0').split('/')[0])||0;
           if(aCov>0){
-            lines.push('<b>'+esc(provider)+'</b>: you are cited on '+aCov+' of '+queries.length+' '+(queries.length>1?'questions':'question')+(you.ai_avg_rank!=null?', around position '+Math.round(you.ai_avg_rank):'')+
-              (aiLeader&&aiLeader.brand.toLowerCase()!==you.brand.toLowerCase()?'. The preferred answer is '+esc(aiLeader.brand)+'.':'. You are the preferred answer.'));
+            lines.push(FR
+              ?('<b>'+esc(provider)+'</b> : vous êtes cité sur '+aCov+' '+(aCov>1?'questions':'question')+' sur '+queries.length+(you.ai_avg_rank!=null?', autour de la position '+Math.round(you.ai_avg_rank):'')+
+                (aiLeader&&aiLeader.brand.toLowerCase()!==you.brand.toLowerCase()?'. La réponse privilégiée est '+esc(aiLeader.brand)+'.':'. Vous êtes la réponse privilégiée.'))
+              :('<b>'+esc(provider)+'</b>: you are cited on '+aCov+' of '+queries.length+' '+(queries.length>1?'questions':'question')+(you.ai_avg_rank!=null?', around position '+Math.round(you.ai_avg_rank):'')+
+                (aiLeader&&aiLeader.brand.toLowerCase()!==you.brand.toLowerCase()?'. The preferred answer is '+esc(aiLeader.brand)+'.':'. You are the preferred answer.')));
           }else{
-            lines.push('<b>'+esc(provider)+'</b>: you are never cited on these questions yet'+(aiLeader?'. The preferred answer is '+esc(aiLeader.brand)+'.':'.'));
+            lines.push(FR
+              ?('<b>'+esc(provider)+'</b> : vous n’êtes encore jamais cité sur ces questions'+(aiLeader?'. La réponse privilégiée est '+esc(aiLeader.brand)+'.':'.'))
+              :('<b>'+esc(provider)+'</b>: you are never cited on these questions yet'+(aiLeader?'. The preferred answer is '+esc(aiLeader.brand)+'.':'.')));
           }
         }
         // The single clearest gap: first query where YOU are absent from both
@@ -1877,21 +1972,29 @@
         var aiHolder=function(q){var h=null,hr=99;r.forEach(function(x){if(x.brand.toLowerCase()===you.brand.toLowerCase())return;var c=x.ai_cells&&x.ai_cells[q];if(c&&c.rank<hr){hr=c.rank;h=x.brand;}});return h;};
         if(gapBoth){
           var hb=serpHolder(gapBoth)||aiHolder(gapBoth);
-          lines.push('<b>Your clearest gap</b>: &ldquo;'+esc(gapBoth)+'&rdquo;, invisible on both floors'+(hb?'. '+esc(hb)+' holds the answer today.':'.'));
+          lines.push(FR
+            ?('<b>Votre angle mort le plus net</b> : &ldquo;'+esc(gapBoth)+'&rdquo;, invisible sur les deux étages'+(hb?'. '+esc(hb)+' détient la réponse aujourd’hui.':'.'))
+            :('<b>Your clearest gap</b>: &ldquo;'+esc(gapBoth)+'&rdquo;, invisible on both floors'+(hb?'. '+esc(hb)+' holds the answer today.':'.')));
         }else if(gapAI){
           var ha=aiHolder(gapAI);
-          lines.push('<b>Your blind spot</b>: &ldquo;'+esc(gapAI)+'&rdquo; on the AI floor. '+esc(provider)+' answers it today without naming you'+(ha?'. '+esc(ha)+' is the answer.':'.'));
+          lines.push(FR
+            ?('<b>Votre angle mort</b> : &ldquo;'+esc(gapAI)+'&rdquo; côté IA. '+esc(provider)+' y répond aujourd’hui sans vous nommer'+(ha?'. '+esc(ha)+' est la réponse.':'.'))
+            :('<b>Your blind spot</b>: &ldquo;'+esc(gapAI)+'&rdquo; on the AI floor. '+esc(provider)+' answers it today without naming you'+(ha?'. '+esc(ha)+' is the answer.':'.')));
         }else if(gapSerp){
           var hs=serpHolder(gapSerp);
-          lines.push('<b>Your blind spot</b>: &ldquo;'+esc(gapSerp)+'&rdquo; on Google'+(hs?', where '+esc(hs)+' holds the answer today.':'.'));
+          lines.push(FR
+            ?('<b>Votre angle mort</b> : &ldquo;'+esc(gapSerp)+'&rdquo; sur Google'+(hs?', où '+esc(hs)+' détient la réponse aujourd’hui.':'.'))
+            :('<b>Your blind spot</b>: &ldquo;'+esc(gapSerp)+'&rdquo; on Google'+(hs?', where '+esc(hs)+' holds the answer today.':'.')));
         }else{
-          lines.push('<b>No blind spot on this sample</b>: you are present everywhere measured. The game is now defending it.');
+          lines.push(FR
+            ?'<b>Aucun angle mort sur cet échantillon</b> : vous êtes présent partout où c’est mesuré. Il reste à défendre la position.'
+            :'<b>No blind spot on this sample</b>: you are present everywhere measured. The game is now defending it.');
         }
       }else{
-        lines.push('<b>Google</b>: '+esc(leader.brand)+' shows most often on these buyer searches.');
-        if(hasAI&&aiLeader)lines.push('<b>'+esc(provider)+'</b>: its preferred answer is '+esc(aiLeader.brand)+'.');
+        lines.push(FR?('<b>Google</b> : '+esc(leader.brand)+' apparaît le plus souvent sur ces recherches d’acheteur.'):('<b>Google</b>: '+esc(leader.brand)+' shows most often on these buyer searches.'));
+        if(hasAI&&aiLeader)lines.push(FR?('<b>'+esc(provider)+'</b> : sa réponse privilégiée est '+esc(aiLeader.brand)+'.'):('<b>'+esc(provider)+'</b>: its preferred answer is '+esc(aiLeader.brand)+'.'));
       }
-      return '<div class="readout"><div class="k">What this means</div><ul>'+
+      return '<div class="readout"><div class="k">'+(FR?'Ce que ça veut dire':'What this means')+'</div><ul>'+
         lines.map(function(l){return '<li>'+l+'</li>';}).join('')+'</ul></div>';
     })();
 
@@ -1921,6 +2024,7 @@
       // The instrument receives its own measurement: needle up, reading printed.
       setDialReading(geoHero,geoObj);
       offersMode(isDeepTier?'idle':'result');
+      if(!isDeepTier)track('plan_shown');
       var dial=document.getElementById('geoDial');if(dial)dial.classList.add('glow');
       var vs=document.querySelector('#out .vsent');
       if(vs){if(reduceMotion())vs.classList.add('in');else setTimeout(function(){vs.classList.add('in');},700);}
@@ -1951,33 +2055,42 @@
       finalize();
     });
 
+    track('result_seen');
+
     if(isDeepTier){window.__lastDeep=d;}
   }
 
   // ---- GEO score gauge (0-100) ,  SVG arc ----
   function geoScoreColor(s){return s>=71?'var(--sage-ink)':(s>=41?'var(--amber)':'#B5722E');}
-  function geoScoreLabel(s){return s>=71?'Strong':(s>=41?'Middling':'Weak');}
+  // Label helpers read the module-level _curFR set once per render(): they are
+  // called deep inside string builders that were never passed `d` directly.
+  function geoScoreLabel(s){return _curFR?(s>=71?'Fort':(s>=41?'Moyen':'Faible')):(s>=71?'Strong':(s>=41?'Middling':'Weak'));}
 
   // Bounded-score UI helpers. The backend sends d.geo = {point, half_width, low,
   // high, n, verdict}. A verdict of STABLE/MODERE/VOLATIL/SINGLE_RUN drives a
   // coloured badge; half_width prints as the "plus or minus" beside the number.
   // No dashes anywhere (the "plus or minus" symbol is used, not a hyphen).
   function verdictClass(v){var m={STABLE:'stable',MODERE:'modere',VOLATIL:'volatil',SINGLE_RUN:'single'};return m[v]||'single';}
-  function verdictLabel(v){var m={STABLE:'Stable',MODERE:'Moderate',VOLATIL:'Volatile',SINGLE_RUN:'Single run'};return m[v]||'';}
+  function verdictLabel(v){
+    var m=_curFR
+      ?{STABLE:'Stable',MODERE:'Modéré',VOLATIL:'Volatil',SINGLE_RUN:'Mesure unique'}
+      :{STABLE:'Stable',MODERE:'Moderate',VOLATIL:'Volatile',SINGLE_RUN:'Single run'};
+    return m[v]||'';
+  }
   // The interval text shown under the score. Never invents a bound on n=1.
   // When a verdict badge already carries the measure count, this line only
   // appears to WARN (wide band) or to flag the unbounded single measure: one
   // annotation fewer around the number (Ive, round 6).
   function ciText(geo){
-    if(!geo||geo.half_width==null){return 'single measure, reliability not bounded';}
-    if(geo.half_width>=15){return 'band too wide to call a trend, more measures tighten it';}
+    if(!geo||geo.half_width==null){return _curFR?'mesure unique, fiabilité non bornée':'single measure, reliability not bounded';}
+    if(geo.half_width>=15){return _curFR?'bande trop large pour affirmer une tendance, d’autres mesures la resserrent':'band too wide to call a trend, more measures tighten it';}
     return '';
   }
   // The verdict badge markup, measure count fused in ("Stable across 3 measures").
   function verdictBadge(geo){
     if(!geo||!geo.verdict)return '';
     var lbl=verdictLabel(geo.verdict);
-    if(geo.n>1)lbl+=' across '+geo.n+' measures';
+    if(geo.n>1)lbl+=_curFR?(' sur '+geo.n+' mesures'):(' across '+geo.n+' measures');
     return '<div class="vbadge '+verdictClass(geo.verdict)+'">'+esc(lbl)+'</div>';
   }
 
@@ -1989,16 +2102,21 @@
   // lack both bounded scores or a valid interval on either side.
   function boundedCompare(you, rival, youName, rivalName){
     if(!you||!rival||you.half_width==null||rival.half_width==null)return '';
+    var FR=_curFR;
     var overlap=(you.low<=rival.high)&&(rival.low<=you.high);
     var youAhead=you.point>=rival.point;
     var lead=youAhead?you:rival, behind=youAhead?rival:you;
     var leadName=youAhead?youName:rivalName, behindName=youAhead?rivalName:youName;
     var sentence, tone;
     if(overlap){
-      sentence='The gap is not real: the two intervals overlap, so '+esc(leadName)+'’s lead over '+esc(behindName)+' is within the noise.';
+      sentence=FR
+        ?('L’écart n’est pas réel : les deux intervalles se chevauchent, l’avance de '+esc(leadName)+' sur '+esc(behindName)+' reste dans le bruit.')
+        :('The gap is not real: the two intervals overlap, so '+esc(leadName)+'’s lead over '+esc(behindName)+' is within the noise.');
       tone='modere';
     } else {
-      sentence='Real lead: '+esc(leadName)+' stays ahead of '+esc(behindName)+' even in the worst case. The gap is not noise.';
+      sentence=FR
+        ?('Avance réelle : '+esc(leadName)+' reste devant '+esc(behindName)+' même dans le pire des cas. L’écart n’est pas du bruit.')
+        :('Real lead: '+esc(leadName)+' stays ahead of '+esc(behindName)+' even in the worst case. The gap is not noise.');
       tone='stable';
     }
     function col(g,name){
@@ -2009,8 +2127,8 @@
       '</div>';
     }
     return '<div class="cmp-bounded">'+
-      '<div class="cmp-cap">Is the lead real, or noise?</div>'+
-      '<div class="cmp-grid">'+col(you,youName)+'<div class="cmp-vs">vs</div>'+col(rival,rivalName)+'</div>'+
+      '<div class="cmp-cap">'+(FR?'L’avance est-elle réelle, ou du bruit ?':'Is the lead real, or noise?')+'</div>'+
+      '<div class="cmp-grid">'+col(you,youName)+'<div class="cmp-vs">'+(FR?'contre':'vs')+'</div>'+col(rival,rivalName)+'</div>'+
       '<div class="cmp-verdict '+tone+'">'+sentence+'</div>'+
     '</div>';
   }
@@ -2033,9 +2151,9 @@
         '<path class="arcfill" d="'+fill+'" fill="none" stroke="'+col+'" stroke-width="11" stroke-linecap="round" stroke-dasharray="'+arcLen.toFixed(1)+'" stroke-dashoffset="'+arcLen.toFixed(1)+'"/>'+
       '</svg>'+
       '<div class="meta">'+
-        '<div class="lab">AI visibility score, '+label+'</div>'+
+        '<div class="lab">'+(_curFR?('Score de visibilité IA, '+label):('AI visibility score, '+label))+'</div>'+
         '<div class="num" style="color:'+col+';">'+s+'<span class="o">/100</span></div>'+
-        '<div class="desc">SERP share of voice, AI coverage and AI rank quality. Re-measurable any time.</div>'+
+        '<div class="desc">'+(_curFR?'Part de voix SERP, couverture IA et qualité de position IA. Remesurable à tout moment.':'SERP share of voice, AI coverage and AI rank quality. Re-measurable any time.')+'</div>'+
       '</div>'+
       '</div></div>';
   }
@@ -2091,7 +2209,8 @@
   // Every sentence here is DERIVED from the measurement above it: same score,
   // same leader, real query names. One brand, one score, one story per screen.
   function freeTeaser(d){
-    var brandName=d.brand||'your brand';
+    var FR=_curFR;
+    var brandName=d.brand||(FR?'votre marque':'your brand');
     var rr=d.ranking||[],qq=d.queries||[];
     var you=rr.find(function(x){return x.brand.toLowerCase()===String(brandName).toLowerCase();});
     var present=rr.filter(function(x){return x.share_of_voice>0;});
@@ -2105,11 +2224,17 @@
     var youAbsent=!you||(you.share_of_voice||0)===0;
     var insightT;
     if(youLeads){
-      insightT=esc(brandName)+' leads these buyer queries today. The Deep Audit stress-tests that lead across 5 queries at triple runs and hands you the defense plan before AI shifts the ground.';
+      insightT=FR
+        ?(esc(brandName)+' mène ces requêtes d’acheteur aujourd’hui. Le Deep Audit teste la solidité de cette avance sur 5 requêtes en triple mesure et vous remet le plan de défense avant que l’IA ne change la donne.')
+        :(esc(brandName)+' leads these buyer queries today. The Deep Audit stress-tests that lead across 5 queries at triple runs and hands you the defense plan before AI shifts the ground.');
     }else if(youAbsent){
-      insightT=esc(brandName)+' does not appear on these buyer queries'+(lead?' while '+esc(lead.brand)+' captures the answers':'')+'. The dossier maps exactly where the answers go instead, and how to enter.';
+      insightT=FR
+        ?(esc(brandName)+' n’apparaît pas sur ces requêtes d’acheteur'+(lead?', tandis que '+esc(lead.brand)+' capte les réponses':'')+'. Le dossier cartographie précisément où vont les réponses à votre place, et comment y entrer.')
+        :(esc(brandName)+' does not appear on these buyer queries'+(lead?' while '+esc(lead.brand)+' captures the answers':'')+'. The dossier maps exactly where the answers go instead, and how to enter.');
     }else{
-      insightT=esc(brandName)+' trails '+esc(lead.brand)+' on these queries. The dossier names every gap that is real rather than noise, and what closes it.';
+      insightT=FR
+        ?(esc(brandName)+' est derrière '+esc(lead.brand)+' sur ces requêtes. Le dossier nomme chaque écart réel plutôt que du bruit, et ce qui le comble.')
+        :(esc(brandName)+' trails '+esc(lead.brand)+' on these queries. The dossier names every gap that is real rather than noise, and what closes it.');
     }
 
     // First moves drafted from THIS measurement: blind queries by name, with
@@ -2123,44 +2248,76 @@
     var moves=[];
     blindQ.slice(0,2).forEach(function(q){
       var h=holder(q);
-      moves.push('Publish a comparison page for "'+esc(q)+'"'+(h?', where '+esc(h)+' holds the answer today':'')+'.');
+      moves.push(FR
+        ?('Publier une page comparative pour "'+esc(q)+'"'+(h?', où '+esc(h)+' détient la réponse aujourd’hui':'')+'.')
+        :('Publish a comparison page for "'+esc(q)+'"'+(h?', where '+esc(h)+' holds the answer today':'')+'.'));
     });
     if(moves.length<3&&qq.length){
-      moves.push('Add a citable FAQ answering "'+esc(qq[0])+'" so AI assistants can quote you directly.');
+      moves.push(FR
+        ?('Ajouter une FAQ citable répondant à "'+esc(qq[0])+'" pour que les assistants IA puissent vous citer directement.')
+        :('Add a citable FAQ answering "'+esc(qq[0])+'" so AI assistants can quote you directly.'));
     }
     if(moves.length<3){
       var Lo=d.serp_landscape;
       var SOCIAL=/facebook\.|instagram\.|youtube\.|tiktok\.|linkedin\.|twitter\.|(^|\.)x\.com/;
       var ownHosts=((Lo&&Lo.owners)||[]).map(function(o){return o.host;}).filter(function(h){return !SOCIAL.test(h);}).slice(0,2);
-      moves.push(ownHosts.length
-        ?'Earn a mention on '+ownHosts.map(esc).join(' and ')+', the pages that already own these answers on Google.'
-        :'Earn a mention on the third party listicles AI already cites for this category.');
+      moves.push(FR
+        ?(ownHosts.length
+          ?'Décrocher une mention sur '+ownHosts.map(esc).join(' et ')+', les pages qui possèdent déjà ces réponses sur Google.'
+          :'Décrocher une mention dans les comparatifs tiers que l’IA cite déjà pour cette catégorie.')
+        :(ownHosts.length
+          ?'Earn a mention on '+ownHosts.map(esc).join(' and ')+', the pages that already own these answers on Google.'
+          :'Earn a mention on the third party listicles AI already cites for this category.'));
     }
     var movesHtml=moves.slice(0,3).map(function(m){return '<li>'+m+'</li>';}).join('');
 
-    var main='<div class="doc-main">'+
-      '<h3>Your board-ready visibility dossier</h3>'+
-      '<div class="doc-sub">A written verdict, a defensible AI visibility score and a concrete action plan, forwardable to your board as a single HTML file.</div>'+
-      '<div class="insight">'+insightT+'</div>'+
-      '<div class="k" style="margin:0 0 8px;">First moves, drafted from this measurement</div>'+
-      '<ol style="font-size:14px;">'+movesHtml+'</ol>'+
-      '<div class="thumb"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="8" x2="16" y2="8" stroke="#8B6FE8" stroke-width="1.6"/><line x1="8" y1="12" x2="16" y2="12" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="16" x2="13" y2="16" stroke="#4FD1A5" stroke-width="1.6"/></svg></div>'+
-        '<div><div class="t">'+fileName+'</div><div class="d">Self-contained HTML, two-territory heatmap, score gauge, forwardable</div></div></div>'+
-      '</div>';
-    var side='<div class="doc-side">'+
-      geoScoreBlock(teaserScore)+
-      '<div class="anchor">'+
-        '<div class="col"><div class="lab">Agency visibility audit</div><div class="big">3000 to 5000&euro;</div><div class="sm">3 weeks, slide deck</div></div>'+
-        '<div class="col hi"><div class="lab">Nadelio Deep Audit</div><div class="big">79&euro;</div><div class="sm">60 seconds, forwardable to your board</div></div>'+
-      '</div>'+
-      '<div class="doc-cta">'+
-        '<div class="actionbar"><button class="go" data-deepcta onclick="startCheckout()">Run the Deep Audit</button><span class="doc-price">79<span class="eu">&euro;</span></span></div>'+
-        '<div data-deepmsg style="font-size:12px;color:var(--muted-light);margin-top:8px;display:none;"></div>'+
-        '<div class="bene">Written verdict, AI visibility score 0 to 100 with its margin, top blind spots, action plan, downloadable HTML dossier.</div>'+
-        '<div class="stripe"><span class="lock">&#128274;</span> Secure payment by Stripe</div>'+
-      '</div>'+
-      '</div>';
-    return '<div class="doc"><div class="doc-eyebrow">The deliverable, Deep Audit preview</div>'+main+side+'</div>';
+    var main=FR
+      ?('<div class="doc-main">'+
+        '<h3>Votre dossier de visibilité prêt pour le board</h3>'+
+        '<div class="doc-sub">Un verdict écrit, un score de visibilité IA défendable et un plan d’action concret, transmissible à votre board en un seul fichier HTML.</div>'+
+        '<div class="insight">'+insightT+'</div>'+
+        '<div class="k" style="margin:0 0 8px;">Premiers coups, rédigés à partir de cette mesure</div>'+
+        '<ol style="font-size:14px;">'+movesHtml+'</ol>'+
+        '<div class="thumb"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="8" x2="16" y2="8" stroke="#8B6FE8" stroke-width="1.6"/><line x1="8" y1="12" x2="16" y2="12" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="16" x2="13" y2="16" stroke="#4FD1A5" stroke-width="1.6"/></svg></div>'+
+          '<div><div class="t">'+fileName+'</div><div class="d">HTML autonome, heatmap à deux étages, jauge de score, transmissible</div></div></div>'+
+        '</div>')
+      :('<div class="doc-main">'+
+        '<h3>Your board-ready visibility dossier</h3>'+
+        '<div class="doc-sub">A written verdict, a defensible AI visibility score and a concrete action plan, forwardable to your board as a single HTML file.</div>'+
+        '<div class="insight">'+insightT+'</div>'+
+        '<div class="k" style="margin:0 0 8px;">First moves, drafted from this measurement</div>'+
+        '<ol style="font-size:14px;">'+movesHtml+'</ol>'+
+        '<div class="thumb"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="8" x2="16" y2="8" stroke="#8B6FE8" stroke-width="1.6"/><line x1="8" y1="12" x2="16" y2="12" stroke="#4FD1A5" stroke-width="1.6"/><line x1="8" y1="16" x2="13" y2="16" stroke="#4FD1A5" stroke-width="1.6"/></svg></div>'+
+          '<div><div class="t">'+fileName+'</div><div class="d">Self-contained HTML, two-territory heatmap, score gauge, forwardable</div></div></div>'+
+        '</div>');
+    var side=FR
+      ?('<div class="doc-side">'+
+        geoScoreBlock(teaserScore)+
+        '<div class="anchor">'+
+          '<div class="col"><div class="lab">Audit de visibilité en agence</div><div class="big">3000 à 5000&euro;</div><div class="sm">3 semaines, diaporama</div></div>'+
+          '<div class="col hi"><div class="lab">Nadelio Deep Audit</div><div class="big">79&euro;</div><div class="sm">60 secondes, transmissible à votre board</div></div>'+
+        '</div>'+
+        '<div class="doc-cta">'+
+          '<div class="actionbar"><button class="go" data-deepcta onclick="startCheckout()">Lancer le Deep Audit</button><span class="doc-price">79<span class="eu">&euro;</span></span></div>'+
+          '<div data-deepmsg style="font-size:12px;color:var(--muted-light);margin-top:8px;display:none;"></div>'+
+          '<div class="bene">Verdict écrit, score de visibilité IA de 0 à 100 avec sa marge, principaux angles morts, plan d’action, dossier HTML téléchargeable.</div>'+
+          '<div class="stripe"><span class="lock">&#128274;</span> Paiement sécurisé par Stripe</div>'+
+        '</div>'+
+        '</div>')
+      :('<div class="doc-side">'+
+        geoScoreBlock(teaserScore)+
+        '<div class="anchor">'+
+          '<div class="col"><div class="lab">Agency visibility audit</div><div class="big">3000 to 5000&euro;</div><div class="sm">3 weeks, slide deck</div></div>'+
+          '<div class="col hi"><div class="lab">Nadelio Deep Audit</div><div class="big">79&euro;</div><div class="sm">60 seconds, forwardable to your board</div></div>'+
+        '</div>'+
+        '<div class="doc-cta">'+
+          '<div class="actionbar"><button class="go" data-deepcta onclick="startCheckout()">Run the Deep Audit</button><span class="doc-price">79<span class="eu">&euro;</span></span></div>'+
+          '<div data-deepmsg style="font-size:12px;color:var(--muted-light);margin-top:8px;display:none;"></div>'+
+          '<div class="bene">Written verdict, AI visibility score 0 to 100 with its margin, top blind spots, action plan, downloadable HTML dossier.</div>'+
+          '<div class="stripe"><span class="lock">&#128274;</span> Secure payment by Stripe</div>'+
+        '</div>'+
+        '</div>');
+    return '<div class="doc"><div class="doc-eyebrow">'+(FR?'Le livrable, aperçu du Deep Audit':'The deliverable, Deep Audit preview')+'</div>'+main+side+'</div>';
   }
 
   // ---- Standalone HTML dossier export (client-side Blob) ----

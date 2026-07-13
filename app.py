@@ -1,5 +1,6 @@
 import base64
 import datetime
+import hashlib
 import hmac
 import html as _html
 import json
@@ -762,6 +763,12 @@ _recon_cache = {}
 _RECON_CACHE_MAX = 500
 _infer_hits = {}  # {ip: [minute_bucket_int, count]}
 _INFER_RATE_PER_MIN = int(os.environ.get("INFER_RATE_PER_MIN", "20"))
+
+# Light per-IP rate-limit for the funnel-tracking endpoint (spam guard, not a
+# billing gate). A single session can legitimately fire several events, so the
+# limit is generous.
+_event_hits = {}  # {ip: [minute_bucket_int, count]}
+_EVENT_RATE_PER_MIN = int(os.environ.get("EVENT_RATE_PER_MIN", "60"))
 
 
 def _looks_like_domain(brand):
@@ -3016,6 +3023,129 @@ def robots():
     resp = app.make_response(body)
     resp.headers["Content-Type"] = "text/plain; charset=utf-8"
     return resp
+
+
+# ---------------------------------------------------------------------------
+# Funnel tracking (best-effort, fail-open, no third-party analytics)
+# ---------------------------------------------------------------------------
+_EVENT_ALLOWLIST = (
+    "input_submitted", "result_seen", "sample_seen", "plan_shown",
+    "deep_click", "monitor_click", "checkout_started",
+)
+
+
+def _event_salt():
+    return (os.environ.get("EVENT_SALT") or os.environ.get("CRON_SECRET")
+            or os.environ.get("ANTHROPIC_API_KEY") or "")
+
+
+def _hash_ip(ip):
+    digest = hashlib.sha256((str(ip) + _event_salt()).encode("utf-8")).hexdigest()
+    return digest[:16]
+
+
+@app.route("/api/event", methods=["POST"])
+def api_event():
+    """Best-effort funnel event log. Always returns 200 to the client (the
+    client never needs to know or care whether the write landed): a down or
+    misconfigured D1, a bad payload, or a rate-limit hit all just skip the
+    write silently. Never a load-bearing call, never 500."""
+    data = _read_json()
+    name = str(data.get("name") or "")
+    if name not in _EVENT_ALLOWLIST:
+        return jsonify({"error": "unknown event"}), 400
+
+    # Light per-IP rate-limit, same bucket pattern as /api/infer.
+    ip = _client_ip()
+    minute = int(time.time() // 60)
+    with _live_lock:
+        entry = _event_hits.get(ip)
+        if not entry or entry[0] != minute:
+            for stale in [k for k, v in _event_hits.items() if v[0] != minute]:
+                del _event_hits[stale]
+            _event_hits[ip] = [minute, 1]
+        elif entry[1] >= _EVENT_RATE_PER_MIN:
+            return jsonify({"ok": True})
+        else:
+            entry[1] += 1
+
+    if _history_enabled():
+        try:
+            _d1_query(
+                "CREATE TABLE IF NOT EXISTS funnel_events ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, name TEXT, "
+                "brand TEXT, market TEXT, tier TEXT, meta TEXT, ip_hash TEXT)")
+            _d1_query(
+                "INSERT INTO funnel_events (ts, name, brand, market, tier, meta, ip_hash) "
+                "VALUES (?,?,?,?,?,?,?)",
+                [
+                    datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    name,
+                    str(data.get("brand") or "")[:120],
+                    str(data.get("market") or "")[:120],
+                    str(data.get("tier") or "")[:120],
+                    str(data.get("meta") or "")[:120],
+                    _hash_ip(ip),
+                ])
+        except Exception:
+            logger.warning("funnel event log failed (non-fatal)", exc_info=True)
+
+    return jsonify({"ok": True})
+
+
+@app.route("/api/admin/funnel", methods=["GET"])
+def api_admin_funnel():
+    """Owner-only funnel dashboard feed. Returns 404 (not 401) whenever the
+    token is missing, wrong, or ADMIN_TOKEN is unset, so the endpoint's mere
+    existence is never revealed to an unauthenticated caller."""
+    admin_token = os.environ.get("ADMIN_TOKEN")
+    given = request.args.get("token", "")
+    if not admin_token or not hmac.compare_digest(given, admin_token):
+        return jsonify({"error": "not found"}), 404
+
+    if not _history_enabled():
+        return jsonify({"error": "history store unavailable"})
+
+    def _window(days):
+        counts = {n: 0 for n in _EVENT_ALLOWLIST}
+        try:
+            since = (datetime.datetime.now(datetime.timezone.utc)
+                     - datetime.timedelta(days=days)).isoformat()
+            rows = _d1_query(
+                "SELECT name, COUNT(*) AS n FROM funnel_events "
+                "WHERE ts >= ? GROUP BY name", [since])
+            for r in rows:
+                n = r.get("name")
+                if n in counts:
+                    counts[n] = int(r.get("n") or 0)
+        except Exception:
+            logger.warning("admin funnel query failed (non-fatal)", exc_info=True)
+
+        def _rate(numer, denom):
+            a, b = counts.get(numer, 0), counts.get(denom, 0)
+            return round(a / b, 4) if b else None
+
+        conversions = {
+            "result_seen_per_input_submitted": _rate("result_seen", "input_submitted"),
+            "deep_click_per_result_seen": _rate("deep_click", "result_seen"),
+            "checkout_started_per_deep_click": _rate("checkout_started", "deep_click"),
+        }
+        return {"counts": counts, "conversions": conversions}
+
+    out = {"window_7d": _window(7), "window_30d": _window(30)}
+
+    try:
+        since_7d = (datetime.datetime.now(datetime.timezone.utc)
+                    - datetime.timedelta(days=7)).isoformat()
+        rows = _d1_query(
+            "SELECT COUNT(DISTINCT ip_hash) AS n FROM funnel_events WHERE ts >= ?",
+            [since_7d])
+        out["distinct_visitors_7d"] = int((rows[0].get("n") if rows else 0) or 0)
+    except Exception:
+        logger.warning("admin funnel distinct-visitor query failed (non-fatal)", exc_info=True)
+        out["distinct_visitors_7d"] = 0
+
+    return jsonify(out)
 
 
 if __name__ == "__main__":
