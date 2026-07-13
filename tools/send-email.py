@@ -21,6 +21,7 @@ Usage:
 Drop --dry-run to actually send. Always dry-run first.
 """
 import argparse
+import base64
 import json
 import os
 import sys
@@ -30,7 +31,7 @@ FROM_EMAIL = os.environ.get("OUTREACH_FROM_EMAIL", "Adam Chabbi <adam@nadelio.co
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 
-def send(to_email, subject, body_text, api_key, reply_to=None, dry_run=True):
+def send(to_email, subject, body_text, api_key, reply_to=None, dry_run=True, attach=None):
     if "@" not in to_email:
         raise ValueError("Invalid recipient: %r" % to_email)
     if not subject.strip():
@@ -48,11 +49,21 @@ def send(to_email, subject, body_text, api_key, reply_to=None, dry_run=True):
     }
     if reply_to:
         payload["reply_to"] = reply_to
+    # Attachments: Resend takes each file base64-encoded with its filename.
+    if attach:
+        atts = []
+        for path in attach:
+            with open(path, "rb") as f:
+                content = base64.b64encode(f.read()).decode("ascii")
+            atts.append({"filename": os.path.basename(path), "content": content})
+        payload["attachments"] = atts
 
     print("--- Preview ---")
     print("From:   %s" % FROM_EMAIL)
     print("To:     %s" % to_email)
     print("Subject: %s" % subject)
+    if attach:
+        print("Attach: %s" % ", ".join(os.path.basename(a) for a in attach))
     print("---")
     print(body_text)
     print("---")
@@ -83,6 +94,8 @@ def main():
     ap.add_argument("--body", help="Inline body text (alternative to --body-file)")
     ap.add_argument("--reply-to", default="adam.chabbi94@gmail.com",
                      help="Reply-To header, defaults to Adam's Gmail so replies land where he reads")
+    ap.add_argument("--attach", action="append", default=[],
+                     help="Path to a file to attach (repeatable). Use for the guide PDF.")
     ap.add_argument("--dry-run", action="store_true", default=True,
                      help="Preview only, do not send (default)")
     ap.add_argument("--send", dest="dry_run", action="store_false",
@@ -97,9 +110,14 @@ def main():
         print("ERROR: provide --body-file or --body", file=sys.stderr)
         sys.exit(1)
 
+    for path in args.attach:
+        if not os.path.isfile(path):
+            print("ERROR: attachment not found: %s" % path, file=sys.stderr)
+            sys.exit(1)
+
     send(args.to, args.subject, body_text,
          api_key=os.environ.get("RESEND_API_KEY"),
-         reply_to=args.reply_to, dry_run=args.dry_run)
+         reply_to=args.reply_to, dry_run=args.dry_run, attach=args.attach)
 
 
 if __name__ == "__main__":
