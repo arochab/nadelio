@@ -77,11 +77,23 @@ def send(to_email, subject, body_text, api_key, reply_to=None, dry_run=True, att
         sys.exit(1)
 
     body = json.dumps(payload).encode("utf-8")
+    # Resend sits behind Cloudflare, which rejects requests with no User-Agent
+    # (Cloudflare error 1010, a 403). A plain urllib request sends none, so we
+    # set one explicitly. Without this, every send is refused before it reaches
+    # Resend at all.
     req = urllib.request.Request(
         RESEND_ENDPOINT, data=body, method="POST",
-        headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        result = json.loads(resp.read().decode())
+        headers={"Authorization": "Bearer " + api_key,
+                 "Content-Type": "application/json",
+                 "User-Agent": "nadelio-outreach/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as he:
+        detail = he.read().decode(errors="replace")
+        print("\nENVOI REFUSE par Resend (HTTP %d)." % he.code, file=sys.stderr)
+        print("Reponse de Resend : %s" % detail, file=sys.stderr)
+        raise SystemExit(1)
     print("\nSent. Resend id: %s" % result.get("id"))
     return result
 
