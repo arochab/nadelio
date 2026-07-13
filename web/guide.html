@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nadelio, the field guide</title>
-<meta name="description" content="Why AI visibility can be measured, and how Nadelio measures it honestly. A short guide for the people who decide, not the people who code.">
+<title>Nadelio, le guide</title>
+<meta name="description" content="Comment mesurer honnêtement la visibilité d'une marque dans les réponses IA. Le guide Nadelio, pour les agences et les marques françaises.">
 <meta name="robots" content="noindex">
 <style>
   /* ---- Nadelio field guide. Print-first (A4), screen-graceful. ---------- */
@@ -72,8 +72,8 @@
   .cover .plusmark{font-family:var(--serif);font-size:150pt;line-height:.8;
         color:var(--ink);font-weight:500;margin:0 0 6mm -4px;}
   .cover .plusmark .pm{color:var(--sage);}
-  .cover h1{font-family:var(--serif);font-weight:500;font-size:40pt;line-height:1.02;
-        letter-spacing:-.5px;text-wrap:balance;max-width:15ch;margin-bottom:8mm;}
+  .cover h1{font-family:var(--serif);font-weight:500;font-size:38pt;line-height:1.05;
+        letter-spacing:-.5px;text-wrap:balance;max-width:16ch;margin-bottom:8mm;}
   .cover h1 em{font-style:italic;color:var(--sage);}
   .cover .sub{font-size:13pt;line-height:1.5;color:var(--ink-soft);max-width:44ch;
         margin-bottom:14mm;}
@@ -167,7 +167,26 @@
         padding:0 0 3mm;border-bottom:1px solid var(--rule);}
   .use td{padding:3.5mm 0;border-bottom:1px solid var(--rule-soft);
         color:var(--ink-soft);vertical-align:top;line-height:1.45;}
-  .use td:first-child{color:var(--ink);font-weight:600;width:34%;padding-right:6mm;}
+  .use td:first-child{color:var(--ink);font-weight:600;width:26%;padding-right:6mm;}
+
+  /* Product cards: the three ways to go further. */
+  .prod{border:1px solid var(--rule);border-radius:2mm;background:var(--card);
+        padding:4.5mm 7mm;margin-bottom:3.5mm;}
+  .prod .ph{display:flex;justify-content:space-between;align-items:baseline;gap:6mm;margin-bottom:2mm;}
+  .prod .pt{font-family:var(--serif);font-weight:500;font-size:13.5pt;color:var(--ink);white-space:nowrap;}
+  .prod .pp{font-family:var(--mono);font-size:9.5pt;font-weight:600;color:var(--sage);
+        white-space:nowrap;text-align:right;}
+  .prod p{font-size:9.5pt;line-height:1.5;color:var(--ink-soft);margin:0 0 2mm;max-width:none;}
+  .prod .ex{font-size:9pt;line-height:1.45;color:var(--muted);
+        border-top:1px solid var(--rule-soft);margin-top:2mm;padding-top:2mm;}
+  .prod .ex strong{color:var(--ink-soft);font-weight:600;}
+
+  /* FAQ, short. */
+  .faq{margin:3mm 0 0;}
+  .faq .q{padding:4mm 0;border-top:1px solid var(--rule-soft);}
+  .faq .q:first-child{border-top:none;}
+  .faq .q h4{font-size:10.5pt;font-weight:600;color:var(--ink);margin-bottom:1.5mm;}
+  .faq .q p{font-size:9.5pt;color:var(--ink-soft);margin:0;line-height:1.5;max-width:60ch;}
 
   .closing{display:grid;grid-template-columns:14mm 1fr;gap:0 8mm;}
   .closing .num{font-family:var(--mono);font-size:10pt;color:var(--sage);padding-top:5px;}
@@ -200,167 +219,232 @@
 </head>
 <body>
 
-<!-- ================= PAGE 1: COVER ================= -->
+<!-- ================= PAGE 1: COUVERTURE ================= -->
 <section class="page">
   <div class="cover">
-    <div class="mark">Nadelio &nbsp;/&nbsp; Field guide</div>
-    <div class="plusmark">42<span class="pm">&plusmn;6</span></div>
-    <h1>The number your buyers trust, <em>measured honestly.</em></h1>
-    <p class="sub">A short guide to what AI visibility is, why it now decides who gets recommended, and how Nadelio measures it without pretending. Written for the people who decide, not the people who code.</p>
+    <div class="mark">Nadelio &nbsp;/&nbsp; Le guide</div>
+    <div class="plusmark">56<span class="pm">&plusmn;1</span></div>
+    <h1>Qui possède la réponse, <em>mesuré et prouvé.</em></h1>
+    <p class="sub">Un guide court pour comprendre la visibilité d'une marque dans Google et dans les assistants IA, et pour lire un score sans jamais confondre un signal réel avec du bruit.</p>
     <div class="meta">
-      <div><div class="k">For</div><div class="v">Marketing and growth leaders</div></div>
-      <div><div class="k">Reading time</div><div class="v">Six minutes</div></div>
-      <div><div class="k">Where</div><div class="v">nadelio.com</div></div>
+      <div><div class="k">Marché</div><div class="v">France, marques francophones</div></div>
+      <div><div class="k">Première mesure</div><div class="v">Dix secondes, gratuite, sans compte</div></div>
+      <div><div class="k">Où</div><div class="v">nadelio.com</div></div>
     </div>
   </div>
-  <div class="foot"><span>Nadelio field guide</span><span>01</span></div>
+  <div class="foot"><span>Nadelio, le guide</span><span>01</span></div>
 </section>
 
-<!-- ================= PAGE 2: THE SHIFT + WHAT WE MEASURE ================= -->
+<!-- ================= PAGE 2: LE CONSTAT ================= -->
 <section class="page">
   <div class="rail">
     <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
-    <span>The shift, and what we measure</span>
+    <span>Le constat</span>
   </div>
 
   <div class="lead">
     <div class="num">01</div>
-    <h2>Your buyers stopped scrolling. They started asking.</h2>
-    <p class="dek">When a customer wants "the best tool for X", more of them now ask an AI assistant instead of scanning ten blue links. The assistant answers with a short list of names. If yours is not on it, you were never in the room, and you will never see the click you lost.</p>
+    <h2>Vos clients ne cherchent plus. Ils demandent.</h2>
+    <p class="dek">Quand un acheteur veut savoir quel est le meilleur outil pour son besoin, il pose de plus en plus souvent la question à un assistant IA plutôt qu'à Google. Si votre marque n'est pas dans la réponse, vous n'existez pas dans cette conversation, et personne ne vous le dira.</p>
   </div>
 
   <div class="body">
-    <p>This is the quiet part of the shift. Search used to show everyone and let the buyer choose. AI answers choose first, then show a few. Being on page one of Google and being named by an assistant are now two different races, and a brand can be winning one while losing the other.</p>
-    <p>Most companies cannot see this happening. They watch their Google rank, feel safe, and never notice that the assistant recommends a competitor for the exact question their best customers ask. <strong>Nadelio makes both races visible on one screen.</strong></p>
+    <p>La recherche classique montrait dix résultats et laissait l'acheteur choisir. La réponse IA choisit à sa place, puis n'en cite que deux ou trois. Être premier sur Google et être cité par un assistant sont deux courses différentes. Une marque peut gagner l'une et perdre l'autre sans jamais le savoir.</p>
+    <p>Aucun outil ne mesurait cet écart avec rigueur. Les rares scores publiés sont des moyennes sur un seul passage, sans marge, sans preuve qu'ils resteraient les mêmes le lendemain. <strong>Nadelio mesure les deux terrains, avec une marge d'erreur assumée, en une lecture.</strong></p>
 
-    <div class="kicker">What Nadelio actually looks at</div>
+    <div class="kicker">Ce que Nadelio observe</div>
     <div class="split">
       <div class="terr serp">
         <div class="h"><span class="dot"></span> Google</div>
-        <p>We run the real buyer questions against live Google, in the right country and language, and record where every brand ranks.</p>
+        <p>Les vraies questions d'achat, posées sur le Google réel, dans le bon pays et la bonne langue.</p>
       </div>
       <div class="terr ai">
-        <div class="h"><span class="dot"></span> AI answers</div>
-        <p>We put the same questions to an AI assistant and record which brands it recommends, in what order, and whether yours is the main answer or an afterthought.</p>
+        <div class="h"><span class="dot"></span> Assistant IA</div>
+        <p>Les mêmes questions posées à un assistant, avec les marques citées, dans quel ordre, et à quelle place la vôtre arrive.</p>
       </div>
     </div>
-    <p class="small">One brand name is all we need to start. Nadelio identifies your competitive set, writes the questions a real buyer would ask, and measures both territories. No setup, no account, about ten seconds.</p>
+    <p class="small">Un seul nom de marque suffit pour commencer. Nadelio lit d'abord votre vrai site pour ne jamais auditer la mauvaise entreprise. Aucun compte, environ dix secondes.</p>
   </div>
 
-  <div class="foot"><span>The shift</span><span>02</span></div>
+  <div class="foot"><span>Le constat</span><span>02</span></div>
 </section>
 
-<!-- ================= PAGE 3: WHY ONE NUMBER LIES + THE READING ================= -->
+<!-- ================= PAGE 3: VOTRE PREMIERE MESURE ================= -->
 <section class="page">
   <div class="rail">
     <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
-    <span>Why the interval is the whole point</span>
+    <span>Votre première mesure</span>
   </div>
 
   <div class="lead">
     <div class="num">02</div>
-    <h2>A single number is a coin flip wearing a suit.</h2>
-    <p class="dek">Ask an assistant the same question ten times and you will not get the same answer ten times. The models are built to vary. So a tool that asks once and prints a score is reporting a coin flip as if it were a fact.</p>
+    <h2>Trois gestes, un résultat.</h2>
+    <p class="dek">Aucun tutoriel n'est nécessaire. Voici ce qui se passe entre le moment où vous tapez un nom et celui où vous lisez un score.</p>
   </div>
 
   <div class="body">
-    <p>This is where the whole category quietly fails. Every dashboard hands you a confident number. Almost none of them tell you how much that number would move if they measured again. In a controlled test, a reported visibility of <strong>10.8%</strong> corresponded to a true value of <strong>1.9%</strong>. Nine points of illusion, because nobody bounded the noise.</p>
-
-    <p>Nadelio measures several times and reports the spread, not just the average. You get the score <strong>with its margin</strong>, and one honest word for how much to trust it.</p>
-
-    <div class="reading">
-      <div>
-        <div class="cap">Your GEO visibility score</div>
-        <div class="n">42<span class="pm">&plusmn;6</span><span class="slash">/100</span></div>
-      </div>
-      <div class="tag stable">Stable</div>
+    <div class="steps">
+      <div class="s"><div class="i"></div><div><h4>Vous tapez un nom de marque</h4><p>La vôtre, celle d'un client, celle d'un concurrent. Aucun compte, aucune carte bancaire, aucune installation.</p></div></div>
+      <div class="s"><div class="i"></div><div><h4>Nadelio confirme l'identité</h4><p>Le nom lit d'abord le vrai site de l'entreprise. Un nom ambigu comme Toucan ou Payflows peut désigner plusieurs sociétés. Cette étape évite d'auditer la mauvaise entreprise, et le pays et la langue s'alignent sur le marché réel de la marque.</p></div></div>
+      <div class="s"><div class="i"></div><div><h4>Vous lisez le résultat</h4><p>Un score entre zéro et cent, avec sa marge d'erreur, un verdict stable ou volatile, la position sur Google et dans l'assistant IA, et trois phrases en français qui expliquent ce que ça veut dire pour vous.</p></div></div>
     </div>
 
     <div class="thesis">
-      <p>A score without its interval is marketing. A score with its interval is a measurement.</p>
-      <div class="attr">The Nadelio principle</div>
+      <p>Dix secondes pour savoir qui répond à votre place aujourd'hui.</p>
+      <div class="attr">La première mesure Nadelio</div>
     </div>
 
-    <div class="kicker">The same lead, read two ways</div>
-    <div class="versus">
-      <div class="them">
-        <div class="lbl">A bare-number tool says</div>
-        <div class="big">48 &gt; 44</div>
-        <div class="note">"Your rival is ahead." A clean story, told from a single noisy sample.</div>
-      </div>
-      <div class="us">
-        <div class="lbl">Nadelio says</div>
-        <div class="big">48<span class="pm">&plusmn;11</span></div>
-        <div class="note">The intervals overlap. The rival is not really ahead. The gap is noise, and you just avoided a bad decision.</div>
-      </div>
-    </div>
+    <p class="small">Cette première lecture est gratuite et le restera. Elle donne une marge plus large qu'un audit complet, mais elle dit déjà si vous êtes dans la conversation ou hors jeu.</p>
   </div>
 
-  <div class="foot"><span>Why one number lies</span><span>03</span></div>
+  <div class="foot"><span>Votre première mesure</span><span>03</span></div>
 </section>
 
-<!-- ================= PAGE 4: HOW TO READ IT + WHEN TO USE ================= -->
+<!-- ================= PAGE 4: LIRE UN RESULTAT ================= -->
 <section class="page">
   <div class="rail">
     <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
-    <span>Reading the result, and when to reach for it</span>
+    <span>Lire un résultat</span>
   </div>
 
   <div class="lead">
     <div class="num">03</div>
-    <h2>Four things to look at, in order.</h2>
-    <p class="dek">You do not need to understand the statistics. You need to read four signals, and Nadelio puts them where your eye lands first.</p>
+    <h2>Un score sans marge est un pari déguisé en fait.</h2>
+    <p class="dek">Interroger un assistant IA sur la même question dix fois ne donne pas dix fois la même réponse. Un score qui ignore cette variation ment par omission.</p>
   </div>
 
   <div class="body">
-    <div class="steps">
-      <div class="s"><div class="i"></div><div><h4>The score, with its margin</h4><p>How visible you are, out of 100, and how much that number could move. The margin is not a detail. It is the difference between a fact and a guess.</p></div></div>
-      <div class="s"><div class="i"></div><div><h4>The verdict word</h4><p>Stable means you can present it to your board. Volatile means the model is inconsistent here, so treat it as a direction, not a fact.</p></div></div>
-      <div class="s"><div class="i"></div><div><h4>The two territories</h4><p>Where you stand on Google versus in AI answers. Strong on one and invisible on the other is the most common, and most expensive, blind spot.</p></div></div>
-      <div class="s"><div class="i"></div><div><h4>The lead that is real</h4><p>When compared to a rival, Nadelio tells you whether a gap holds up or dissolves into noise. That one line prevents a lot of wasted budget.</p></div></div>
+    <div class="reading">
+      <div>
+        <div class="cap">Score de visibilité IA, 56 &plusmn;1 veut dire entre 55 et 57</div>
+        <div class="n">56<span class="pm">&plusmn;1</span><span class="slash">/100</span></div>
+      </div>
+      <div class="tag stable">Stable</div>
     </div>
 
-    <p>Read together, these four answer the questions that actually get asked in a leadership meeting: are we visible where buyers now decide, is a competitor genuinely ahead, did our last move work, and can this figure survive scrutiny. The free read gives an honest, wider margin. The Deep Audit measures more, narrows the margin, and returns a written verdict, a prioritized plan, and a dossier you can forward.</p>
+    <div class="kicker">Le même écart, lu deux fois</div>
+    <div class="versus">
+      <div class="them">
+        <div class="lbl">Un chiffre nu affirme</div>
+        <div class="big">78 &gt; 76</div>
+        <div class="note">Une marque devance l'autre. Une histoire nette, tirée d'un seul passage bruité.</div>
+      </div>
+      <div class="us">
+        <div class="lbl">Nadelio répond</div>
+        <div class="big">78<span class="pm">&plusmn;4</span></div>
+        <div class="note">Face à 76 &plusmn;5, les bandes se chevauchent. L'avance est du bruit, pas un vrai écart.</div>
+      </div>
+    </div>
+
+    <p>Quatre repères suffisent. <strong>Le score et sa marge</strong>, jamais l'un sans l'autre. <strong>Les deux terrains</strong>, Google en vert et l'IA en violet, souvent très différents pour une même marque. <strong>Le verdict</strong>, stable si la bande est étroite, volatile si elle mérite d'autres mesures avant d'agir. <strong>L'écart réel face à un concurrent</strong>, deux bandes qui se touchent ou non. Séparées, l'avance tient même dans le pire des cas, et Nadelio pointe la question où un rival possède la réponse aujourd'hui.</p>
   </div>
 
-  <div class="foot"><span>Reading the result</span><span>04</span></div>
+  <div class="foot"><span>Lire un résultat</span><span>04</span></div>
 </section>
 
-<!-- ================= PAGE 5: TRUST + CLOSE ================= -->
+<!-- ================= PAGE 5: LES TROIS FACONS D'ALLER PLUS LOIN ================= -->
 <section class="page">
   <div class="rail">
     <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
-    <span>What we will not pretend</span>
+    <span>Les trois façons d'aller plus loin</span>
   </div>
 
   <div class="lead">
     <div class="num">04</div>
-    <h2>The honesty is the product.</h2>
-    <p class="dek">Anyone can print a confident number. The harder, rarer thing is to tell you when the number cannot be trusted. That is the line Nadelio holds, on purpose.</p>
+    <h2>De la mesure gratuite à la preuve contractuelle.</h2>
+    <p class="dek">Trois usages, trois profondeurs de preuve, chacun avec un exemple mesuré sur le Google réel.</p>
   </div>
 
   <div class="body">
-    <div class="steps">
-      <div class="s"><div class="i"></div><div><h4>We audit the right company</h4><p>Before measuring, Nadelio reads your real website. If a name is ambiguous, we confirm it with you instead of confidently measuring the wrong business.</p></div></div>
-      <div class="s"><div class="i"></div><div><h4>We never bound a single sample</h4><p>With one measurement, we say so plainly rather than inventing a false precision. A margin you can trust is worth more than a number you cannot.</p></div></div>
-      <div class="s"><div class="i"></div><div><h4>A wide margin is information, not a flaw</h4><p>When the interval is wide, that is the honest signal that the model is unstable on your brand. Knowing that is something you can act on.</p></div></div>
+    <div class="prod">
+      <div class="ph"><div class="pt">Audit approfondi</div><div class="pp">79 euros, à l'unité</div></div>
+      <p>Cinq questions d'achat réelles, mesurées trois fois pour une marge resserrée, les angles morts face à des concurrents nommés, un plan de correction écrit.</p>
+      <div class="ex"><strong>Exemple mesuré.</strong> Pennylane obtient 60 &plusmn;1, derrière Sage à 71 &plusmn;1. Sur meilleur logiciel comptabilité SaaS pour PME, les réponses vont à swapn.fr et legalplace.fr, pas à Pennylane.</div>
     </div>
 
-    <p>The models will keep changing. New assistants will arrive. That is exactly why a bounded, repeatable measurement matters more than a one time snapshot: it is the one reading that stays meaningful as the ground moves under it.</p>
+    <div class="prod">
+      <div class="ph"><div class="pt">Surveillance continue</div><div class="pp">Dès 99 euros par mois</div></div>
+      <p>Nouvelle mesure chaque semaine. Starter à 99 euros une marque, Pro à 249 pour trois, Agence à 499 pour dix en marque blanche, alerte au-delà de la marge d'erreur.</p>
+      <div class="ex"><strong>Exemple mesuré.</strong> Yoyaku, disquaire parisien, tient 56 &plusmn;1, verdict stable, à égalité avec Superfly Records en part de voix mais derrière en position.</div>
+    </div>
+
+    <div class="prod">
+      <div class="ph"><div class="pt">Règlement de performance</div><div class="pp">300 à 500 euros par mois</div></div>
+      <p>Nadelio, arbitre neutre entre une marque et son agence, sur preuve, questions fixes, seuil de confiance à 95 pour cent, forfait fixe, jamais une commission. Rapport initial à 990 euros.</p>
+      <div class="ex"><strong>Exemple mesuré.</strong> Qonto à 80 &plusmn;1 face à Shine à 76 &plusmn;1. Les bandes, 79 à 81 contre 75 à 77, ne se touchent pas, l'avance est prouvable. À 78 &plusmn;4 contre 76 &plusmn;5, elles se chevaucheraient, pas de gain réel, pas de bonus dû.</div>
+    </div>
+  </div>
+
+  <div class="foot"><span>Les trois façons d'aller plus loin</span><span>05</span></div>
+</section>
+
+<!-- ================= PAGE 6: POUR LES AGENCES ================= -->
+<section class="page">
+  <div class="rail">
+    <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
+    <span>Pour les agences</span>
+  </div>
+
+  <div class="lead">
+    <div class="num">05</div>
+    <h2>Un arbitre neutre, pas un outil de plus.</h2>
+    <p class="dek">Une agence qui promet de la visibilité IA prend un risque, celui de ne pas pouvoir prouver son propre résultat. Nadelio retire ce risque des deux côtés.</p>
+  </div>
+
+  <div class="body">
+    <table class="use">
+      <tr><th>Usage</th><th>Ce que ça change</th></tr>
+      <tr><td>Avant-vente</td><td>Un audit approfondi en pièce jointe montre un angle mort précis et chiffré, avant le premier rendez-vous.</td></tr>
+      <tr><td>Suivi de mandat</td><td>La surveillance hebdomadaire fournit une preuve indépendante des progrès, sans dépendre du reporting interne.</td></tr>
+      <tr><td>Reporting marque blanche</td><td>Le forfait Agence couvre dix marques, dossier au nom de l'agence, prêt à être renvoyé tel quel.</td></tr>
+      <tr><td>Contrat de performance</td><td>Le règlement fixe le seuil de preuve à l'avance, la marge protège l'agence comme le client d'un résultat contesté.</td></tr>
+    </table>
+
+    <div class="thesis">
+      <p>Une agence qui prouve son résultat vend plus cher qu'une agence qui le promet.</p>
+      <div class="attr">Pourquoi les agences utilisent Nadelio</div>
+    </div>
+
+    <p class="small">Nadelio ne remplace pas le travail de contenu ou de citation de l'agence. Il mesure, avec une rigueur qu'aucune des deux parties ne peut contester, si ce travail a fonctionné.</p>
+  </div>
+
+  <div class="foot"><span>Pour les agences</span><span>06</span></div>
+</section>
+
+<!-- ================= PAGE 7: CLOTURE + FAQ ================= -->
+<section class="page">
+  <div class="rail">
+    <span class="mono-mark">&plusmn; <b>Nadelio</b></span>
+    <span>Questions courtes</span>
+  </div>
+
+  <div class="lead">
+    <div class="num">06</div>
+    <h2>Construit en public, sans promesse creuse.</h2>
+    <p class="dek">Nadelio est un instrument, pas une plateforme qui se veut tout pour tout le monde. Les quatre questions qu'on nous pose le plus.</p>
+  </div>
+
+  <div class="body">
+    <div class="faq">
+      <div class="q"><h4>La première mesure est vraiment gratuite</h4><p>Oui, sans compte ni carte bancaire. La marge est plus large qu'un audit payant, mais dit déjà si votre marque est dans la conversation.</p></div>
+      <div class="q"><h4>Pourquoi confirmer l'identité de la marque</h4><p>Un nom seul peut désigner plusieurs entreprises. Nadelio lit le vrai site avant de mesurer, pour ne jamais noter la mauvaise société.</p></div>
+      <div class="q"><h4>Pourquoi une marge plutôt qu'un seul chiffre</h4><p>Un assistant IA ne répond pas deux fois pareil. La marge rend cette variation visible, et dit si un écart est réel.</p></div>
+      <div class="q"><h4>Et si mon marché n'est pas les États-Unis</h4><p>Nadelio mesure dans le pays et la langue réels de la marque, Google français pour des questions françaises.</p></div>
+    </div>
   </div>
 
   <div class="closing">
     <div class="num">&plusmn;</div>
     <div>
-      <h2>Measure your brand the way a board should see it.</h2>
+      <h2>Mesurez votre marque comme un instrument.</h2>
     </div>
     <div class="cta">
       <span class="url">nadelio.com</span>
-      <span class="say">One brand name. Ten seconds. A number you can actually stand behind.</span>
+      <span class="say">Un nom de marque. Dix secondes. Adam lit chaque réponse à adam@nadelio.com.</span>
     </div>
   </div>
 
-  <div class="foot"><span>Nadelio, the AI visibility score you can show your board</span><span>05</span></div>
+  <div class="foot"><span>Nadelio, la visibilité IA mesurée honnêtement</span><span>07</span></div>
 </section>
 
 </body>

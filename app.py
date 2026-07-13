@@ -1903,6 +1903,15 @@ def roadmap():
     return resp
 
 
+@app.route("/guide", strict_slashes=False)
+def guide():
+    # The print-first onboarding guide (French). Served so it has a real URL
+    # to link from outreach, and so a browser can print it to PDF directly.
+    resp = send_from_directory("web", "guide.html")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 @app.route("/arbitration-agreement", strict_slashes=False)
 def arbitration_agreement():
     resp = send_from_directory("web", "arbitration-agreement.html")
