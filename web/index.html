@@ -536,6 +536,9 @@
   .offer-cta{margin-top:14px;font-family:var(--body);font-size:13px;font-weight:600;cursor:pointer;border-radius:10px;padding:10px 16px;border:1px solid var(--action);background:transparent;color:var(--sage-signal);}
   .offer-cta:hover{background:rgba(79,209,165,.08);}
   .mtx-flat{margin-top:26px;padding-top:20px;border-top:1px dashed var(--hairline-2);font-size:13px;color:var(--muted-dark);line-height:1.6;}
+  /* The "you" marker inside the matrix cell: a pill, not a trailing bare word,
+     so "Superfly Records, Yoyaku you" can never read as a broken fragment. */
+  .mtx-you{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#08110D;background:var(--amber);border-radius:5px;padding:1px 6px;margin-left:3px;vertical-align:1px;}
   /* What this means: three plain-language lines, the human summary of the grid */
   .readout{margin-top:26px;padding-top:20px;border-top:1px dashed var(--hairline-2);}
   .readout .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-dark);margin-bottom:10px;}
@@ -1579,7 +1582,7 @@
                      serpOnly:'visible on Google only',invisible:'invisible on both floors'}[filled[0]||'invisible'];
       return '<div class="mtx-flat">All '+r.length+' brands measured sit in the same quadrant: '+flatLabel+'. The SERP x AI map appears when positions diverge.</div>';
     }
-    function names(list){return list.length?list.map(function(x){return esc(x.brand)+(x.brand.toLowerCase()===brandName.toLowerCase()?' <span class="you">you</span>':'');}).join(', '):'<span style="color:var(--muted-dark)">none</span>';}
+    function names(list){return list.length?list.map(function(x){return esc(x.brand)+(x.brand.toLowerCase()===brandName.toLowerCase()?' <span class="mtx-you">you</span>':'');}).join(', '):'<span style="color:var(--muted-dark)">none</span>';}
     var you=r.find(function(x){return x.brand.toLowerCase()===brandName.toLowerCase();});
     var youQuad=you?(you.share_of_voice>0&&you.ai_avg_rank!=null?'dominant':you.ai_avg_rank!=null?'aiOnly':you.share_of_voice>0?'serpOnly':'invisible'):null;
     function cellStyle(key){return youQuad===key?'box-shadow:inset 0 0 0 2px var(--amber);':'';}
@@ -1777,7 +1780,7 @@
       } else {
         verdictH2='You are #'+youData.rank+' of '+youData.total+', someone else owns the answer.';
         if(youData.leader&&pct(youData.sov)===pct(youData.leader.share_of_voice)){
-          bizLine='<div class="biz"><b>'+youBrand+'</b> matches <b>'+esc(youData.leader.brand)+'</b> on share of voice, <b>'+pct(youData.sov)+'%</b> each. The gap is position, not presence.</div>';
+          bizLine='<div class="biz"><b>'+youBrand+'</b> matches <b>'+esc(youData.leader.brand)+'</b> on share of voice, <b>'+pct(youData.sov)+'%</b> each. Same presence, but someone else owns the answer.</div>';
         }else{
           bizLine='<div class="biz"><b>'+youBrand+'</b> holds <b>'+pct(youData.sov)+'%</b> of the conversation'+(youData.leader?', while <b>'+esc(youData.leader.brand)+'</b> takes <b>'+pct(youData.leader.share_of_voice)+'%</b>':'')+'. Room to climb.</div>';
         }
