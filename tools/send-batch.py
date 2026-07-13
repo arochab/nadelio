@@ -28,6 +28,22 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+
+# Read RESEND_API_KEY (and any other keys) from the project .env if present, so
+# Adam never has to paste a secret into the terminal. Environment wins over the
+# file, so an explicitly-exported key still takes precedence.
+def _load_dotenv():
+    env_path = os.path.abspath(os.path.join(HERE, "..", ".env"))
+    if not os.path.isfile(env_path):
+        return
+    for line in open(env_path, encoding="utf-8"):
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip())
+
+_load_dotenv()
 import importlib.util
 _spec = importlib.util.spec_from_file_location("send_email", os.path.join(HERE, "send-email.py"))
 send_email = importlib.util.module_from_spec(_spec)
@@ -59,8 +75,8 @@ def main():
                      help="CSV with columns slug,email,firstname")
     ap.add_argument("--send", action="store_true",
                      help="Actually send. Without this flag, previews only.")
-    ap.add_argument("--no-attach", action="store_true",
-                     help="Do not attach the guide PDF.")
+    ap.add_argument("--attach-guide", action="store_true",
+                     help="Attach the guide PDF. Off by default: cold emails link to nadelio.com instead of attaching a file, which is safer for the recipient and better for deliverability.")
     ap.add_argument("--delay", type=float, default=4.0,
                      help="Seconds to wait between sends, to look human and respect limits.")
     args = ap.parse_args()
@@ -70,9 +86,9 @@ def main():
         print("Create it with columns: slug,email,firstname", file=sys.stderr)
         sys.exit(1)
 
-    attach = None if args.no_attach else [GUIDE]
+    attach = [GUIDE] if args.attach_guide else None
     if attach and not os.path.isfile(GUIDE):
-        print("ERROR: guide PDF not found at %s. Regenerate it or pass --no-attach." % GUIDE, file=sys.stderr)
+        print("ERROR: guide PDF not found at %s. Regenerate it or drop --attach-guide." % GUIDE, file=sys.stderr)
         sys.exit(1)
 
     rows = []
