@@ -24,8 +24,40 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import urllib.request
+
+# Turn bare nadelio.com URLs in the plain-text body into real clickable links in
+# the HTML version, so the recipient can click straight through. The plain-text
+# version keeps the readable URL. Matches nadelio.com and any path after it.
+_URL_RE = re.compile(r"\b((?:https?://)?nadelio\.com(?:/[\w\-#/?=&.]*)?)")
+
+
+def _linkify(text):
+    def repl(m):
+        shown = m.group(1)
+        href = shown if shown.startswith("http") else "https://" + shown
+        return '<a href="%s">%s</a>' % (href, shown)
+    return _URL_RE.sub(repl, text)
+
+
+def _to_html(text):
+    """Build the HTML body from the plain-text body. Blank lines separate
+    paragraphs. A run of lines each starting with '. ' becomes a real bullet
+    list. Every nadelio.com URL is linkified. The plain-text version the client
+    also receives keeps the readable dot-prefixed bullets."""
+    text = _linkify(text)
+    blocks = text.split("\n\n")
+    out = []
+    for block in blocks:
+        lines = block.split("\n")
+        if all(ln.strip().startswith(". ") for ln in lines if ln.strip()):
+            items = "".join("<li>%s</li>" % ln.strip()[2:] for ln in lines if ln.strip())
+            out.append('<ul style="margin:0 0 16px;padding-left:20px">%s</ul>' % items)
+        else:
+            out.append("<p>" + "<br>".join(lines) + "</p>")
+    return "".join(out)
 
 FROM_EMAIL = os.environ.get("OUTREACH_FROM_EMAIL", "Adam Chabbi <adam@nadelio.com>")
 RESEND_ENDPOINT = "https://api.resend.com/emails"
@@ -39,7 +71,7 @@ def send(to_email, subject, body_text, api_key, reply_to=None, dry_run=True, att
     if not body_text.strip():
         raise ValueError("Body cannot be empty")
 
-    html = "<p>" + body_text.replace("\n\n", "</p><p>").replace("\n", "<br>") + "</p>"
+    html = _to_html(body_text)
     payload = {
         "from": FROM_EMAIL,
         "to": [to_email],
