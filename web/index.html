@@ -703,7 +703,7 @@
       <div class="chan" id="chan01"><span class="cno mono">01</span><span class="cdot"></span><span class="clabel">GOOGLE</span></div>
       <div class="chan" id="chan02"><span class="cno mono">02</span><span class="cdot"></span><span class="clabel">AI</span></div>
     </div>
-    <div class="rail-state" id="railState"><span class="sdot"></span><span class="slabel" id="railStateLabel">Ready</span></div>
+    <div class="rail-state" id="railState"><span class="sdot"></span><span class="slabel" id="railStateLabel" data-i18n="rail.ready">Ready</span></div>
   </aside>
 
   <!-- ============ WORK: 12-col grid, anchored left ============ -->
@@ -713,13 +713,13 @@
       <!-- ACT 1 ,  THE PROBE (7/5 asymmetric hero) -->
       <section class="hero">
         <div class="hero-l">
-          <div class="eyebrow"><span class="dot" aria-hidden="true"></span> The AI visibility instrument</div>
-          <h1>When a buyer asks AI, one brand gets named. Measure whether it is <span class="pivot">yours</span>.</h1>
-          <p class="lede">See who owns the answers on <span class="strong">Google and in AI assistants</span>. Ten seconds, free, no signup.</p>
+          <div class="eyebrow"><span class="dot" aria-hidden="true"></span> <span data-i18n="hero.eyebrow">The AI visibility instrument</span></div>
+          <h1 data-i18n-html="hero.h1">When a buyer asks AI, one brand gets named. Measure whether it is <span class="pivot">yours</span>.</h1>
+          <p class="lede" data-i18n-html="hero.lede">See who owns the answers on <span class="strong">Google and in AI assistants</span>. Ten seconds, free, no signup.</p>
 
           <div class="bar-input">
-            <input id="brand" type="text" placeholder="Your brand, e.g. Notion" onkeydown="if(event.key==='Enter')run(true)" aria-label="Your brand"/>
-            <button id="goBtn" onclick="run(true)">Measure</button>
+            <input id="brand" type="text" placeholder="Your brand, e.g. Notion" data-i18n-ph="hero.placeholder" onkeydown="if(event.key==='Enter')run(true)" aria-label="Your brand"/>
+            <button id="goBtn" onclick="run(true)" data-i18n="hero.measure">Measure</button>
           </div>
 
           <!-- PERSISTENT ENTITY RESOLVER: one card, never destroyed. -->
@@ -729,31 +729,31 @@
           <div id="planStrip" class="plan-strip" hidden></div>
 
           <div id="hintRow">
-            <input id="officialUrl" class="refine-field" type="text" placeholder="Official website, locks the exact company" oninput="onUrlInput()" onkeydown="if(event.key==='Enter')preview()"/>
-            <input id="hint" class="refine-field" type="text" placeholder="Or a few words: 'French techno label', 'AP automation'" onkeydown="if(event.key==='Enter')preview()"/>
+            <input id="officialUrl" class="refine-field" type="text" placeholder="Official website, locks the exact company" data-i18n-ph="hint.url" oninput="onUrlInput()" onkeydown="if(event.key==='Enter')preview()"/>
+            <input id="hint" class="refine-field" type="text" placeholder="Or a few words: 'French techno label', 'AP automation'" data-i18n-ph="hint.hint" onkeydown="if(event.key==='Enter')preview()"/>
             <div class="refine-row">
-              <label for="market">Market</label>
+              <label for="market" data-i18n="hint.market">Market</label>
               <select id="market">
-                <option value="">Auto</option>
+                <option value="" data-i18n="hint.auto">Auto</option>
                 <option value="fr">France</option>
                 <option value="us">US / Global</option>
                 <option value="dach">DACH</option>
                 <option value="uk">UK</option>
               </select>
-              <button id="previewBtn" class="refine-run" onclick="preview()">Update identification</button>
+              <button id="previewBtn" class="refine-run" onclick="preview()" data-i18n="hint.update">Update identification</button>
             </div>
-            <a class="more-opts" onclick="expandHint()" tabindex="0" onkeydown="if(event.key==='Enter')expandHint()">More options</a>
+            <a class="more-opts" onclick="expandHint()" tabindex="0" onkeydown="if(event.key==='Enter')expandHint()" data-i18n="hint.more">More options</a>
           </div>
 
-          <div class="sample-line">Just looking? <a onclick="run(false)" tabindex="0" onkeydown="if(event.key==='Enter')run(false)">See a sample measurement</a></div>
+          <div class="sample-line" data-i18n-html="hero.sample">Just looking? <a onclick="run(false)" tabindex="0" onkeydown="if(event.key==='Enter')run(false)">See a sample measurement</a></div>
         </div>
 
         <!-- ACT 1 right: instrument cartridge (idle heatmap filigree) -->
         <aside class="hero-r" aria-hidden="true">
           <div class="cartouche">
             <div class="cartouche-plate">
-              <span class="lab">Your AI visibility score</span>
-              <span class="range mono">0 to 100</span>
+              <span class="lab" data-i18n="cart.label">Your AI visibility score</span>
+              <span class="range mono" data-i18n="cart.range">0 to 100</span>
             </div>
             <!-- A drawn dial at rest, not a loading skeleton: graduated 0-100 arc,
                  needle parked at zero. The wait is a designed state. -->
@@ -773,7 +773,7 @@
               <text x="14" y="128" font-family="var(--mono)" font-size="10" fill="rgba(255,255,255,.35)">0</text>
               <text x="188" y="128" font-family="var(--mono)" font-size="10" fill="rgba(255,255,255,.35)">100</text>
             </svg>
-            <div class="cartouche-await" id="cartAwait"><span class="pulse"></span> Your reading appears here</div>
+            <div class="cartouche-await" id="cartAwait"><span class="pulse"></span> <span data-i18n="cart.await">Your reading appears here</span></div>
           </div>
         </aside>
       </section>
@@ -785,27 +785,27 @@
            quiet typographic strip above the footer. The free measure keeps the
            hero to itself; this answers "then what" without shouting. -->
       <section class="offers" aria-label="Paid measurements">
-        <div class="offers-k">When the sample is not enough</div>
+        <div class="offers-k" data-i18n="offers.k">When the sample is not enough</div>
         <div class="offers-grid">
           <div class="offer">
-            <div class="on">Deep Audit</div>
-            <div class="op mono">79&euro; <span>one time</span></div>
-            <div class="od">Five buyer queries at triple runs, a tighter interval, your blind spots against named rivals, and the action plan.</div>
-            <span id="offerDeepBtn"><button class="offer-cta" data-deepcta onclick="startCheckout()">Run a Deep Audit</button></span>
-            <a id="offerDeepLink" class="offer-link" hidden onclick="scrollToPlanche()" tabindex="0" onkeydown="if(event.key==='Enter')scrollToPlanche()">Open the dossier preview above</a>
+            <div class="on" data-i18n="offers.deep.n">Deep Audit</div>
+            <div class="op mono">79&euro; <span data-i18n="offers.onetime">one time</span></div>
+            <div class="od" data-i18n="offers.deep.d">Five buyer queries at triple runs, a tighter interval, your blind spots against named rivals, and the action plan.</div>
+            <span id="offerDeepBtn"><button class="offer-cta" data-deepcta onclick="startCheckout()" data-i18n="offers.deep.cta">Run a Deep Audit</button></span>
+            <a id="offerDeepLink" class="offer-link" hidden onclick="scrollToPlanche()" tabindex="0" onkeydown="if(event.key==='Enter')scrollToPlanche()" data-i18n="offers.deep.link">Open the dossier preview above</a>
             <div class="offer-msg" data-deepmsg></div>
           </div>
           <div class="offer">
-            <div class="on">Monitoring</div>
-            <div class="op mono">from 99&euro; <span>per month</span></div>
-            <div class="od">The same bounded score, measured every week. You are alerted when movement clears the noise, never on the noise itself.</div>
-            <a class="offer-link" href="/settlement#pricing" onclick="track('monitor_click')">See the three plans</a>
+            <div class="on" data-i18n="offers.mon.n">Monitoring</div>
+            <div class="op mono"><span data-i18n="offers.from">from</span> 99&euro; <span data-i18n="offers.permonth">per month</span></div>
+            <div class="od" data-i18n="offers.mon.d">The same bounded score, measured every week. You are alerted when movement clears the noise, never on the noise itself.</div>
+            <a class="offer-link" href="/settlement#pricing" onclick="track('monitor_click')" data-i18n="offers.mon.link">See the three plans</a>
           </div>
           <div class="offer">
-            <div class="on">Settlement</div>
-            <div class="op mono">flat fee <span>never a percentage</span></div>
-            <div class="od">Nadelio referees performance contracts between brands and agencies. A gain counts only when it clears the 95% band.</div>
-            <a class="offer-link" href="/settlement">How settlement works</a>
+            <div class="on" data-i18n="offers.set.n">Settlement</div>
+            <div class="op mono"><span data-i18n="offers.flat">flat fee</span> <span data-i18n="offers.neverpct">never a percentage</span></div>
+            <div class="od" data-i18n="offers.set.d">Nadelio referees performance contracts between brands and agencies. A gain counts only when it clears the 95% band.</div>
+            <a class="offer-link" href="/settlement" data-i18n="offers.set.link">How settlement works</a>
           </div>
         </div>
       </section>
@@ -813,17 +813,17 @@
       <footer class="site">
         <div class="brandline">Nadelio</div>
         <div class="row">
-          <a href="mailto:adam.chabbi94@gmail.com">Contact support</a>
+          <a href="mailto:adam.chabbi94@gmail.com" data-i18n="foot.support">Contact support</a>
           <span class="sep"></span>
-          <a href="/compare">Why Nadelio?</a>
+          <a href="/compare" data-i18n="foot.why">Why Nadelio?</a>
           <span class="sep"></span>
-          <a href="/methodology">How we measure</a>
+          <a href="/methodology" data-i18n="foot.how">How we measure</a>
           <span class="sep"></span>
-          <a href="/settlement">Pay on results</a>
+          <a href="/settlement" data-i18n="foot.pay">Pay on results</a>
           <span class="sep"></span>
-          <a href="/roadmap">Roadmap</a>
+          <a href="/roadmap" data-i18n="foot.roadmap">Roadmap</a>
           <span class="sep"></span>
-          <a href="mailto:adam.chabbi94@gmail.com">Legal and terms</a>
+          <a href="mailto:adam.chabbi94@gmail.com" data-i18n="foot.legal">Legal and terms</a>
         </div>
       </footer>
 
@@ -834,6 +834,78 @@
 <script>
   var SUPPORT_EMAIL='adam.chabbi94@gmail.com';
   var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c];});};
+
+  // ============ CHROME LOCALIZATION (whole-page FR) ============
+  // The result screen already localizes per audited brand (isFR/_curFR). This
+  // layer localizes the STATIC chrome (hero, offers, footer, meta) for a French
+  // VISITOR: French when the URL says ?lang=fr, or the browser language starts
+  // with fr and no ?lang=en override is present. English stays the default and
+  // is never regressed. Every translated node carries data-i18n (textContent),
+  // data-i18n-html (innerHTML, for the ones with inner spans), or data-i18n-ph
+  // (placeholder). Keys map to the FR dictionary below.
+  var SITE_FR={
+    'rail.ready':'Prêt',
+    'hero.eyebrow':"L'instrument de visibilité IA",
+    'hero.h1':'Quand un acheteur interroge une IA, une marque est nommée. Mesurez si c’est <span class="pivot">la vôtre</span>.',
+    'hero.lede':'Voyez qui possède les réponses sur <span class="strong">Google et dans les assistants IA</span>. Dix secondes, gratuit, sans compte.',
+    'hero.placeholder':'Votre marque, par exemple Notion',
+    'hero.measure':'Mesurer',
+    'hero.sample':'Juste curieux ? <a onclick="run(false)" tabindex="0" onkeydown="if(event.key===\'Enter\')run(false)">Voir une mesure exemple</a>',
+    'hint.url':'Site officiel, verrouille la bonne entreprise',
+    'hint.hint':"Ou quelques mots : 'label techno français', 'gestion de trésorerie'",
+    'hint.market':'Marché',
+    'hint.auto':'Auto',
+    'hint.update':"Mettre à jour l'identification",
+    'hint.more':'Plus d’options',
+    'cart.label':'Votre score de visibilité IA',
+    'cart.range':'0 à 100',
+    'cart.await':'Votre lecture apparaîtra ici',
+    'offers.k':"Quand l'échantillon ne suffit plus",
+    'offers.onetime':'une fois',
+    'offers.from':'dès',
+    'offers.permonth':'par mois',
+    'offers.flat':'forfait fixe',
+    'offers.neverpct':'jamais un pourcentage',
+    'offers.deep.n':'Audit approfondi',
+    'offers.deep.d':'Cinq requêtes d’acheteur en triple mesure, un intervalle plus serré, vos angles morts face aux concurrents nommés, et le plan d’action.',
+    'offers.deep.cta':'Lancer un audit approfondi',
+    'offers.deep.link':'Ouvrir l’aperçu du dossier ci-dessus',
+    'offers.mon.n':'Surveillance',
+    'offers.mon.d':'Le même score borné, mesuré chaque semaine. Vous êtes alerté quand un mouvement sort du bruit, jamais sur le bruit lui-même.',
+    'offers.mon.link':'Voir les trois offres',
+    'offers.set.n':'Règlement',
+    'offers.set.d':'Nadelio arbitre les contrats de performance entre marques et agences. Un gain ne compte que s’il sort de la bande à 95 pour cent.',
+    'offers.set.link':'Comment marche le règlement',
+    'foot.support':'Contacter le support',
+    'foot.why':'Pourquoi Nadelio ?',
+    'foot.how':'Comment nous mesurons',
+    'foot.pay':'Payez sur résultats',
+    'foot.roadmap':'Feuille de route',
+    'foot.legal':'Mentions et conditions'
+  };
+  function pageLang(){
+    try{
+      var p=new URLSearchParams(window.location.search).get('lang');
+      if(p==='fr')return 'fr';
+      if(p==='en')return 'en';
+    }catch(e){}
+    return /^fr/i.test(navigator.language||navigator.userLanguage||'')?'fr':'en';
+  }
+  var PAGE_FR=(pageLang()==='fr');
+  function applyChromeLang(){
+    if(!PAGE_FR)return; // English is the authored default, nothing to do
+    document.documentElement.setAttribute('lang','fr');
+    var nodes=document.querySelectorAll('[data-i18n],[data-i18n-html],[data-i18n-ph]');
+    for(var i=0;i<nodes.length;i++){
+      var el=nodes[i];
+      var kt=el.getAttribute('data-i18n');
+      if(kt&&SITE_FR[kt]!=null)el.textContent=SITE_FR[kt];
+      var kh=el.getAttribute('data-i18n-html');
+      if(kh&&SITE_FR[kh]!=null)el.innerHTML=SITE_FR[kh];
+      var kp=el.getAttribute('data-i18n-ph');
+      if(kp&&SITE_FR[kp]!=null)el.setAttribute('placeholder',SITE_FR[kp]);
+    }
+  }
 
   // ============ FUNNEL TRACKING (fail-open, own D1, no third-party analytics) ============
   function track(name,extra){
@@ -909,7 +981,7 @@
     var nd=document.getElementById('dialNeedle'),hub=document.getElementById('dialHub'),aw=document.getElementById('cartAwait');
     if(nd){nd.setAttribute('x2','32');nd.setAttribute('y2','113');nd.setAttribute('stroke','var(--sage-signal)');nd.setAttribute('opacity','.55');}
     if(hub){hub.setAttribute('fill','var(--sage-signal)');hub.setAttribute('opacity','.55');}
-    if(aw)aw.innerHTML='<span class="pulse"></span> Your reading appears here';
+    if(aw)aw.innerHTML='<span class="pulse"></span> '+(PAGE_FR?'Votre lecture apparaîtra ici':'Your reading appears here');
   }
   // The offers strip is state-aware: hidden while an error card asks the user
   // to recover (never pitch payment on a failed free read), and once a result
@@ -923,13 +995,16 @@
     if(l)l.hidden=(mode!=='result');
   }
   function scrollToPlanche(){var doc=document.querySelector('#out .doc');if(doc)doc.scrollIntoView({behavior:reduceMotion()?'auto':'smooth',block:'start'});}
+  // Tiny chrome translator for JS-built strings on the journey. EN by default,
+  // FR when the visitor is French (same PAGE_FR flag as the static chrome).
+  function T(en,fr){return PAGE_FR?fr:en;}
   function setRailState(mode){
     var el=document.getElementById('railState'),lab=document.getElementById('railStateLabel');
     if(!el)return;
     el.classList.remove('live');
-    if(mode==='live'){el.classList.add('live');if(lab)lab.textContent='Live';}
-    else if(mode==='cached'){if(lab)lab.textContent='Cached';}
-    else{if(lab)lab.textContent='Ready';}
+    if(mode==='live'){el.classList.add('live');if(lab)lab.textContent=T('Live','En direct');}
+    else if(mode==='cached'){if(lab)lab.textContent=T('Cached','En cache');}
+    else{if(lab)lab.textContent=T('Ready','Prêt');}
   }
 
   // ============ ENTITY RESOLVER ,  persistent identity card ============
@@ -991,8 +1066,8 @@
       el.innerHTML=
         '<div class="rz-fav'+(host?' rz-fav--load':'')+'">'+faviconImg(host,brand)+'</div>'+
         '<div class="rz-meta">'+
-          '<span class="rz-badge resolving"><span class="lv"></span>'+(d.live?'Recognized, press Enter to lock it in.':'Reading…')+'</span>'+
-          '<div class="rz-name">'+esc(brand||host||'Identifying…')+'</div>'+
+          '<span class="rz-badge resolving"><span class="lv"></span>'+(d.live?T('Recognized, press Enter to lock it in.','Reconnu, appuyez sur Entrée pour valider.'):T('Reading…','Lecture…'))+'</span>'+
+          '<div class="rz-name">'+esc(brand||host||T('Identifying…','Identification…'))+'</div>'+
           (host?'<div class="rz-domain"><span class="dot"></span>'+esc(host)+'</div>':'<div class="rz-sk w1"></div>')+
           '<div class="rz-sk w2"></div>'+
         '</div>';
@@ -1009,20 +1084,20 @@
       if(d.toast){
         var sm=[];if(d.sector)sm.push(d.sector);if(d.market)sm.push(d.market);
         toastHtml=sm.length
-          ?'<div class="rz-toast">Locked: '+esc(sm.join(', '))+'.</div>'
-          :'<div class="rz-toast">Locked on '+esc(host||d.brand||'the site')+'. Measuring the right company.</div>';
+          ?'<div class="rz-toast">'+T('Locked: ','Verrouillé : ')+esc(sm.join(', '))+'.</div>'
+          :'<div class="rz-toast">'+T('Locked on ','Verrouillé sur ')+esc(host||d.brand||T('the site','le site'))+T('. Measuring the right company.','. Mesure de la bonne entreprise.')+'</div>';
       }
       el.innerHTML=
         '<div class="rz-fav">'+faviconImg(host,name||d.brand)+'</div>'+
         '<div class="rz-meta">'+
-          '<span class="rz-badge high">Verified on the web</span>'+
+          '<span class="rz-badge high">'+T('Verified on the web','Vérifié sur le web')+'</span>'+
           '<div class="rz-name">'+esc(name||d.brand||host)+'</div>'+
           (host?'<div class="rz-domain sage"><span class="dot"></span><a href="'+esc('https://'+host)+'" target="_blank" rel="noopener">'+esc(host)+'</a></div>':'')+
           (desc?'<div class="rz-desc">'+esc(truncDesc(desc,150))+'</div>':'')+
         '</div>'+
         '<div class="rz-actions">'+
-          '<span class="rz-lock">Identity locked'+(host?' from '+esc(host):'')+'</span>'+
-          '<button class="rz-ghostfix" onclick="cancelAutoChain()">Not '+esc(name||d.brand||'this')+'? Fix it</button>'+
+          '<span class="rz-lock">'+T('Identity locked','Identité verrouillée')+(host?T(' from ',' depuis ')+esc(host):'')+'</span>'+
+          '<button class="rz-ghostfix" onclick="cancelAutoChain()">'+T('Not ','Pas ')+esc(name||d.brand||T('this','celle-ci'))+T('? Fix it',' ? Corriger')+'</button>'+
         '</div>'+
         toastHtml;
       return;
@@ -1039,7 +1114,7 @@
       domainHtml=host?'<div class="rz-domain"><span class="dot"></span><a href="'+esc('https://'+host)+'" target="_blank" rel="noopener">'+esc(host)+'</a></div>':'';
       descHtml=desc?'<div class="rz-desc">'+esc(truncDesc(desc,150))+'</div>':'';
     }else{
-      descHtml='<div class="rz-desc">Common name, several companies share it. Paste your official site and the read locks onto the right one.</div>';
+      descHtml='<div class="rz-desc">'+T('Common name, several companies share it. Paste your official site and the read locks onto the right one.','Nom courant, plusieurs entreprises le partagent. Collez votre site officiel et la lecture se verrouille sur la bonne.')+'</div>';
     }
     var nameCls=hasIdentity&&name?'rz-name':'rz-name muted';
     var nameTxt=hasIdentity&&name?name:brand;
@@ -1047,15 +1122,15 @@
     // (a single tap keeps going); doubting it is the quiet secondary path. With
     // no guess at all, the primary is the one thing that unblocks: the site.
     var actions=hasIdentity
-      ?'<button class="btn-primary" onclick="confirmAnalyze()">Yes, measure '+esc(host||brand)+'</button>'+
-       '<button class="btn-ghost" onclick="openHintCompact()">Not this one?</button>'
-      :'<button class="btn-primary" onclick="openHintCompact()">Paste your site</button>'+
-       '<button class="btn-ghost" onclick="confirmAnalyze()">Measure on the name anyway</button>';
+      ?'<button class="btn-primary" onclick="confirmAnalyze()">'+T('Yes, measure ','Oui, mesurer ')+esc(host||brand)+'</button>'+
+       '<button class="btn-ghost" onclick="openHintCompact()">'+T('Not this one?','Pas la bonne ?')+'</button>'
+      :'<button class="btn-primary" onclick="openHintCompact()">'+T('Paste your site','Collez votre site')+'</button>'+
+       '<button class="btn-ghost" onclick="confirmAnalyze()">'+T('Measure on the name anyway','Mesurer sur le nom quand même')+'</button>';
     el.innerHTML=
       '<div class="rz-fav">'+faviconImg(host,nameTxt||brand)+'</div>'+
       '<div class="rz-meta">'+
-        '<span class="rz-badge low">Best guess</span>'+
-        '<div class="'+nameCls+'">'+esc(nameTxt||'Best guess')+'</div>'+
+        '<span class="rz-badge low">'+T('Best guess','Meilleure hypothèse')+'</span>'+
+        '<div class="'+nameCls+'">'+esc(nameTxt||T('Best guess','Meilleure hypothèse'))+'</div>'+
         domainHtml+descHtml+
       '</div>'+
       '<div class="rz-actions">'+actions+'</div>';
@@ -1168,8 +1243,8 @@
     var myGen=++_rzGen;
     var seedHost=hostOf(officialUrl)||(function(){var b=document.getElementById('brand').value.trim();return hostOf(b);})();
     renderResolver('resolving',{host:seedHost,brand:brand},myGen);
-    out.innerHTML='<div class="card"><div class="stage">Identifying <b>'+esc(brand)+'</b> on the web…<div class="bar"><i></i></div>'+
-      '<div class="beats"><span class="active">Identification</span><span class="sep">&#8594;</span><span>SERP</span><span class="sep">&#8594;</span><span>AI</span></div></div></div>';
+    out.innerHTML='<div class="card"><div class="stage">'+T('Identifying ','Identification de ')+'<b>'+esc(brand)+'</b>'+T(' on the web…',' sur le web…')+'<div class="bar"><i></i></div>'+
+      '<div class="beats"><span class="active">'+T('Identification','Identification')+'</span><span class="sep">&#8594;</span><span>'+T('SERP','SERP')+'</span><span class="sep">&#8594;</span><span>'+T('AI','IA')+'</span></div></div></div>';
     // Honest slow-path note: the free-tier server sleeps when idle and the
     // first request of a quiet period can take up to a minute to answer. Tell
     // the user instead of letting a silent bar read as "broken".
@@ -1177,7 +1252,7 @@
       if(myGen!==_rzGen)return;
       var st=out.querySelector('.stage');
       if(st){var n=document.createElement('div');n.className='stage-slow';
-        n.textContent='Still reading. The first measure after a quiet period can take up to a minute while the instrument wakes.';
+        n.textContent=T('Still reading. The first measure after a quiet period can take up to a minute while the instrument wakes.','Lecture en cours. La première mesure après une période creuse peut prendre jusqu\'à une minute, le temps que l\'instrument se réveille.');
         st.appendChild(n);}
     },8000);
     var data,res;
@@ -1186,13 +1261,13 @@
       data=await res.json();
     }catch(e){
       clearTimeout(slowNote);
-      renderResolverError(brand,myGen,'Could not reach the instrument. Nothing was measured.');
+      renderResolverError(brand,myGen,T('Could not reach the instrument. Nothing was measured.','Impossible de joindre l\'instrument. Rien n\'a été mesuré.'));
       out.innerHTML='';
       btn.disabled=false;if(pbtn)pbtn.disabled=false;return;
     }
     clearTimeout(slowNote);
     if(!res.ok||data.error){
-      renderResolverError(brand,myGen,typeof data.error==='string'?data.error:'Could not identify this brand.');
+      renderResolverError(brand,myGen,typeof data.error==='string'?data.error:T('Could not identify this brand.','Impossible d\'identifier cette marque.'));
       out.innerHTML='';
       btn.disabled=false;if(pbtn)pbtn.disabled=false;return;
     }
@@ -1211,13 +1286,13 @@
     el.innerHTML=
       '<div class="rz-fav">'+fallbackSlot(brand)+'</div>'+
       '<div class="rz-meta">'+
-        '<span class="rz-badge low">Read failed</span>'+
-        '<div class="rz-name">'+esc(brand||'This brand')+'</div>'+
-        '<div class="rz-desc">'+esc(msg||'The identification step failed. Nothing was measured.')+'</div>'+
+        '<span class="rz-badge low">'+T('Read failed','Lecture échouée')+'</span>'+
+        '<div class="rz-name">'+esc(brand||T('This brand','Cette marque'))+'</div>'+
+        '<div class="rz-desc">'+esc(msg||T('The identification step failed. Nothing was measured.','L\'étape d\'identification a échoué. Rien n\'a été mesuré.'))+'</div>'+
       '</div>'+
       '<div class="rz-actions">'+
-        '<button class="btn-primary" onclick="preview()">Try again</button>'+
-        '<button class="btn-ghost" onclick="openHintCompact()">Paste your site</button>'+
+        '<button class="btn-primary" onclick="preview()">'+T('Try again','Réessayer')+'</button>'+
+        '<button class="btn-ghost" onclick="openHintCompact()">'+T('Paste your site','Collez votre site')+'</button>'+
       '</div>';
   }
 
@@ -1260,8 +1335,8 @@
       out.dataset.clarifyCount='0';
       renderResolver('high',{brand:data.brand,name:dispName,official_url:officialUrl,desc:dispDesc,
         toast:corrected,sector:data.sector||'',market:market},gen);
-      out.innerHTML='<div class="card"><div class="stage">Identity confirmed, measuring <b>'+esc(data.brand)+'</b>…<div class="bar"><i></i></div>'+
-        '<div class="beats"><span class="done">Identification &#10003;</span><span class="sep">&#8594;</span><span class="active">SERP running</span><span class="sep">&#8594;</span><span>AI running</span></div></div></div>';
+      out.innerHTML='<div class="card"><div class="stage">'+T('Identity confirmed, measuring ','Identité confirmée, mesure de ')+'<b>'+esc(data.brand)+'</b>…<div class="bar"><i></i></div>'+
+        '<div class="beats"><span class="done">'+T('Identification','Identification')+' &#10003;</span><span class="sep">&#8594;</span><span class="active">'+T('SERP running','SERP en cours')+'</span><span class="sep">&#8594;</span><span>'+T('AI running','IA en cours')+'</span></div></div></div>';
       if(_autoChainTimer){clearTimeout(_autoChainTimer);}
       _autoChainTimer=setTimeout(function(){_autoChainTimer=null;confirmAnalyze();},reduceMotion()?200:700);
       return;
@@ -1279,12 +1354,12 @@
     // matching refine field. Sample size and method are declared BEFORE the
     // click, with the methodology one tap away, never discovered after.
     var rivals=competitors.filter(function(c){return c.toLowerCase()!==(data.brand||'').toLowerCase();}).slice(0,4);
-    showPlan('<span class="k">The plan</span>'+
-      '<span class="plan-chip tap" onclick="openRefineField(\'hint\')" title="Adjust the sector">'+esc(data.sector||'Sector to confirm')+'</span>'+
-      (market?'<span class="plan-chip tap" onclick="openRefineField(\'market\')" title="Change the market">'+esc(market)+'</span>':'')+
-      (rivals.length?'<span class="plan-chip tap" onclick="openRefineField(\'hint\')" title="Adjust who you are measured against">vs '+esc(rivals.join(', '))+'</span>':'')+
-      '<span class="plan-chip">'+queries.length+' '+(queries.length>1?'queries':'query')+' &times; 3 runs</span>'+
-      '<a class="plan-chip" href="/methodology" title="How the interval is computed">95% confidence interval</a>');
+    showPlan('<span class="k">'+T('The plan','Le plan')+'</span>'+
+      '<span class="plan-chip tap" onclick="openRefineField(\'hint\')" title="'+T('Adjust the sector','Ajuster le secteur')+'">'+esc(data.sector||T('Sector to confirm','Secteur à confirmer'))+'</span>'+
+      (market?'<span class="plan-chip tap" onclick="openRefineField(\'market\')" title="'+T('Change the market','Changer le marché')+'">'+esc(market)+'</span>':'')+
+      (rivals.length?'<span class="plan-chip tap" onclick="openRefineField(\'hint\')" title="'+T('Adjust who you are measured against','Ajuster les concurrents de la mesure')+'">'+T('vs ','vs ')+esc(rivals.join(', '))+'</span>':'')+
+      '<span class="plan-chip">'+queries.length+' '+T(queries.length>1?'queries':'query',queries.length>1?'requêtes':'requête')+' &times; 3 '+T('runs','passages')+'</span>'+
+      '<a class="plan-chip" href="/methodology" title="'+T('How the interval is computed','Comment l\'intervalle est calculé')+'">'+T('95% confidence interval','Intervalle de confiance à 95 %')+'</a>');
     out.innerHTML='';
   }
   // A plan chip was tapped: open the FULL refine row and focus the matching field.
@@ -1303,14 +1378,14 @@
     el.innerHTML=
       '<div class="rz-fav">'+faviconImg(host,d.name||d.brand)+'</div>'+
       '<div class="rz-meta">'+
-        '<span class="rz-badge low">Best guess</span>'+
-        '<div class="rz-name">'+esc(d.name||d.brand||'Best guess')+'</div>'+
+        '<span class="rz-badge low">'+T('Best guess','Meilleure hypothèse')+'</span>'+
+        '<div class="rz-name">'+esc(d.name||d.brand||T('Best guess','Meilleure hypothèse'))+'</div>'+
         (host?'<div class="rz-domain"><span class="dot"></span>'+esc(host)+'</div>':'')+
-        '<div class="rz-desc">Could not read that site, I will measure on the name.</div>'+
+        '<div class="rz-desc">'+T('Could not read that site, I will measure on the name.','Impossible de lire ce site, je vais mesurer sur le nom.')+'</div>'+
       '</div>'+
       '<div class="rz-actions">'+
-        '<button class="btn-primary" onclick="confirmAnalyze()">Measure now</button>'+
-        '<button class="btn-ghost" onclick="refinePreview()">Try another site</button>'+
+        '<button class="btn-primary" onclick="confirmAnalyze()">'+T('Measure now','Mesurer maintenant')+'</button>'+
+        '<button class="btn-ghost" onclick="refinePreview()">'+T('Try another site','Essayer un autre site')+'</button>'+
       '</div>';
   }
 
@@ -1338,22 +1413,22 @@
     try{queries=JSON.parse(out.dataset.previewQueries||'[]');}catch(e){}
     btn.disabled=true;
     litChannel('chan01');
-    out.innerHTML='<div class="card"><div class="stage">Measuring live SERP and AI for <b>'+esc(brand)+'</b>…<div class="bar"><i></i></div>'+
-      '<div class="beats"><span class="done">Identification &#10003;</span><span class="sep">&#8594;</span><span class="active">SERP running</span><span class="sep">&#8594;</span><span>AI running</span></div></div></div>';
+    out.innerHTML='<div class="card"><div class="stage">'+T('Measuring live SERP and AI for ','Mesure en direct du SERP et de l\'IA pour ')+'<b>'+esc(brand)+'</b>…<div class="bar"><i></i></div>'+
+      '<div class="beats"><span class="done">'+T('Identification','Identification')+' &#10003;</span><span class="sep">&#8594;</span><span class="active">'+T('SERP running','SERP en cours')+'</span><span class="sep">&#8594;</span><span>'+T('AI running','IA en cours')+'</span></div></div></div>';
     var data,res;
     try{
       res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:true,brand:brand,sector:sector,competitors:competitors,queries:queries,market_label:marketLabel,query_language:queryLanguage,identified_as:identifiedAs,confidence:confidence,deep:isDeep()})});
       data=await res.json();
     }catch(e){
-      out.innerHTML='<div class="card"><div class="stage">Could not reach the instrument. Try again in a moment.</div></div>';
+      out.innerHTML='<div class="card"><div class="stage">'+T('Could not reach the instrument. Try again in a moment.','Impossible de joindre l\'instrument. Réessayez dans un instant.')+'</div></div>';
       btn.disabled=false;return;
     }
     if(res.status===429&&(data.error==='quota_ip'||data.error==='quota_global')){
-      out.innerHTML='<div class="card"><div class="stage" style="background:rgba(217,164,65,.1);border:1px solid rgba(217,164,65,.3);border-radius:12px;padding:18px;color:var(--amber)">'+esc(data.message||'Live analysis limit reached.')+'</div>'+
-        '<div class="pro-cta"><button onclick="run(false)" style="background:var(--paper-ink)">See sample instead</button></div>'+proCta()+'</div>';
+      out.innerHTML='<div class="card"><div class="stage" style="background:rgba(217,164,65,.1);border:1px solid rgba(217,164,65,.3);border-radius:12px;padding:18px;color:var(--amber)">'+esc(data.message||T('Live analysis limit reached.','Limite de mesures en direct atteinte.'))+'</div>'+
+        '<div class="pro-cta"><button onclick="run(false)" style="background:var(--paper-ink)">'+T('See sample instead','Voir un exemple à la place')+'</button></div>'+proCta()+'</div>';
       btn.disabled=false;return;
     }
-    if(data.error){out.innerHTML='<div class="card"><div class="stage">'+esc(typeof data.error==='string'?data.error:(data.message||'Something went wrong.'))+'</div></div>';btn.disabled=false;return;}
+    if(data.error){out.innerHTML='<div class="card"><div class="stage">'+esc(typeof data.error==='string'?data.error:(data.message||T('Something went wrong.','Une erreur est survenue.')))+'</div></div>';btn.disabled=false;return;}
     litChannel('chan02');
     render(data);btn.disabled=false;
   }
@@ -1663,7 +1738,7 @@
 
   function render(d){
     var r=d.ranking||[],queries=d.queries||[],brandName=d.brand||'';
-    _curFR=isFR(d); // drives every result-screen sentence below and in the helpers it calls
+    _curFR=PAGE_FR||isFR(d); // French for a French visitor, or a French brand. Drives every result-screen sentence.
     var FR=_curFR;
     window.__curBrand=brandName; // the brand a monitoring subscription attaches to
     window.__curMarket=d.market||''; // so track() can tag events with the current market
@@ -2390,6 +2465,7 @@
 
   // ---- On load: read the URL and route. ----
   (function bootstrap(){
+    applyChromeLang(); // localize the static chrome for a French visitor before anything else
     var params;try{params=new URLSearchParams(window.location.search);}catch(e){params=null;}
     try{fetch('/api/waitlist',{method:'HEAD'}).catch(function(){});}catch(e){}
     if(params&&params.get('paid')){resumeDeepAudit();return;}
