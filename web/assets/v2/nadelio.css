@@ -84,6 +84,12 @@ input{outline:none;}
 .ndl-drawer-close:hover{border-color:#E8DFD2 !important;color:#E8DFD2 !important;}
 .ndl-drawer-close:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
 
+/* Deep Audit CTA + monitoring link in the "aller plus loin" dock card */
+.ndl-deep-cta:hover{background:#D9B87A !important;}
+.ndl-deep-cta:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+.ndl-mon-link:hover{color:#C6A15B !important;border-bottom-color:#C6A15B !important;}
+.ndl-mon-link:focus{outline:2px solid #E8DFD2;outline-offset:3px;color:#C6A15B;}
+
 /* ---- responsive mobile (desktop >=860px stays identical) ----
    Ported from the v5 source <style>: below ~860px the 2-col body
    collapses to one column and the 3-up dock reflows to one column.
@@ -121,4 +127,6 @@ input{outline:none;}
   .ndl-tip-text{min-height:44px;}
   .ndl-transp{min-height:44px;}
   .ndl-drawer-close{width:44px;height:44px;}
+  .ndl-deep-cta{min-height:44px;}
+  .ndl-mon-link{min-height:44px;display:inline-flex;align-items:center;}
 }

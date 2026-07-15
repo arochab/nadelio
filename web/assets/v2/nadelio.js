@@ -30,7 +30,7 @@
   var EXAMPLES = ['Qonto', 'Pennylane', 'Alan'];
 
   var TIP_TEXT = {
-    scale: 'L\'échelle va de 0 à 100. On lit la position réelle de chaque marque et l\'écart entre elles, jamais grossi.',
+    scale: 'L\'échelle réelle va de 0 à 100. On zoome sur la zone utile pour rendre l\'écart lisible, sans jamais le grossir : les positions et la distance entre les marques restent exactes.',
     range: 'Le vrai score se trouve dans cette fourchette 95 fois sur 100. Plus elle est étroite, plus la mesure est sûre.',
     presence: 'Dans combien de vos questions la marque ressort. Absente d\'une question, elle est invisible pour tous ceux qui la posent.'
   };
@@ -43,7 +43,9 @@
      at opacity 0 then, so this is never actually read by a human). */
   var BLANK_CARD = {
     verdictTitle: '', verdictColor: '#93A06E', verdictText: '',
-    questions: [], ticks: [], presenceBig: '', presenceColor: '#6E6250', presenceText: '', action: ''
+    ia: { big: '', bigColor: '#6E6250', line: '', rival: '' },
+    google: { big: '', bigColor: '#6E6250', line: '', owners: '' },
+    deep: { free: '', adds: '' }
   };
 
   /* density and breath were editor sliders -> constants = 1 in production */
@@ -61,7 +63,7 @@
   /* ---------- DOM refs (persistent nodes, never re-created) ---------- */
   var screenEl, mountEl, axisEl, axisAreaEl, inputEl, regionEl, overlayEl,
       verdictEl, verdictTitleEl, verdictTextEl,
-      shareEl, shareSegsEl, sharePctEl, shareNameEl,
+      insightEl, insightTextEl, fieldEl, ticksEl, scaleLabelEl,
       passCounterEl, unknownEl, runBtn, brandsHost, transpBtn, cardEls = [];
 
   /* ---------- three.js state ---------- */
@@ -75,6 +77,7 @@
 
   /* ---------- tracked dynamic node lists (for surgical re-render) ---------- */
   var axisBrandNodes = [], brandBtnNodes = [], lastChipFocus = null, lastContentSig = null;
+  var lastTicksSig = null;
 
   /* ---------- real-audit control (async flow) ---------- */
   var measureGen = 0;                 /* guards against overlapping runs */
@@ -90,6 +93,48 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5); }
+
+  /* ---------- adaptive measurement window ----------
+     The projection window [ZLO,ZHI] is recomputed per render from the bracketed
+     brands (focus + rival). Two close scores (78 vs 73) would be crushed on a
+     fixed 0..100 axis; zooming to the useful band makes the real gap legible
+     WITHOUT magnifying it (positions/distances stay exact). Idle -> 0..100. */
+  function computeWindow(R) {
+    if (!R || !R.rows || !R.rows.length) return { lo: 0, hi: 100 };
+    var lows = [], highs = [];
+    R.rows.forEach(function (r) { lows.push(r.s - r.m); highs.push(r.s + r.m); });
+    var dataLo = Math.min.apply(null, lows), dataHi = Math.max.apply(null, highs);
+    var margin = Math.max(8, dataHi - dataLo);
+    var lo = Math.max(0, Math.floor((dataLo - margin) / 5) * 5);
+    var hi = Math.min(100, Math.ceil((dataHi + margin) / 5) * 5);
+    /* minimum span 25: expand symmetrically, clamp to [0,100], keep round */
+    if (hi - lo < 25) {
+      var need = 25 - (hi - lo);
+      lo -= need / 2; hi += need / 2;
+      if (lo < 0) { hi += -lo; lo = 0; }
+      if (hi > 100) { lo -= (hi - 100); hi = 100; }
+      lo = Math.max(0, Math.floor(lo / 5) * 5);
+      hi = Math.min(100, Math.ceil(hi / 5) * 5);
+    }
+    return { lo: lo, hi: hi };
+  }
+  /* set the module projection knobs from the current result (used by brackets,
+     region band, tick labels AND the 3D cluster projection, so all stay aligned) */
+  function applyWindow() {
+    var w = computeWindow(currentResult);
+    ZLO = w.lo; ZHI = w.hi;
+    return w;
+  }
+  /* pick a round tick step (multiple of 5/10/25/50) yielding 4..6 labels */
+  function tickStep(span) {
+    var cands = [5, 10, 25, 50];
+    for (var i = 0; i < cands.length; i++) {
+      if (Math.floor(span / cands[i]) + 1 <= 6) return cands[i];
+    }
+    return 50;
+  }
+  /* trim a SERP host for compact display (drop a leading www.) */
+  function shortHost(h) { return String(h || '').replace(/^www\./, ''); }
 
   /* ============================ refs (was ref="{{ ... }}") ============================ */
   function mountRef(el) { mountEl = el; }
@@ -270,54 +315,92 @@
 
     var fn = esc(v.focusName || 'la marque');
     var provider = esc(v.providerLabel || 'l\'IA');
-    var perQ = v.transpQ || [];
+    var matrix = v.matrix || [];
+    var owners = v.owners || [];
+    var serpByQ = v.serpByQ || [];
     var runN = v.runN || 0;
 
-    /* REAL granularity is PER-QUESTION: for each question we show where the brand
-       ranks in Google (SERP) and in the one AI assistant actually queried. There
-       is NO 12-AI matrix - the backend measures one assistant, N runs. */
+    /* REAL granularity is PER-QUESTION x PER-BRAND: for each question, every brand
+       the backend measured gets a cell = its rank in the one AI assistant (with
+       primary/mentioned + cited/runs) and its Google (SERP) rank. There is NO
+       12-AI matrix; the backend measures one assistant, N runs. */
     var srcNames = ['Google (SERP)', v.providerLabel || 'IA'];
     var srcChips = '';
     for (var i = 0; i < srcNames.length; i++) {
       srcChips += '<span style="font-size:11px;color:#C9BEAC;border:1px solid #2A241C;padding:5px 9px;">' + esc(srcNames[i]) + '</span>';
     }
-    /* grid header: two territories, Google + the assistant */
-    var colNames = ['Google', v.providerLabel || 'IA'];
+
+    /* column header = the brands, focus first and in brass */
+    var headerCells = matrix.length ? matrix[0].cells : [];
+    var K = headerCells.length;
+    var gridCols = 'minmax(150px,1.4fr) repeat(' + Math.max(1, K) + ',minmax(104px,1fr))';
+    var minW = 150 + Math.max(1, K) * 108;
     var hCols = '';
-    for (var j = 0; j < colNames.length; j++) {
-      hCols += '<div title="' + esc(colNames[j]) + '" style="font-size:9px;color:#8A7D68;text-align:center;white-space:nowrap;overflow:hidden;">' + esc(colNames[j]) + '</div>';
+    for (var j = 0; j < headerCells.length; j++) {
+      var hn = headerCells[j];
+      hCols += '<div title="' + esc(hn.name) + '" style="font-size:10px;font-weight:' + (hn.isFocus ? '600' : '400') + ';color:' + (hn.isFocus ? BRASS : '#9A8D78') + ';text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(hn.name) + '</div>';
     }
-    /* one cell = the brand's position for that question in that territory, or a
-       dot when absent. Same visual language as the demo (green = cited, sienna
-       border = absent), only the meaning is now honest (rank, not a fabricated
-       per-AI hit count). */
-    function detailCell(rank) {
-      var absent = (rank == null);
-      var rr = absent ? 0 : Math.round(rank);
-      var strong = !absent && rr <= 3;
-      var bg = absent ? 'transparent' : strong ? 'rgba(147,160,110,0.7)' : 'rgba(147,160,110,0.28)';
-      var border = absent ? 'rgba(176,116,82,0.55)' : 'transparent';
-      var textColor = absent ? '#7C5240' : strong ? '#141009' : '#D8CDBB';
-      var label = absent ? '·' : String(rr);
-      var title = absent ? 'absent' : 'rang ' + rr;
-      return '<div title="' + title + '" style="height:26px;display:flex;align-items:center;justify-content:center;font-size:10px;font-variant-numeric:tabular-nums;background:' + bg + ';border:1px solid ' + border + ';box-sizing:border-box;color:' + textColor + ';">' + label + '</div>';
+
+    /* one cell = a brand's standing on a question: AI chip (primary=strong,
+       mentioned=soft, absent=sienna outline) + cited/runs + Google rank. */
+    function matrixCell(cell) {
+      var aiTxt, aiBg, aiFg, aiBorder = 'transparent';
+      if (cell.aiRank == null) {
+        aiTxt = 'absent'; aiBg = 'transparent'; aiFg = '#7C5240'; aiBorder = 'rgba(176,116,82,0.55)';
+      } else if (cell.aiKind === 'primary') {
+        aiTxt = 'principal n' + cell.aiRank; aiBg = 'rgba(147,160,110,0.7)'; aiFg = '#141009';
+      } else {
+        aiTxt = 'cité n' + cell.aiRank; aiBg = 'rgba(147,160,110,0.28)'; aiFg = '#D8CDBB';
+      }
+      var citeTxt = (cell.aiRank != null && cell.runs) ? (cell.cited + '/' + cell.runs) : '';
+      var gTxt = cell.serpRank != null ? ('Google n' + cell.serpRank) : 'Google absent';
+      var focusEdge = cell.isFocus ? 'border-top:2px solid ' + BRASS + ';' : 'border-top:2px solid transparent;';
+      return '<div style="display:flex;flex-direction:column;gap:3px;padding:5px;background:#171310;' + focusEdge + 'box-sizing:border-box;">' +
+        '<div style="font-size:9.5px;line-height:1.2;text-align:center;padding:3px 4px;background:' + aiBg + ';border:1px solid ' + aiBorder + ';box-sizing:border-box;color:' + aiFg + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(aiTxt) + '</div>' +
+        '<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;color:#8A7D68;font-variant-numeric:tabular-nums;">' +
+          '<span>' + (citeTxt ? ('cité ' + citeTxt) : '&nbsp;') + '</span><span>' + esc(gTxt) + '</span>' +
+        '</div>' +
+      '</div>';
     }
+
     var rowsHtml = '';
-    for (var ri = 0; ri < perQ.length; ri++) {
-      var p = perQ[ri];
-      rowsHtml += '<div style="display:grid;grid-template-columns:minmax(160px,1.7fr) repeat(2,minmax(70px,1fr));gap:3px;align-items:stretch;">' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#D8CDBB;display:flex;align-items:center;padding-right:8px;line-height:1.3;">« ' + esc(p.q) + ' »</div>' +
-        detailCell(p.serpRank) + detailCell(p.aiRank) + '</div>';
+    for (var ri = 0; ri < matrix.length; ri++) {
+      var row = matrix[ri];
+      var cellsHtml = '';
+      for (var ci = 0; ci < row.cells.length; ci++) cellsHtml += matrixCell(row.cells[ci]);
+      rowsHtml += '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:3px;align-items:stretch;">' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#D8CDBB;display:flex;align-items:center;padding-right:8px;line-height:1.3;">« ' + esc(row.q) + ' »</div>' +
+        cellsHtml + '</div>';
     }
-    if (!perQ.length) {
+    if (!matrix.length) {
       rowsHtml = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#8A7D68;">Lancez d\'abord une mesure pour voir le détail, question par question.</div>';
     }
+
+    /* "Qui tient Google" : the hosts that own the page, per question, making the
+       aggregator ownership explicit. */
+    var ownerHtml = '';
+    for (var qi = 0; qi < serpByQ.length; qi++) {
+      var sq = serpByQ[qi];
+      var hostsHtml = '';
+      if (sq.hosts.length) {
+        for (var hi = 0; hi < sq.hosts.length; hi++) {
+          hostsHtml += '<span style="font-size:10.5px;color:#C9BEAC;border:1px solid #2A241C;padding:3px 7px;font-variant-numeric:tabular-nums;">' + esc(shortHost(sq.hosts[hi].host)) + ' <span style="color:#8A7D68;">n' + sq.hosts[hi].rank + '</span></span>';
+        }
+      } else {
+        hostsHtml = '<span style="font-size:10.5px;color:#8A7D68;">page non relevée</span>';
+      }
+      ownerHtml += '<div style="display:flex;flex-direction:column;gap:5px;">' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#A99C88;">« ' + esc(sq.q) + ' »</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:5px;">' + hostsHtml + '</div>' +
+      '</div>';
+    }
+    if (!serpByQ.length) ownerHtml = '<div style="font-size:11.5px;color:#8A7D68;">Aucune donnée de page Google.</div>';
 
     drawerDialog.innerHTML =
       '<div style="flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:clamp(16px,2.4vh,26px) clamp(18px,2.4vw,30px);border-bottom:1px solid #2A241C;">' +
         '<div style="display:flex;flex-direction:column;gap:5px;">' +
           '<div style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(17px,1.7vw,23px);letter-spacing:-0.01em;">Le détail, sans filtre</div>' +
-          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#A99C88;max-width:46ch;">Voici vos questions posées à Google et à ' + provider + ' pour mesurer ' + fn + ', et où la marque ressort. Rien n\'est agrégé avant que vous le voyiez.</div>' +
+          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#A99C88;max-width:46ch;">Vos questions posées à Google et à ' + provider + ', et où chaque marque ressort. Rien n\'est agrégé avant que vous le voyiez.</div>' +
         '</div>' +
         '<button class="ndl-drawer-close" aria-label="fermer le détail" style="flex:none;cursor:pointer;background:none;border:1px solid #3A3128;color:#A99C88;font-family:inherit;font-size:15px;line-height:1;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">✕</button>' +
       '</div>' +
@@ -328,12 +411,12 @@
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:10px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">résultat par question</div>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">chaque marque, question par question</div>' +
             '<div style="font-size:10px;color:#8A7D68;font-variant-numeric:tabular-nums;">' + runN + ' mesures IA par question</div>' +
           '</div>' +
           '<div style="overflow-x:auto;overflow-y:hidden;">' +
-            '<div style="min-width:340px;display:flex;flex-direction:column;gap:4px;">' +
-              '<div style="display:grid;grid-template-columns:minmax(160px,1.7fr) repeat(2,minmax(70px,1fr));gap:3px;align-items:end;">' +
+            '<div style="min-width:' + minW + 'px;display:flex;flex-direction:column;gap:4px;">' +
+              '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:3px;align-items:end;">' +
                 '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#55483A;">question</div>' +
                 hCols +
               '</div>' +
@@ -341,12 +424,17 @@
             '</div>' +
           '</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:16px;padding-top:2px;">' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.7);"></span>cité en tête</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.7);"></span>réponse principale</div>' +
             '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.28);"></span>cité plus bas</div>' +
             '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:transparent;border:1px solid rgba(176,116,82,0.6);box-sizing:border-box;"></span>absent</div>' +
           '</div>' +
-          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;">Le chiffre d\'une case, c\'est la position de ' + fn + ' pour cette question. Un point signifie absent. On lit Google une fois et on interroge ' + provider + ' ' + runN + ' fois par question, puis le score est borné sur ces mesures.</div>' +
         '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:12px;">' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">qui tient la page Google</div>' +
+          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;">Souvent, la page Google n\'est pas tenue par les marques mais par des comparateurs et des agrégateurs. Voici les domaines en tête, question par question.</div>' +
+          ownerHtml +
+        '</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;border-top:1px solid #2A241C;padding-top:14px;">Mesuré : ' + matrix.length + ' question' + (matrix.length > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + runN + ' passage' + (runN > 1 ? 's' : '') + ' par question, une lecture de Google. Chaque case montre le rang réel de la marque, sans agrégation cachée. Le Deep Audit élargit cette même lecture à plus de questions et plusieurs IA recoupées.</div>' +
       '</div>';
 
     screenEl.appendChild(drawerScrim);
@@ -484,6 +572,11 @@
     var arect = axisEl.getBoundingClientRect();
     if (arect.width < 10) return;
     var axL = arect.left - mrect.left, axW = arect.width, axY = arect.top - mrect.top;
+    /* recompute the adaptive window here too: buildClusters is called from
+       initScene / resize / runReal independently of renderVals, so the 3D cloud
+       must project on the SAME [ZLO,ZHI] as the brackets/region/ticks. It depends
+       only on currentResult (null while loading -> 0..100). */
+    applyWindow();
     var zspan = ZHI - ZLO;
     var rows = rowsIn.slice().sort(function (a, b) { return b.s - a.s; });
     var l = rows[0], s2 = rows[1];
@@ -597,6 +690,47 @@
     renderer.render(scene, camera);
   }
 
+  /* ============================ paid push (Deep Audit checkout) ============================ */
+  /* Ported from index.html startCheckout: same endpoint, headers and body. The
+     subject is the measured brand (state.focus / the real result), the market is
+     the audit's own market label. Transparent, non-manipulative: everything free
+     is already shown; this only goes deeper. */
+  function deepMsg(text, isError) {
+    var el = cardEls[2] ? cardEls[2].querySelector('.ndl-deep-msg') : null;
+    if (!el) return;
+    el.textContent = text || '';
+    el.style.display = text ? 'block' : 'none';
+    el.style.color = isError ? '#B07452' : '#8A7D68';
+  }
+  function deepCtaLock(locked) {
+    var el = cardEls[2] ? cardEls[2].querySelector('.ndl-deep-cta') : null;
+    if (el) el.style.pointerEvents = locked ? 'none' : '';
+  }
+  function startCheckout() {
+    var brand = (currentResult && currentResult.focusName) || state.focus || (state.inputValue || '').trim();
+    if (!brand) { if (inputEl) inputEl.focus(); deepMsg('Lancez d\'abord un audit, le Deep Audit a besoin d\'une marque.', true); return; }
+    var market = (currentResult && currentResult.market) || '';
+    deepCtaLock(true);
+    deepMsg('Ouverture du paiement sécurisé...', false);
+    fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: brand, hint: '', market: market }) })
+      .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, body: d }; }); })
+      .then(function (r) {
+        var d = r.body || {};
+        if (!r.ok || !d.url) {
+          deepMsg(d.error === 'payments not configured'
+            ? 'Le Deep Audit par paiement n\'est pas encore disponible. Revenez bientôt.'
+            : 'Impossible d\'ouvrir le paiement pour le moment. Réessayez dans un instant.', true);
+          deepCtaLock(false);
+          return;
+        }
+        window.location = d.url;
+      })
+      .catch(function () {
+        deepMsg('Impossible de joindre le serveur. Réessayez dans un instant.', true);
+        deepCtaLock(false);
+      });
+  }
+
   /* ============================ measurement control ============================ */
   /* Real two-step flow, same-origin: /api/infer identifies the brand + proposes
      the queries, then /api/analyze runs the bounded audit. The loading animation
@@ -677,6 +811,47 @@
   /* Turns the /api/analyze body into the single object renderVals() reads. The
      bounded head-to-head (focus vs top rival) is the honest core; we never invent
      scores for brands the backend did not bound. */
+  /* brand-level AI standing across the real questions: best (lowest) rank seen,
+     whether the brand is ever the PRIMARY answer, its coverage, and a cited/runs
+     count taken on its best question. Every field guarded. */
+  function aiSummary(entry, queries) {
+    var best = null, primaryN = 0, presentN = 0, anyRuns = 0;
+    (queries || []).forEach(function (q) {
+      var c = entry && entry.ai_cells ? entry.ai_cells[q] : null;
+      if (!c || c.rank == null) return;
+      presentN += 1;
+      if (c.kind === 'primary') primaryN += 1;
+      if (c.runs) anyRuns = c.runs;
+      if (best === null || c.rank < best.rank) best = c;
+    });
+    if (!best) return { present: false, primaryN: 0, presentN: 0, runs: anyRuns };
+    var runs = best.runs || 0;
+    var cons = best.consistency != null ? best.consistency : 0;
+    return {
+      present: true, rank: Math.round(best.rank),
+      kind: best.kind === 'primary' ? 'primary' : 'mentioned',
+      consistency: cons, runs: runs, cited: runs ? Math.round(cons / 100 * runs) : 0,
+      primaryN: primaryN, presentN: presentN
+    };
+  }
+  /* brand-level Google standing: best and worst SERP rank across the questions */
+  function serpRange(entry, queries) {
+    var best = null, worst = null;
+    (queries || []).forEach(function (q) {
+      var c = entry && entry.cells ? entry.cells[q] : null;
+      if (c && c.rank != null) {
+        if (best === null || c.rank < best) best = c.rank;
+        if (worst === null || c.rank > worst) worst = c.rank;
+      }
+    });
+    return { best: best, worst: worst };
+  }
+  /* compact FR label for a brand's AI standing (used in the named field) */
+  function aiLabel(ai) {
+    if (!ai || !ai.present) return 'absent de l\'IA';
+    return (ai.kind === 'primary' ? 'principal' : 'mentionné') + ' n' + ai.rank + ', cité ' + ai.cited + '/' + ai.runs;
+  }
+
   function buildResult(d) {
     var focusName = d.brand || '';
     var geo = d.geo || null;
@@ -696,32 +871,128 @@
     var lc = String(focusName).toLowerCase();
     var focusEntry = ranking.find(function (r) { return String(r.brand).toLowerCase() === lc; }) || null;
 
-    /* share of voice: the focus entry's name MUST equal d.brand */
-    var share = ranking.map(function (r) { return { n: r.brand, v: Math.max(0, Number(r.share_of_voice) || 0) }; });
-
-    /* per-question detail (drawer + cards) from the focus entry's real cells */
-    var perQ = queries.map(function (q) {
-      var serp = focusEntry && focusEntry.cells ? focusEntry.cells[q] : null;
-      var ai = focusEntry && focusEntry.ai_cells ? focusEntry.ai_cells[q] : null;
+    /* named competitive field: every brand the backend measured, with its real
+       AI standing (rank + primary/mentioned + cited/runs) and Google standing. */
+    var fieldRows = ranking.map(function (r) {
       return {
-        q: q,
-        serpRank: (serp && serp.rank != null) ? serp.rank : null,
-        aiRank: (ai && ai.rank != null) ? ai.rank : null,
-        aiKind: ai ? ai.kind : null
+        name: r.brand,
+        isFocus: String(r.brand).toLowerCase() === lc,
+        share: Math.max(0, Number(r.share_of_voice) || 0),
+        ai: aiSummary(r, queries),
+        serpRank: serpRange(r, queries).best
       };
     });
-    var presentCount = perQ.filter(function (p) { return p.aiRank != null; }).length;
+    /* order the field by real AI visibility (primary before mentioned at equal
+       rank, then absent), keeping share as the tie-break. */
+    function aiScore(x) { return x.ai.present ? (x.ai.rank + (x.ai.kind === 'primary' ? 0 : 0.5)) : 999; }
+    fieldRows.sort(function (a, b) { var dd = aiScore(a) - aiScore(b); return dd !== 0 ? dd : (b.share - a.share); });
+
+    /* per-question x per-brand matrix (drawer), brand columns in field order */
+    var rankByName = {};
+    ranking.forEach(function (r) { rankByName[String(r.brand).toLowerCase()] = r; });
+    var orderedNames = fieldRows.map(function (f) { return f.name; });
+    var matrix = queries.map(function (q) {
+      return {
+        q: q,
+        cells: orderedNames.map(function (nm) {
+          var r = rankByName[String(nm).toLowerCase()] || {};
+          var ai = r.ai_cells ? r.ai_cells[q] : null;
+          var serp = r.cells ? r.cells[q] : null;
+          var runs = ai && ai.runs != null ? ai.runs : n;
+          var cons = ai && ai.consistency != null ? ai.consistency : null;
+          return {
+            name: nm, isFocus: String(nm).toLowerCase() === lc,
+            aiRank: ai && ai.rank != null ? Math.round(ai.rank) : null,
+            aiKind: ai ? (ai.kind === 'primary' ? 'primary' : 'mentioned') : null,
+            cited: (cons != null && runs) ? Math.round(cons / 100 * runs) : null,
+            runs: runs || 0,
+            serpRank: serp && serp.rank != null ? serp.rank : null
+          };
+        })
+      };
+    });
+
+    /* who owns the Google page (often aggregators, not the brands) */
+    var landscape = d.serp_landscape || {};
+    var owners = (landscape.owners || []).map(function (o) { return { host: o.host, best_rank: o.best_rank, hits: o.hits }; });
+    var serpByQ = queries.map(function (q) {
+      var arr = (landscape.queries && landscape.queries[q]) ? landscape.queries[q] : [];
+      return { q: q, hosts: arr.map(function (x) { return { host: x.host, rank: x.rank }; }) };
+    });
+    var oh = owners.map(function (o) { return shortHost(o.host); });
+    var ownersPhrase = oh.length >= 2 ? (oh[0] + ', ' + oh[1]) : (oh.length === 1 ? oh[0] : '');
+
+    /* focus per-question AI facts for the headline insight */
+    var focusPrimaryN = 0, focusPresentN = 0, focusAbsentN = 0, focusPrimaryCited = null;
+    queries.forEach(function (q) {
+      var c = focusEntry && focusEntry.ai_cells ? focusEntry.ai_cells[q] : null;
+      if (!c || c.rank == null) { focusAbsentN += 1; return; }
+      focusPresentN += 1;
+      if (c.kind === 'primary') {
+        focusPrimaryN += 1;
+        var rr = c.runs || 0, cc = c.consistency != null ? c.consistency : 0;
+        var cited = rr ? Math.round(cc / 100 * rr) : 0;
+        if (focusPrimaryCited === null || cited < focusPrimaryCited) focusPrimaryCited = cited;
+      }
+    });
+    var focusAi = aiSummary(focusEntry, queries);
+    var focusSerp = serpRange(focusEntry, queries);
+    var runs = focusAi.runs || n || 0;
+    var aiLeader = fieldRows.length ? fieldRows[0] : null;
+
+    var ctx = {
+      focusName: focusName, geo: geo, rival: rival, Q: Q, runs: runs,
+      providerLabel: d.ai_provider_label || 'l\'IA',
+      focusAi: focusAi, focusSerp: focusSerp,
+      focusPrimaryN: focusPrimaryN, focusPresentN: focusPresentN,
+      focusAbsentN: focusAbsentN, focusPrimaryCited: focusPrimaryCited,
+      fieldRows: fieldRows, aiLeader: aiLeader,
+      owners: owners, ownersPhrase: ownersPhrase, hasFocusEntry: !!focusEntry
+    };
 
     return {
       sig: focusName + '|' + (geo ? geo.point : '') + '|' + (rival ? rival.point : '') + '|' + n + '|' + Q,
       focusName: focusName, geo: geo, rival: rival,
-      rows: rows, share: share, perQ: perQ,
-      nQueries: Q, presentCount: presentCount, n: n,
+      rows: rows, fieldRows: fieldRows, matrix: matrix, owners: owners, serpByQ: serpByQ,
+      nQueries: Q, n: n,
       passTotal: n * Q,                        /* n runs x Q queries, one assistant */
       providerLabel: d.ai_provider_label || 'l\'IA',
+      market: d.market || '',
       notice: d.notice || '',
-      cards: buildCards(focusName, geo, rival, ranking, d.serp_landscape, perQ, presentCount, Q, d.ai_provider_label || 'l\'IA')
+      insight: buildInsight(ctx),
+      cards: buildCards(ctx)
     };
+  }
+
+  /* The single most valuable pattern in the data: the AI-vs-Google divergence.
+     Real, quantified, no doubt-planting, no dashes. Picks the branch the data
+     supports (focus wins the AI answer / only mentioned / absent). */
+  function buildInsight(c) {
+    if (!c.hasFocusEntry || c.Q === 0) return '';
+    var Y = c.Q, plural = Y > 1 ? 's' : '';
+    if (c.focusPrimaryN >= 1) {
+      var citedTxt = (c.focusPrimaryCited && c.runs) ? (c.focusPrimaryCited + ' fois sur ' + c.runs) : ('sur ' + c.runs + ' mesures');
+      var s = 'En IA, ' + c.focusName + ' est la réponse mise en avant, n1 sur ' + c.focusPrimaryN + ' de vos ' + Y + ' question' + plural + ', ' + citedTxt + '.';
+      if (c.ownersPhrase) s += ' Sur Google, ce sont les comparateurs (' + c.ownersPhrase + ') qui tiennent la page. Vous gagnez la réponse IA, pas encore le référencement.';
+      else if (c.focusSerp.best != null) s += ' Sur Google, votre meilleure position est le rang ' + c.focusSerp.best + '. L\'avantage IA est réel, tenez-le dans le temps.';
+      else s += ' L\'avantage IA est réel, tenez-le dans le temps.';
+      return s;
+    }
+    if (c.focusPresentN >= 1) {
+      var lead = (c.aiLeader && !c.aiLeader.isFocus) ? c.aiLeader.name : '';
+      var yr = c.focusAi.present ? c.focusAi.rank : null;
+      var s2 = 'En IA, ' + c.focusName + ' est cité mais jamais en tête' + (yr != null ? (' (au mieux n' + yr + ')') : '') + '.';
+      if (lead) s2 += ' C\'est ' + lead + ' qui est la réponse mise en avant.';
+      if (c.ownersPhrase) s2 += ' Et sur Google, la page reste tenue par les comparateurs (' + c.ownersPhrase + ').';
+      s2 += ' La place de premier choix est à prendre.';
+      return s2;
+    }
+    var lead2 = (c.aiLeader && c.aiLeader.ai.present && !c.aiLeader.isFocus) ? c.aiLeader.name : '';
+    var s3 = 'En IA, ' + c.focusName + ' n\'apparaît pas sur vos ' + Y + ' question' + plural + '.';
+    if (lead2) s3 += ' C\'est ' + lead2 + ' qui prend la réponse.';
+    if (c.ownersPhrase) s3 += ' Sur Google, ce sont les comparateurs (' + c.ownersPhrase + ') qui tiennent la page.';
+    s3 += ' Vous êtes invisible pour qui pose ces questions à une IA.';
+    return s3;
   }
 
   /* The verdict: bounded head-to-head. Confident and quantified, never planting
@@ -762,73 +1033,59 @@
     };
   }
 
-  /* Which brand (or SERP host) takes a question the focus brand misses. */
-  function whoTakes(q, ranking, focusName, landscape) {
-    var lc = String(focusName).toLowerCase(), best = null;
-    (ranking || []).forEach(function (r) {
-      if (String(r.brand).toLowerCase() === lc) return;
-      var c = r.ai_cells && r.ai_cells[q];
-      if (c && c.rank != null && (best === null || c.rank < best.rank)) best = { name: r.brand, rank: c.rank };
-    });
-    if (best) return best.name;
-    var lq = landscape && landscape.queries && landscape.queries[q];
-    if (lq && lq.length && lq[0].host) return lq[0].host;
-    return '';
-  }
+  /* The 3 dock cards, dense and specific: what happens in the AI answer, what
+     happens on the Google page (and who owns it), and an honest paid push. */
+  function buildCards(c) {
+    var verdict = computeVerdict(c.focusName, c.geo, c.rival);
+    var Y = c.Q, provider = c.providerLabel;
 
-  function buildCards(focusName, geo, rival, ranking, landscape, perQ, presentCount, Q, providerLabel) {
-    var verdict = computeVerdict(focusName, geo, rival);
-    var toneColor = function (t) { return t === 'up' ? SAGE : t === 'down' ? SIENNA : '#A99C88'; };
-
-    /* card 0 - real questions with a present/absent status */
-    var q3 = perQ.slice(0, 3).map(function (p) {
-      var tone, status;
-      if (p.aiRank != null && (p.aiKind === 'primary' || Math.round(p.aiRank) === 1)) { tone = 'up'; status = 'cité en premier'; }
-      else if (p.aiRank != null) { tone = 'mid'; status = 'cité, rang ' + Math.round(p.aiRank) + ' dans l\'IA'; }
-      else if (p.serpRank != null) { tone = 'mid'; status = 'présent sur Google, rang ' + p.serpRank; }
-      else { tone = 'down'; status = 'absent des réponses'; }
-      return { q: p.q, status: status, statusColor: toneColor(tone), dot: toneColor(tone) };
-    });
-
-    /* card 1 - presence X / N across the real questions (AI coverage) */
-    var ratio = Q ? presentCount / Q : 0;
-    var presColor = ratio >= 0.67 ? '#93A06E' : '#B07452';
-    var ticks = perQ.map(function (p) {
-      var present = p.aiRank != null;
-      var strong = present && Math.round(p.aiRank) <= 3;
-      return {
-        bg: !present ? 'transparent' : strong ? 'rgba(147,160,110,0.85)' : 'rgba(147,160,110,0.32)',
-        border: present ? 'transparent' : 'rgba(176,116,82,0.6)'
-      };
-    });
-    var absentQ = perQ.filter(function (p) { return p.aiRank == null; }).map(function (p) { return p.q; });
-    var presenceText;
-    if (Q === 0) presenceText = '';
-    else if (presentCount === Q) presenceText = 'Présent dans toutes vos questions, mesuré sur ' + providerLabel + '.';
-    else if (presentCount === 0) presenceText = 'Absent des réponses IA sur vos ' + Q + ' questions.';
-    else presenceText = 'Absent sur : ' + absentQ.slice(0, 2).map(function (x) { return '« ' + x + ' »'; }).join(', ') + '.';
-
-    /* card 2 - one honest next step */
-    var action;
-    var firstAbsent = perQ.filter(function (p) { return p.aiRank == null; })[0];
-    if (firstAbsent) {
-      var who = whoTakes(firstAbsent.q, ranking, focusName, landscape);
-      action = 'Gagner « ' + firstAbsent.q + ' », la question où vous n\'apparaissez pas encore' + (who ? (', ' + who + ' y prend la réponse') : '') + '.';
-    } else if (rival && verdict.kind === 'overlap') {
-      action = 'L\'écart avec ' + rival.brand + ' se joue à quelques citations. Gagner une question de plus suffit à le trancher.';
-    } else if (rival && verdict.kind === 'behind') {
-      action = 'Combler le retard sur ' + rival.brand + ' : viser les questions où il passe devant.';
-    } else if (rival) {
-      action = 'Tenir l\'avance sur ' + rival.brand + ' en surveillant la mesure dans le temps.';
+    /* card 0 - "en IA" : primary on X/Y, consistency, the main AI rival */
+    var iaBig, iaColor, iaLine;
+    if (c.focusPrimaryN >= 1) {
+      iaBig = c.focusPrimaryN + ' / ' + Y; iaColor = SAGE;
+      var citedTxt = (c.focusPrimaryCited && c.runs) ? (', ' + c.focusPrimaryCited + ' fois sur ' + c.runs) : '';
+      iaLine = 'Réponse mise en avant sur ' + c.focusPrimaryN + ' de vos ' + Y + ' question' + (Y > 1 ? 's' : '') + citedTxt + '.';
+    } else if (c.focusAi.present) {
+      iaBig = 'n' + c.focusAi.rank; iaColor = '#B07452';
+      iaLine = 'Cité au mieux au rang ' + c.focusAi.rank + ', jamais en tête, sur ' + c.runs + ' passages.';
     } else {
-      action = 'Surveiller la mesure dans le temps pour voir la position bouger.';
+      iaBig = 'absent'; iaColor = '#B07452';
+      iaLine = 'Aucune citation dans les réponses ' + provider + ' sur vos ' + Y + ' questions.';
     }
+    var iaRival = '';
+    var rl = null;
+    for (var i = 0; i < c.fieldRows.length; i++) { if (!c.fieldRows[i].isFocus && c.fieldRows[i].ai.present) { rl = c.fieldRows[i]; break; } }
+    if (rl) iaRival = 'Principal rival IA : ' + rl.name + ' (' + aiLabel(rl.ai) + ').';
+
+    /* card 1 - "sur Google" : your best/worst rank + who owns the page */
+    var gBig, gColor, gLine;
+    if (c.focusSerp.best != null) {
+      gBig = 'n' + c.focusSerp.best; gColor = '#C6A15B';
+      gLine = (c.focusSerp.worst != null && c.focusSerp.worst !== c.focusSerp.best)
+        ? ('Vous figurez entre le rang ' + c.focusSerp.best + ' et le rang ' + c.focusSerp.worst + '.')
+        : ('Vous figurez au rang ' + c.focusSerp.best + '.');
+    } else {
+      gBig = 'absent'; gColor = '#B07452';
+      gLine = 'Vous n\'apparaissez pas dans la page Google sur ces questions.';
+    }
+    var gOwners;
+    if (c.owners.length) {
+      gOwners = 'La page est tenue par ' + c.owners.slice(0, 3).map(function (o) {
+        return shortHost(o.host) + ' (rang ' + o.best_rank + ')';
+      }).join(', ') + '.';
+    } else {
+      gOwners = 'Aucun domaine dominant identifié sur la page.';
+    }
+
+    /* card 2 - "aller plus loin" : transparent paid push */
+    var free = 'Gratuit : ' + Y + ' question' + (Y > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + c.runs + ' passage' + (c.runs > 1 ? 's' : '') + ' par question.';
+    var adds = 'Le Deep Audit élargit : plus de questions, plusieurs IA recoupées, vos angles morts, une preuve sourcée et un plan d\'action.';
 
     return {
       verdictTitle: verdict.title, verdictColor: verdict.color, verdictText: verdict.text,
-      questions: q3, ticks: ticks,
-      presenceBig: presentCount + ' / ' + Q, presenceColor: presColor, presenceText: presenceText,
-      action: action
+      ia: { big: iaBig, bigColor: iaColor, line: iaLine, rival: iaRival },
+      google: { big: gBig, bigColor: gColor, line: gLine, owners: gOwners },
+      deep: { free: free, adds: adds }
     };
   }
 
@@ -839,6 +1096,9 @@
     var st = state;
     var R = currentResult;
     var haveResult = !!(R && R.rows && R.rows.length);
+    /* recompute the adaptive projection window (ZLO/ZHI) from the real result so
+       brackets, region band, tick labels AND the 3D cloud share one scale. */
+    applyWindow();
     var zspan = ZHI - ZLO;
 
     /* ---- axis brackets + advantage/overlap band (empty until a real result) ---- */
@@ -894,22 +1154,32 @@
       };
     });
 
-    /* ---- share of voice (focus entry name === d.brand) ---- */
-    var shareSegs = [], focusShare = 0, focusName = st.focus;
+    /* ---- named competitive field (replaces the anonymous share bar) ---- */
+    var fieldRows = [], focusName = st.focus, maxShare = 0;
     if (haveResult) {
       focusName = R.focusName;
-      var fe = R.share.find(function (x) { return x.n === R.focusName; }) || R.share[0];
-      focusShare = fe ? fe.v : 0;
-      shareSegs = R.share.map(function (x, i) {
+      R.fieldRows.forEach(function (f) { if (f.share > maxShare) maxShare = f.share; });
+      fieldRows = R.fieldRows.map(function (f) {
+        var g = f.serpRank != null ? ('Google rang ' + f.serpRank) : 'absent de Google';
         return {
-          key: x.n, pct: x.v,
-          color: x.n === R.focusName ? BRASS : 'rgba(216,205,187,' + Math.max(0.06, 0.30 - i * 0.06).toFixed(2) + ')',
-          title: x.n + ' : ' + Math.round(x.v) + '% des citations du panel'
+          name: f.name, isFocus: f.isFocus,
+          nameColor: f.isFocus ? BRASS : '#C9BEAC',
+          ai: aiLabel(f.ai),
+          aiColor: !f.ai.present ? '#7C5240' : f.ai.kind === 'primary' ? '#93A06E' : '#A99C88',
+          google: g,
+          googleColor: f.serpRank != null ? '#8A7D68' : '#7C5240',
+          sharePct: f.share,
+          shareW: maxShare > 0 ? Math.max(3, Math.round(f.share / maxShare * 100)) : 0,
+          shareColor: f.isFocus ? BRASS : 'rgba(216,205,187,0.28)',
+          shareLabel: Math.round(f.share) + '%'
         };
       });
     }
 
     var card = haveResult ? R.cards : BLANK_CARD;
+    var insight = haveResult ? R.insight : '';
+    /* dynamic scale label: shows the zoom window once a result is present */
+    var scaleLabel = haveResult ? ('zoom ' + ZLO + ' à ' + ZHI + ' sur 100') : 'échelle 0 à 100';
 
     /* ---- pass counter: real total once settled, indeterminate while measuring ---- */
     var passCounter;
@@ -932,8 +1202,12 @@
       inputValue: st.inputValue,
       hasUnknown: !!st.unknownMsg, unknownMsg: st.unknownMsg,
       brands: brands, axisBrands: axisBrands, region: region, card: card,
-      shareSegs: shareSegs, focusShare: focusShare, passCounter: passCounter, focusName: focusName,
-      transpQ: haveResult ? R.perQ : [], providerLabel: haveResult ? R.providerLabel : 'l\'IA',
+      zlo: ZLO, zhi: ZHI, scaleLabel: scaleLabel,
+      fieldRows: fieldRows, insight: insight,
+      passCounter: passCounter, focusName: focusName,
+      matrix: haveResult ? R.matrix : [], owners: haveResult ? R.owners : [], serpByQ: haveResult ? R.serpByQ : [],
+      market: haveResult ? R.market : '',
+      providerLabel: haveResult ? R.providerLabel : 'l\'IA',
       runN: haveResult ? R.n : 0, nQueries: haveResult ? R.nQueries : 0
     };
   }
@@ -995,15 +1269,60 @@
     }
   }
 
-  function renderShare(v) {
-    var html = '';
-    for (var i = 0; i < v.shareSegs.length; i++) {
-      var sg = v.shareSegs[i];
-      html += '<div title="' + esc(sg.title) + '" style="width:' + sg.pct + '%;background:' + sg.color + ';transition:width 0.6s cubic-bezier(0.2,0.8,0.2,1),background 0.4s;"></div>';
+  /* dynamic axis ticks: 4..6 round labels spanning [ZLO,ZHI] plus 5-unit minor
+     ticks, positioned proportionally. Regenerated only when the window changes. */
+  function renderTicks(v) {
+    if (!ticksEl) return;
+    var sig = v.zlo + '|' + v.zhi;
+    if (sig === lastTicksSig) return;
+    lastTicksSig = sig;
+    var zlo = v.zlo, zhi = v.zhi, span = (zhi - zlo) || 1;
+    var step = tickStep(span);
+    var html = '', pos, val;
+    /* minor ticks every 5 units (skip where a major label sits) */
+    for (val = Math.ceil(zlo / 5) * 5; val <= zhi + 0.001; val += 5) {
+      if (val % step === 0) continue;
+      pos = ((val - zlo) / span * 100).toFixed(2);
+      html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% - 2px);width:1px;height:5px;background:#2A241C;"></div>';
     }
-    if (shareSegsEl) shareSegsEl.innerHTML = html;
-    if (sharePctEl) sharePctEl.textContent = (v.haveResult ? Math.round(v.focusShare) : 0) + '%';
-    if (shareNameEl) shareNameEl.textContent = v.haveResult ? ('des citations du panel vont à ' + v.focusName) : '';
+    /* major ticks + round labels */
+    for (val = Math.ceil(zlo / step) * step; val <= zhi + 0.001; val += step) {
+      pos = ((val - zlo) / span * 100).toFixed(2);
+      html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% - 4px);width:1px;height:9px;background:#2E2820;"></div>';
+      html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">' + val + '</div>';
+    }
+    ticksEl.innerHTML = html;
+  }
+
+  /* named competitive field: one compact row per measured brand (focus in brass),
+     its AI standing, its Google standing and a share-of-voice bar. Horizontal
+     scroll protects the layout on narrow widths. */
+  function renderField(v) {
+    if (!fieldEl) return;
+    if (!v.fieldRows.length) { fieldEl.innerHTML = ''; return; }
+    var rowCols = 'minmax(74px,1fr) minmax(126px,1.4fr) minmax(84px,0.9fr) 92px';
+    var head =
+      '<div style="display:grid;grid-template-columns:' + rowCols + ';gap:10px;align-items:baseline;font-size:8.5px;letter-spacing:0.14em;text-transform:uppercase;color:#55483A;">' +
+        '<span>marque</span><span>en IA</span><span>sur Google</span><span style="text-align:right;">part de voix</span>' +
+      '</div>';
+    var rows = '';
+    for (var i = 0; i < v.fieldRows.length; i++) {
+      var f = v.fieldRows[i];
+      rows +=
+        '<div style="display:grid;grid-template-columns:' + rowCols + ';gap:10px;align-items:center;">' +
+          '<span style="font-size:11.5px;font-weight:' + (f.isFocus ? '600' : '400') + ';color:' + f.nameColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(f.name) + '</span>' +
+          '<span style="font-size:10px;color:' + f.aiColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(f.ai) + '</span>' +
+          '<span style="font-size:10px;color:' + f.googleColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(f.google) + '</span>' +
+          '<span style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">' +
+            '<span style="position:relative;width:52px;height:5px;background:#221C15;"><span style="position:absolute;left:0;top:0;bottom:0;width:' + f.shareW + '%;background:' + f.shareColor + ';"></span></span>' +
+            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:10px;color:' + (f.isFocus ? BRASS : '#8A7D68') + ';font-variant-numeric:tabular-nums;min-width:26px;text-align:right;">' + esc(f.shareLabel) + '</span>' +
+          '</span>' +
+        '</div>';
+    }
+    fieldEl.innerHTML =
+      '<div style="overflow-x:auto;overflow-y:hidden;">' +
+        '<div style="min-width:400px;display:flex;flex-direction:column;gap:6px;">' + head + rows + '</div>' +
+      '</div>';
   }
 
   function renderVerdict(card) {
@@ -1011,38 +1330,47 @@
     if (verdictTextEl) verdictTextEl.textContent = card.verdictText;
   }
 
+  function labelRow(txt) {
+    return '<div style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">' + esc(txt) + '</div>';
+  }
+
   function renderCards(card) {
-    /* card 0 - "ce que les gens demandent" (questions, tone-colored dot) */
-    var qh = '';
-    for (var i = 0; i < card.questions.length; i++) {
-      var q = card.questions[i];
-      qh += '<div style="display:flex;flex-direction:column;gap:0;">' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#E8DFD2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">« ' + esc(q.q) + ' »</div>' +
-        '<div style="display:flex;align-items:center;gap:6px;font-size:9.5px;color:' + q.statusColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span style="width:5px;height:5px;flex:none;background:' + q.dot + ';"></span>' + esc(q.status) + '</div>' +
-        '</div>';
-    }
+    /* card 0 - "en IA": primary on X/Y, consistency, the main AI rival */
+    var ia = card.ia;
     cardEls[0].innerHTML =
-      '<div style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">ce que les gens demandent</div>' +
-      '<div style="display:flex;flex-direction:column;gap:6px;">' + qh + '</div>';
-
-    /* card 1 - "présence dans vos questions" (label is a tooltip trigger) */
-    var th = '';
-    for (var j = 0; j < card.ticks.length; j++) {
-      var t = card.ticks[j];
-      th += '<div style="width:11px;height:7px;background:' + t.bg + ';border:1px solid ' + t.border + ';box-sizing:border-box;"></div>';
-    }
-    cardEls[1].innerHTML =
-      '<button data-tip="presence" class="ndl-tip-text" aria-label="présence dans vos questions, en savoir plus" style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;cursor:help;background:none;border:none;padding:0;font-family:inherit;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;border-bottom:1px dotted #3A3128;">présence dans vos questions<span style="display:inline-flex;width:12px;height:12px;border:1px solid #3A3128;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>' +
-      '<div style="display:flex;align-items:baseline;gap:9px;">' +
-        '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(20px,2vw,30px);line-height:1;color:' + card.presenceColor + ';font-variant-numeric:tabular-nums;">' + esc(card.presenceBig) + '</span>' +
-        '<div style="display:flex;gap:3px;">' + th + '</div>' +
+      labelRow('en IA') +
+      '<div style="display:flex;align-items:baseline;gap:10px;">' +
+        '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(19px,1.9vw,28px);line-height:1;color:' + ia.bigColor + ';font-variant-numeric:tabular-nums;">' + esc(ia.big) + '</span>' +
+        '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#A99C88;">' + esc(ia.line) + '</span>' +
       '</div>' +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#A99C88;">' + esc(card.presenceText) + '</div>';
+      (ia.rival ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#8A7D68;">' + esc(ia.rival) + '</div>' : '');
 
-    /* card 2 - "à faire en premier" (action) */
+    /* card 1 - "sur Google": your best/worst rank + who owns the page */
+    var g = card.google;
+    cardEls[1].innerHTML =
+      labelRow('sur Google') +
+      '<div style="display:flex;align-items:baseline;gap:10px;">' +
+        '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(19px,1.9vw,28px);line-height:1;color:' + g.bigColor + ';font-variant-numeric:tabular-nums;">' + esc(g.big) + '</span>' +
+        '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#A99C88;">' + esc(g.line) + '</span>' +
+      '</div>' +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#8A7D68;">' + esc(g.owners) + '</div>';
+
+    /* card 2 - "aller plus loin": transparent paid push (Deep Audit + monitoring) */
+    var dp = card.deep;
+    var hasDeep = !!dp.free;
     cardEls[2].innerHTML =
-      '<div style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">à faire en premier</div>' +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#E8DFD2;">' + esc(card.action) + '</div>';
+      labelRow('aller plus loin') +
+      (hasDeep ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#8A7D68;">' + esc(dp.free) + '</div>' : '') +
+      (hasDeep ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#C9BEAC;">' + esc(dp.adds) + '</div>' : '') +
+      (hasDeep ?
+        '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:2px;">' +
+          '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Deep Audit, 79 &euro;</button>' +
+          '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">suivre dans le temps</a>' +
+        '</div>' +
+        '<div class="ndl-deep-msg" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#8A7D68;display:none;"></div>'
+        : '');
+    var cta = cardEls[2].querySelector('.ndl-deep-cta');
+    if (cta) cta.addEventListener('click', startCheckout);
   }
 
   /* ============================ render() ============================ */
@@ -1061,8 +1389,17 @@
       verdictEl.style.transform = 'translateY(' + v.verdictTy + 'px)';
     }
 
-    /* share-of-voice block fades to full on settle */
-    if (shareEl) shareEl.style.opacity = v.proofOp;
+    /* named competitive field fades to full on settle */
+    if (fieldEl) fieldEl.style.opacity = v.proofOp;
+
+    /* headline insight (shown only with a real result), revealed with the proof */
+    if (insightEl) {
+      if (v.haveResult && v.insight) { insightEl.style.display = 'flex'; insightEl.style.opacity = v.proofOp; }
+      else { insightEl.style.display = 'none'; insightEl.style.opacity = 0; }
+    }
+
+    /* dynamic scale label (shows the zoom window once measured) */
+    if (scaleLabelEl) scaleLabelEl.textContent = v.scaleLabel;
 
     /* dock cards reveal (opacity + translateY on the persistent outer nodes) */
     for (var i = 0; i < cardEls.length; i++) {
@@ -1087,6 +1424,7 @@
       else unknownEl.style.display = 'none';
     }
 
+    renderTicks(v);
     renderAxisBrands(v.axisBrands);
 
     /* quick-pick chips only reflect which example is focused -> rebuild on focus change */
@@ -1095,13 +1433,14 @@
       lastChipFocus = state.focus;
     }
 
-    /* verdict + cards + share depend on the real result (or the loading/idle
-       phase) -> rebuild only when that signature changes, so the ~ticking during
-       loading never re-writes innerHTML needlessly. */
+    /* verdict + cards + field + insight depend on the real result (or the
+       loading/idle phase) -> rebuild only when that signature changes, so the
+       ~ticking during loading never re-writes innerHTML needlessly. */
     if (lastContentSig !== v.contentSig) {
       renderCards(v.card);
       renderVerdict(v.card);
-      renderShare(v);
+      renderField(v);
+      if (insightTextEl) insightTextEl.textContent = v.insight;
       lastContentSig = v.contentSig;
     }
 
@@ -1131,10 +1470,11 @@
     verdictEl = document.getElementById('ndl-verdict');
     verdictTitleEl = document.getElementById('ndl-verdict-title');
     verdictTextEl = document.getElementById('ndl-verdict-text');
-    shareEl = document.getElementById('ndl-share');
-    shareSegsEl = document.getElementById('ndl-share-segs');
-    sharePctEl = document.getElementById('ndl-share-pct');
-    shareNameEl = document.getElementById('ndl-share-name');
+    insightEl = document.getElementById('ndl-insight');
+    insightTextEl = document.getElementById('ndl-insight-text');
+    fieldEl = document.getElementById('ndl-field');
+    ticksEl = document.getElementById('ndl-ticks');
+    scaleLabelEl = document.getElementById('ndl-scale-label');
     passCounterEl = document.getElementById('ndl-passcounter');
     unknownEl = document.getElementById('ndl-unknown');
     runBtn = document.querySelector('.ndl-run');
