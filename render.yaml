@@ -4,7 +4,10 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    # A live audit runs several sequential SERP + AI calls and takes ~50s (more
+    # for a Deep Audit), well past gunicorn's 30s default which was killing the
+    # worker mid-audit and returning 500. Give it real headroom.
+    startCommand: gunicorn app:app --timeout 300
     envVars:
       - key: BRIGHTDATA_API_KEY
         sync: false
