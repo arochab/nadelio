@@ -1926,6 +1926,15 @@ def settlement():
     return resp
 
 
+@app.route("/v2", strict_slashes=False)
+def v2():
+    # Studio-grade one-pager (dark instrument world, WebGL measurement).
+    # Served self-hosted: /assets/site.js and /assets/fonts are static, zero CDN.
+    resp = send_from_directory("web", "v2.html")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 @app.route("/api/providers")
 def api_providers():
     """The AI assistants currently available to measure against (only those with
@@ -3155,6 +3164,475 @@ def api_admin_funnel():
         out["distinct_visitors_7d"] = 0
 
     return jsonify(out)
+
+
+# ===========================================================================
+# First-party visitor analytics (STRICTLY ADDITIVE, RGPD-clean, fail-open).
+#
+# A light, cookieless, dependency-free analytics layer that lives ENTIRELY in
+# new blocks below. It reuses the existing D1 store (_d1_query / _history_enabled),
+# the existing IP hashing salt (_event_salt), the existing rate-limit pattern
+# (_live_lock + per-IP minute buckets) and the existing ADMIN_TOKEN auth. It
+# never modifies an existing function or route. No cookie is ever set, no raw IP
+# is ever stored, no external network call is ever made, and every write is
+# best-effort on a daemon thread so it can never block or break a response.
+# ===========================================================================
+
+# Bots we never count as human page views. Matched case-insensitively against
+# the User-Agent string.
+_BOT_UA_RE = re.compile(
+    r"bot|crawl|spider|slurp|bing|headless|monitor|preview|"
+    r"facebookexternalhit|python-requests|curl|wget",
+    re.I,
+)
+
+# Static assets we never log as a page view (belt-and-braces on top of the
+# text/html Content-Type gate). A trailing known-asset extension or the /assets
+# prefix means "not a page".
+_ASSET_EXT_RE = re.compile(
+    r"\.(?:js|mjs|css|map|png|jpe?g|gif|svg|webp|avif|ico|bmp|"
+    r"woff2?|ttf|otf|eot|mp4|webm|ogg|mp3|wav|pdf|wasm|json|xml|txt)$",
+    re.I,
+)
+
+
+def _visitor_day_hash(ip, ua):
+    """Cookieless, daily-rotating anonymous visitor id (the Plausible technique).
+
+    sha256 of (ip + user-agent + today's UTC date + the shared event salt),
+    truncated to 16 hex chars. Because the hashed input INCLUDES today's UTC
+    date, the SAME visitor produces a DIFFERENT hash every day: they cannot be
+    followed across days, and no raw IP is ever stored. RGPD-clean by
+    construction, exactly like the funnel ip_hash but rotated daily."""
+    raw = str(ip) + "|" + str(ua) + "|" + _today_utc() + "|" + _event_salt()
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _parse_ua(ua):
+    """Very light User-Agent parse with zero dependency. Returns
+    {device, browser, os}. device is one of 'mobile', 'tablet', 'desktop',
+    'bot'. Bots short-circuit to device 'bot' with empty browser/os so callers
+    can drop them cheaply."""
+    ua = str(ua or "")
+    low = ua.lower()
+    if not low or _BOT_UA_RE.search(low):
+        return {"device": "bot", "browser": "", "os": ""}
+
+    # Device: tablets first (an Android tablet has no 'mobile' token), then
+    # phones, else desktop.
+    if re.search(r"ipad|tablet|kindle|playbook|silk", low) or (
+        "android" in low and "mobile" not in low
+    ):
+        device = "tablet"
+    elif re.search(r"mobi|iphone|ipod|android|blackberry|opera mini|iemobile|windows phone", low):
+        device = "mobile"
+    else:
+        device = "desktop"
+
+    # Browser: order matters (Edge/Opera masquerade as Chrome, Chrome as Safari).
+    if "edg" in low:
+        browser = "Edge"
+    elif "opr" in low or "opera" in low:
+        browser = "Opera"
+    elif "firefox" in low or "fxios" in low:
+        browser = "Firefox"
+    elif "chrome" in low or "crios" in low or "chromium" in low:
+        browser = "Chrome"
+    elif "safari" in low:
+        browser = "Safari"
+    else:
+        browser = "Other"
+
+    # OS. Apple mobiles are checked BEFORE macOS: an iOS UA contains the literal
+    # "like Mac OS X", so a naive "mac os" test would misclassify every iPhone.
+    if "windows" in low:
+        os_name = "Windows"
+    elif re.search(r"iphone|ipad|ipod", low):
+        os_name = "iOS"
+    elif "android" in low:
+        os_name = "Android"
+    elif "mac os" in low or "macintosh" in low:
+        os_name = "macOS"
+    elif "linux" in low:
+        os_name = "Linux"
+    else:
+        os_name = "Other"
+
+    return {"device": device, "browser": browser, "os": os_name}
+
+
+def _geo_country(req):
+    """Best-effort ISO 3166 country code, from a CDN/proxy header if the deploy
+    sits behind one, else 'ZZ' (unknown). NO network call, NO dependency: this
+    only reads headers already on the request. A local GeoLite2 lookup could be
+    wired in here later without changing a single caller."""
+    for header in ("CF-IPCountry", "X-Vercel-IP-Country", "X-Country-Code", "Fastly-Geo-Country"):
+        val = (req.headers.get(header) or "").strip().upper()
+        # Cloudflare uses 'XX' (unknown) and 'T1' (Tor); treat both as unknown.
+        if val and val not in ("XX", "T1") and re.fullmatch(r"[A-Z]{2}", val):
+            return val
+    return "ZZ"
+
+
+def _store_pageview(row):
+    """Fire-and-forget D1 write of one page view. Runs on a daemon thread so the
+    HTTP round-trip to D1 never blocks the user's response. Best-effort: creates
+    the table on first write (same pattern as funnel_events) and swallows every
+    error."""
+    try:
+        _d1_query(
+            "CREATE TABLE IF NOT EXISTS pageviews ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, path TEXT, "
+            "ref_host TEXT, country TEXT, device TEXT, browser TEXT, os TEXT, "
+            "visitor TEXT)")
+        _d1_query(
+            "INSERT INTO pageviews (ts, path, ref_host, country, device, browser, os, visitor) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            list(row))
+    except Exception:
+        logger.warning("pageview D1 write failed (non-fatal)", exc_info=True)
+
+
+@app.after_request
+def _log_pageview(response):
+    """Additive page-view logger. A SEPARATE after_request from
+    set_security_headers (Flask runs every registered after_request), so the
+    existing header logic is untouched.
+
+    Logs one page view only when ALL hold: GET, HTTP 200, Content-Type is
+    text/html, the path is a real page (not /api, not /analytics, not a static
+    asset), and the visitor is not a bot. The D1 write is dispatched on a daemon
+    thread and NEVER blocks the response. The whole body is wrapped so any error
+    returns the response intact. Page views are deliberately NOT rate-limited
+    (only bot-filtered)."""
+    try:
+        if request.method != "GET" or response.status_code != 200:
+            return response
+        ctype = response.headers.get("Content-Type") or ""
+        if not ctype.startswith("text/html"):
+            return response
+        path = request.path or "/"
+        if (path.startswith("/api") or path == "/analytics"
+                or path.startswith("/assets") or _ASSET_EXT_RE.search(path)):
+            return response
+
+        ua = request.headers.get("User-Agent", "")
+        dev = _parse_ua(ua)
+        if dev["device"] == "bot":
+            return response
+        if not _history_enabled():
+            return response
+
+        # Referrer host: 'direct' when absent or when it is our own host.
+        ref_host = "direct"
+        ref = request.referrer or ""
+        if ref:
+            try:
+                rh = urllib.parse.urlparse(ref).netloc.lower()
+                rh = rh[4:] if rh.startswith("www.") else rh
+                own = urllib.parse.urlparse(request.host_url).netloc.lower()
+                own = own[4:] if own.startswith("www.") else own
+                if rh and rh != own:
+                    ref_host = rh
+            except ValueError:
+                pass
+
+        row = (
+            datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            path[:300],
+            ref_host[:120],
+            _geo_country(request)[:2],
+            dev["device"][:12],
+            dev["browser"][:20],
+            dev["os"][:20],
+            _visitor_day_hash(_client_ip(), ua),
+        )
+        threading.Thread(target=_store_pageview, args=(row,), daemon=True).start()
+    except Exception:
+        logger.warning("pageview log skipped (non-fatal)", exc_info=True)
+    return response
+
+
+# Light per-IP rate-limit for the click endpoint (spam guard, not a billing
+# gate), same bucket pattern as _event_hits / _infer_hits.
+_track_hits = {}  # {ip: [minute_bucket_int, count]}
+_TRACK_RATE_PER_MIN = int(os.environ.get("TRACK_RATE_PER_MIN", "120"))
+
+
+def _store_ui_event(row):
+    """Fire-and-forget D1 write of one UI click. Daemon thread, best-effort,
+    creates its table on first write. Never raises."""
+    try:
+        _d1_query(
+            "CREATE TABLE IF NOT EXISTS ui_events ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, label TEXT, "
+            "path TEXT, visitor TEXT)")
+        _d1_query(
+            "INSERT INTO ui_events (ts, label, path, visitor) VALUES (?,?,?,?)",
+            list(row))
+    except Exception:
+        logger.warning("ui event D1 write failed (non-fatal)", exc_info=True)
+
+
+@app.route("/api/track", methods=["POST"])
+def api_track():
+    """Best-effort first-party UI click log. Always returns 200 (like /api/event):
+    a bad payload, a rate-limit hit, or a down/misconfigured D1 all just skip the
+    write silently. Never load-bearing, never 500."""
+    data = _read_json()
+    label = str(data.get("label") or "").strip()[:80]
+    path = str(data.get("path") or "")[:200]
+    if not label:
+        return jsonify({"ok": True})
+
+    ip = _client_ip()
+    minute = int(time.time() // 60)
+    with _live_lock:
+        entry = _track_hits.get(ip)
+        if not entry or entry[0] != minute:
+            for stale in [k for k, v in _track_hits.items() if v[0] != minute]:
+                del _track_hits[stale]
+            _track_hits[ip] = [minute, 1]
+        elif entry[1] >= _TRACK_RATE_PER_MIN:
+            return jsonify({"ok": True})
+        else:
+            entry[1] += 1
+
+    if _history_enabled():
+        row = (
+            datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            label,
+            path,
+            _visitor_day_hash(ip, request.headers.get("User-Agent", "")),
+        )
+        threading.Thread(target=_store_ui_event, args=(row,), daemon=True).start()
+
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Owner-only visitor analytics dashboard at /analytics?token=ADMIN_TOKEN.
+# Same auth pattern as /api/admin/funnel: 404 (never 401) when the token is
+# missing, wrong, or ADMIN_TOKEN is unset, so the route's existence is never
+# revealed. Every D1 query is wrapped so one failing query never breaks the page.
+# ---------------------------------------------------------------------------
+def _analytics_q(sql, params=None):
+    """One analytics D1 read, returning rows or [] on any error (so a single bad
+    query never brings down the whole dashboard)."""
+    try:
+        return _d1_query(sql, params or [])
+    except Exception:
+        logger.warning("analytics query failed (non-fatal)", exc_info=True)
+        return []
+
+
+def _analytics_pv_stats(since):
+    """(views, unique_visitors) from pageviews since an ISO timestamp."""
+    rows = _analytics_q(
+        "SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS uniq "
+        "FROM pageviews WHERE ts >= ?", [since])
+    r = rows[0] if rows else {}
+    return int(r.get("views") or 0), int(r.get("uniq") or 0)
+
+
+def _analytics_top(select_expr, table, since, limit=10):
+    """Generic top-N GROUP BY over one analytics table. select_expr and table are
+    hard-coded literals from this module (never user input), so building the SQL
+    from them is safe; the time bound is always parameterized."""
+    rows = _analytics_q(
+        "SELECT " + select_expr + " AS k, COUNT(*) AS n FROM " + table
+        + " WHERE ts >= ? GROUP BY k ORDER BY n DESC LIMIT " + str(int(limit)),
+        [since])
+    return [(str(r.get("k") or ""), int(r.get("n") or 0)) for r in rows]
+
+
+def _render_analytics_dashboard():
+    """Self-contained dark dashboard HTML. CSS inline, no external asset, no JS
+    required. Warm dark instrument world consistent with the site."""
+    e = _html.escape
+    SHELL_HEAD = (
+        "<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"UTF-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+        "<title>Analytics, Nadelio</title>"
+        "<meta name=\"robots\" content=\"noindex, nofollow\">"
+        "<style>"
+        "*{margin:0;padding:0;box-sizing:border-box}"
+        ":root{--bg:#14100C;--ink:#E8DFD2;--muted:#8A8172;--accent:#C6A15B;"
+        "--card:#1C1710;--line:#2A2118}"
+        "html{-webkit-text-size-adjust:100%}"
+        "body{font-family:'Inter','Segoe UI',-apple-system,sans-serif;background:var(--bg);"
+        "color:var(--ink);line-height:1.55;padding:44px 22px 90px}"
+        ".wrap{max-width:940px;margin:0 auto}"
+        ".num{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;"
+        "font-variant-numeric:tabular-nums}"
+        "h1{font-size:24px;font-weight:600;letter-spacing:-.4px}"
+        ".sub{color:var(--muted);font-size:13px;margin-top:4px}"
+        ".eyebrow{font:600 11px ui-monospace,monospace;letter-spacing:.14em;"
+        "text-transform:uppercase;color:var(--accent);margin-bottom:10px}"
+        ".kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:26px 0}"
+        ".kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}"
+        ".kpi .lab{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}"
+        ".kpi .big{font-size:34px;font-weight:600;letter-spacing:-1px;margin-top:8px;color:var(--ink)}"
+        ".kpi .small{font-size:13px;color:var(--accent);margin-top:6px}"
+        ".card{background:var(--card);border:1px solid var(--line);border-radius:14px;"
+        "padding:22px;margin-bottom:16px}"
+        ".card h2{font:600 12px 'Inter';letter-spacing:.06em;text-transform:uppercase;"
+        "color:var(--accent);margin-bottom:16px}"
+        ".grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}"
+        "table{width:100%;border-collapse:collapse;font-size:14px}"
+        "th{text-align:left;font:600 10px 'Inter';letter-spacing:.06em;text-transform:uppercase;"
+        "color:var(--muted);padding:0 8px 9px}"
+        "td{padding:9px 8px;border-top:1px solid var(--line)}"
+        "td.n{text-align:right;color:var(--accent)}"
+        ".chart{display:flex;align-items:flex-end;gap:6px;height:150px;padding-top:20px}"
+        ".col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}"
+        ".cn{font:600 10px ui-monospace,monospace;color:var(--muted);margin-bottom:5px}"
+        ".bar{width:100%;max-width:34px;background:linear-gradient(180deg,#C6A15B,#8A6E34);"
+        "border-radius:4px 4px 0 0;min-height:2px}"
+        ".cl{font:500 10px ui-monospace,monospace;color:var(--muted);margin-top:7px}"
+        ".empty{color:var(--muted);font-size:13px;font-style:italic}"
+        "a{color:var(--accent);text-decoration:none}a:hover{opacity:.75}"
+        "footer{margin-top:30px;font-size:12px;color:var(--muted)}"
+        ".twrap{overflow-x:auto}"
+        "@media(max-width:680px){.kpis{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}"
+        "</style></head><body><div class=\"wrap\">"
+    )
+
+    if not _history_enabled():
+        return (SHELL_HEAD
+                + "<div class=\"eyebrow\">Nadelio analytics</div>"
+                + "<h1>Analytics visiteurs</h1>"
+                + "<div class=\"card\" style=\"margin-top:22px\"><p class=\"empty\">"
+                + "Store D1 non configure (variables d'environnement manquantes). "
+                + "Renseigne CF_ACCOUNT_ID, CF_D1_DB_ID et CF_D1_TOKEN pour activer "
+                + "la collecte.</p></div></div></body></html>")
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    def since_days(n):
+        return (now - datetime.timedelta(days=n)).isoformat()
+
+    today_start = _today_utc() + "T00:00:00"
+    since_7 = since_days(7)
+    since_30 = since_days(30)
+
+    v_today, u_today = _analytics_pv_stats(today_start)
+    v_7, u_7 = _analytics_pv_stats(since_7)
+    v_30, u_30 = _analytics_pv_stats(since_30)
+
+    def kpi(lab, views, uniq):
+        return ("<div class=\"kpi\"><div class=\"lab\">" + lab + "</div>"
+                "<div class=\"big num\">" + str(views) + "</div>"
+                "<div class=\"small num\">" + str(uniq) + " visiteurs uniques</div></div>")
+
+    kpis = ("<div class=\"kpis\">"
+            + kpi("Aujourd'hui", v_today, u_today)
+            + kpi("7 jours", v_7, u_7)
+            + kpi("30 jours", v_30, u_30)
+            + "</div>")
+
+    # 14-day timeline (bar height proportional to page views per day).
+    tl = {}
+    for r in _analytics_q(
+            "SELECT substr(ts,1,10) AS d, COUNT(*) AS n FROM pageviews "
+            "WHERE ts >= ? GROUP BY d", [since_days(14)]):
+        tl[str(r.get("d") or "")] = int(r.get("n") or 0)
+    days = [(now.date() - datetime.timedelta(days=i)).isoformat() for i in range(13, -1, -1)]
+    max_n = max([tl.get(d, 0) for d in days] + [1])
+    bars = ""
+    for d in days:
+        n = tl.get(d, 0)
+        bh = int(round(140.0 * n / max_n)) if max_n else 0
+        if n and bh < 3:
+            bh = 3
+        bars += ("<div class=\"col\"><div class=\"cn num\">" + (str(n) if n else "")
+                 + "</div><div class=\"bar\" style=\"height:" + str(bh) + "px\"></div>"
+                 "<div class=\"cl\">" + e(d[5:]) + "</div></div>")
+    timeline = ("<div class=\"card\"><h2>Pages vues, 14 jours</h2>"
+                "<div class=\"chart\">" + bars + "</div></div>")
+
+    def top_table(title, rows, first_col):
+        if not rows:
+            body = "<p class=\"empty\">Aucune donnee sur 30 jours.</p>"
+        else:
+            trs = ""
+            for label, count in rows:
+                shown = e(label) if label else "<span class=\"empty\">(vide)</span>"
+                trs += ("<tr><td>" + shown + "</td><td class=\"n num\">" + str(count) + "</td></tr>")
+            body = ("<div class=\"twrap\"><table><thead><tr><th>" + first_col
+                    + "</th><th style=\"text-align:right\">Vues</th></tr></thead>"
+                    "<tbody>" + trs + "</tbody></table></div>")
+        return "<div class=\"card\"><h2>" + title + "</h2>" + body + "</div>"
+
+    top_pages = _analytics_top("path", "pageviews", since_30)
+    top_refs = _analytics_top("ref_host", "pageviews", since_30)
+    top_countries = _analytics_top("country", "pageviews", since_30)
+    top_devices = _analytics_top("device || ' / ' || browser", "pageviews", since_30)
+    top_clicks = _analytics_top("label", "ui_events", since_30)
+
+    top_html = (
+        "<div class=\"grid2\">"
+        + top_table("Top pages", top_pages, "Page")
+        + top_table("Referents", top_refs, "Source")
+        + "</div><div class=\"grid2\">"
+        + top_table("Pays", top_countries, "Pays")
+        + top_table("Appareils", top_devices, "Appareil / navigateur")
+        + "</div>"
+        + top_table("Clics UI", top_clicks, "Libelle")
+    )
+
+    # Funnel recall from the existing funnel_events table (best-effort).
+    def funnel_counts(since):
+        c = {}
+        for r in _analytics_q(
+                "SELECT name, COUNT(*) AS n FROM funnel_events WHERE ts >= ? GROUP BY name",
+                [since]):
+            c[str(r.get("name") or "")] = int(r.get("n") or 0)
+        return c
+
+    f7 = funnel_counts(since_7)
+    f30 = funnel_counts(since_30)
+    frows = ""
+    for name in _EVENT_ALLOWLIST:
+        frows += ("<tr><td>" + e(name) + "</td>"
+                  "<td class=\"n num\">" + str(f7.get(name, 0)) + "</td>"
+                  "<td class=\"n num\">" + str(f30.get(name, 0)) + "</td></tr>")
+    token = request.args.get("token", "")
+    funnel_link = ("<a href=\"/api/admin/funnel?token="
+                   + urllib.parse.quote(token, safe="") + "\">Flux funnel JSON complet</a>")
+    funnel_html = ("<div class=\"card\"><h2>Funnel</h2>"
+                   "<div class=\"twrap\"><table><thead><tr><th>Evenement</th>"
+                   "<th style=\"text-align:right\">7 jours</th>"
+                   "<th style=\"text-align:right\">30 jours</th></tr></thead>"
+                   "<tbody>" + frows + "</tbody></table></div>"
+                   "<p class=\"sub\" style=\"margin-top:14px\">" + funnel_link + "</p></div>")
+
+    return (SHELL_HEAD
+            + "<div class=\"eyebrow\">Nadelio analytics</div>"
+            + "<h1>Analytics visiteurs</h1>"
+            + "<p class=\"sub\">Mesure first-party, cookieless, RGPD-clean. "
+              "Visiteur anonyme a rotation quotidienne, aucune IP brute stockee.</p>"
+            + kpis
+            + timeline
+            + top_html
+            + funnel_html
+            + "<footer>Collecte first-party servie par l'app, sans analytics tiers.</footer>"
+            + "</div></body></html>")
+
+
+@app.route("/analytics", strict_slashes=False)
+def analytics_dashboard():
+    """Owner-only visitor analytics dashboard. Auth mirrors /api/admin/funnel:
+    404 (not 401) whenever the token is missing, wrong, or ADMIN_TOKEN is unset,
+    so the route's existence is never revealed to an unauthenticated caller."""
+    admin_token = os.environ.get("ADMIN_TOKEN")
+    given = request.args.get("token", "")
+    if not admin_token or not hmac.compare_digest(given, admin_token):
+        return jsonify({"error": "not found"}), 404
+    resp = app.make_response(_render_analytics_dashboard())
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 if __name__ == "__main__":

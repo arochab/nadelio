@@ -46,6 +46,12 @@ services:
         sync: false
       - key: CF_D1_TOKEN
         sync: false
+      # Owner-only secret gating the private dashboards (/analytics and
+      # /api/admin/funnel). Not an account or login, just a shared secret set in
+      # the Render dashboard; without it those routes return 404 to everyone. Use
+      # a long random string, then view stats at /analytics?token=THAT_VALUE.
+      - key: ADMIN_TOKEN
+        sync: false
       # Stripe Checkout (Deep Audit paywall). Both must be set in the Render
       # dashboard for payments to work; if either is missing the payment
       # endpoints return "payments not configured" and the free flow is

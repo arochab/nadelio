@@ -1,0 +1,115 @@
+/* ============================================================
+   Nadelio Home v5 - self-hosted styles (zero CDN, RGPD/CSP safe)
+   Faithful port of the Fable "DC" page. Desktop = pixel-identical
+   to source; mobile responsive added below (>=860px unchanged).
+   v5 recomposition: the VERDICT is the hero (giant Archivo Black
+   headline), the 3D instrument + confidence bands serve it, and the
+   bottom dock is 3 cards (questions, presence, action).
+   Brass palette (#C6A15B), tooltips and transparency drawer.
+   ============================================================ */
+
+/* ---- self-hosted fonts, font-display:swap, /assets/v2/fonts/ ---- */
+@font-face{
+  font-family:'Archivo Black';
+  font-style:normal;font-weight:400;font-display:swap;
+  src:url('/assets/v2/fonts/archivo-black-400.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Archivo';
+  font-style:normal;font-weight:400;font-display:swap;
+  src:url('/assets/v2/fonts/archivo-400.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Archivo';
+  font-style:normal;font-weight:500;font-display:swap;
+  src:url('/assets/v2/fonts/archivo-500.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Archivo';
+  font-style:normal;font-weight:600;font-display:swap;
+  src:url('/assets/v2/fonts/archivo-600.woff2') format('woff2');
+}
+@font-face{
+  font-family:'IBM Plex Mono';
+  font-style:normal;font-weight:400;font-display:swap;
+  src:url('/assets/v2/fonts/ibm-plex-mono-400.woff2') format('woff2');
+}
+@font-face{
+  font-family:'IBM Plex Mono';
+  font-style:normal;font-weight:500;font-display:swap;
+  src:url('/assets/v2/fonts/ibm-plex-mono-500.woff2') format('woff2');
+}
+@font-face{
+  font-family:'IBM Plex Mono';
+  font-style:normal;font-weight:600;font-display:swap;
+  src:url('/assets/v2/fonts/ibm-plex-mono-600.woff2') format('woff2');
+}
+
+/* ---- global reset (verbatim from source <style>) ---- */
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#14100C;}
+a{color:#E8DFD2;text-decoration:none;}
+a:hover{color:#C6A15B;}
+input{outline:none;}
+::selection{background:#C6A15B;color:#14100C;}
+@keyframes dotpulse{0%,100%{opacity:0.2;}50%{opacity:1;}}
+@keyframes tipIn{from{opacity:0;}to{opacity:1;}}
+@keyframes drawerIn{from{opacity:0;transform:translateX(18px);}to{opacity:1;transform:translateX(0);}}
+@keyframes scrimIn{from{opacity:0;}to{opacity:1;}}
+@media (prefers-reduced-motion: reduce){*{animation-duration:0.001ms!important;animation-iteration-count:1!important;transition-duration:0.001ms!important;}}
+
+/* ---- interactive states (ex style-hover / style-focus) ----
+   !important is required so these win over the source inline styles,
+   exactly like the DC runtime applied its hover/focus overrides. */
+.ndl-input:focus{border-bottom-color:#C6A15B !important;}
+
+.ndl-run:hover{background:#FFF6E4 !important;}
+.ndl-run:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+
+.ndl-chip:hover{border-color:#E8DFD2 !important;color:#E8DFD2 !important;}
+.ndl-chip:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+
+/* text tooltip triggers: "comment on mesure", "echelle...", "presence..." */
+.ndl-tip-text:hover{color:#C6A15B !important;border-bottom-color:#C6A15B !important;}
+.ndl-tip-text:focus{outline:2px solid #E8DFD2;outline-offset:3px;}
+
+/* circular info-dot trigger next to the focus score ("pourquoi une fourchette") */
+.ndl-tip-dot:hover{color:#C6A15B !important;border-color:#C6A15B !important;}
+.ndl-tip-dot:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+
+/* header "transparence" link that opens the drawer */
+.ndl-transp:hover{color:#C6A15B !important;border-bottom-color:#C6A15B !important;}
+.ndl-transp:focus{outline:2px solid #E8DFD2;outline-offset:3px;color:#C6A15B;}
+
+/* transparency drawer close button */
+.ndl-drawer-close:hover{border-color:#E8DFD2 !important;color:#E8DFD2 !important;}
+.ndl-drawer-close:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+
+/* ---- responsive mobile (desktop >=860px stays identical) ----
+   Ported from the v5 source <style>: below ~860px the 2-col body
+   collapses to one column and the 3-up dock reflows to one column.
+   Added: a mobile-only order flip so the verdict hero (which lives in
+   the proof column) is the first block read once the columns stack.
+   Desktop DOM and layout are left byte-for-byte as v5. */
+@media (max-width:860px){
+  /* let the page grow taller than the viewport and scroll */
+  [data-nadelio-main]{height:auto !important;min-height:100dvh;}
+  /* stack the two body columns */
+  [data-nadelio-body]{grid-template-columns:1fr !important;gap:20px !important;}
+  /* console drops its right divider, gains a bottom one, sits second */
+  [data-nadelio-console]{border-right:none !important;border-bottom:1px solid #2A241C;padding-right:0 !important;padding-bottom:18px !important;justify-content:flex-start;min-height:0;order:2;}
+  /* the 3-up dock reflows to a single column */
+  [data-nadelio-dock]{grid-template-columns:1fr !important;}
+  /* keep the WebGL instrument tall enough once stacked */
+  [data-nadelio-proof]{min-height:200px !important;}
+  /* verdict hero leads: the proof column stacks above the console */
+  .ndl-right{order:1;}
+}
+
+/* comfortable touch targets on coarse pointers (>=44px) */
+@media (pointer:coarse){
+  .ndl-run{min-height:44px;}
+  .ndl-chip{min-height:44px;}
+  .ndl-tip-text{min-height:44px;}
+  .ndl-transp{min-height:44px;}
+  .ndl-drawer-close{width:44px;height:44px;}
+}
