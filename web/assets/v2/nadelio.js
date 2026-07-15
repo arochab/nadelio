@@ -22,87 +22,38 @@
   'use strict';
 
   /* ---------- constants (copied verbatim from the source) ---------- */
-  var ZLO = 50, ZHI = 90;
+  var ZLO = 0, ZHI = 100;
   var BRASS = '#C6A15B', SAGE = '#93A06E', SIENNA = '#B07452', INK = '#D8CDBB';
 
-  var MARKETS = {
-    Qonto: { rows: [{ n: 'Qonto', s: 80, m: 1 }, { n: 'Shine', s: 76, m: 1 }, { n: 'Revolut Pro', s: 72, m: 2 }] },
-    Pennylane: { rows: [{ n: 'Sage', s: 71, m: 1 }, { n: 'Pennylane', s: 60, m: 1 }, { n: 'Indy', s: 57, m: 2 }] },
-    Alan: { rows: [{ n: 'Alan', s: 74, m: 2 }, { n: 'Malakoff Humanis', s: 73, m: 2 }, { n: 'Generali', s: 68, m: 3 }] }
-  };
-  var MODELS = ['GPT-4o', 'GPT-4.1', 'o3', 'Claude Opus', 'Claude Sonnet', 'Gemini Pro', 'Gemini Flash', 'Mistral Large', 'Llama 4', 'DeepSeek', 'Grok 3', 'Perplexity'];
-  var MODELS_SHORT = ['4o', '4.1', 'o3', 'Opus', 'Sonn', 'GemP', 'GemF', 'Mist', 'Lla4', 'Deep', 'Grok', 'Plx'];
+  /* Example quick-picks: REAL brands. The chips no longer replay demo data,
+     they run a real audit through the backend, exactly like a typed brand. */
+  var EXAMPLES = ['Qonto', 'Pennylane', 'Alan'];
+
   var TIP_TEXT = {
-    scale: 'L\'échelle va de 0 à 100. La vue du dessus agrandit la tranche 50 à 90 pour lire les écarts, sans jamais les grossir.',
+    scale: 'L\'échelle va de 0 à 100. On lit la position réelle de chaque marque et l\'écart entre elles, jamais grossi.',
     range: 'Le vrai score se trouve dans cette fourchette 95 fois sur 100. Plus elle est étroite, plus la mesure est sûre.',
-    presence: 'Combien des 12 IA citent la marque au moins une fois. Absent d\'une IA, c\'est être invisible pour tous ceux qui l\'utilisent.'
+    presence: 'Dans combien de vos questions la marque ressort. Absente d\'une question, elle est invisible pour tous ceux qui la posent.'
   };
-  var SHARE = {
-    Qonto: [{ n: 'Qonto', v: 41 }, { n: 'Shine', v: 33 }, { n: 'Revolut Pro', v: 26 }],
-    Pennylane: [{ n: 'Sage', v: 46 }, { n: 'Pennylane', v: 28 }, { n: 'Indy', v: 26 }],
-    Alan: [{ n: 'Alan', v: 37 }, { n: 'Malakoff Humanis', v: 35 }, { n: 'Generali', v: 28 }]
-  };
-  var TRANSP = {
-    Qonto: {
-      questions: ['quelle banque pour un freelance ?', 'meilleur compte pro sans frais ?', 'néobanque pour auto-entrepreneur ?', 'banque pro 100% en ligne ?', 'compte professionnel pour SASU ?'],
-      weights: [1.2, 0.14, 0.9, 1.1, 1.0]
-    },
-    Pennylane: {
-      questions: ['logiciel de comptabilité pour PME ?', 'compta en ligne pour expert-comptable ?', 'alternative à Sage ?', 'logiciel de facturation pour TPE ?', 'meilleur outil de compta en 2026 ?'],
-      weights: [0.2, 0.85, 0.14, 1.0, 0.7]
-    },
-    Alan: {
-      questions: ['quelle mutuelle pour une petite entreprise ?', 'assurance santé pour une famille ?', 'complémentaire santé senior ?', 'mutuelle pas chère pour indépendant ?', 'meilleure assurance santé en 2026 ?'],
-      weights: [1.15, 0.85, 0.12, 1.0, 0.95]
-    }
-  };
-  var CARDS = {
-    Qonto: {
-      verdictTitle: 'Avance réelle.', verdictColor: '#93A06E',
-      verdictText: 'Qonto devance Shine de 4 points, une avance nette qui tient à chaque mesure.',
-      questions: [
-        { q: 'quelle banque pour un freelance ?', status: 'cité en premier', tone: 'up' },
-        { q: 'meilleur compte pro sans frais ?', status: 'absent, Revolut Pro répond', tone: 'down' },
-        { q: 'néobanque pour auto-entrepreneur ?', status: 'cité, derrière Shine', tone: 'mid' }
-      ],
-      hits: [37, 35, 33, 36, 34, 32, 30, 28, 24, 26, 29, 38],
-      presenceBig: '12 / 12', presenceColor: '#93A06E',
-      presenceText: 'Citée par toutes les IA du panel, de GPT-4o à Perplexity.',
-      action: 'Verrouiller « meilleur compte pro sans frais », la seule question où vous disparaissez. Revolut Pro y prend la réponse.'
-    },
-    Pennylane: {
-      verdictTitle: 'Sage devant, écart réel.', verdictColor: '#B07452',
-      verdictText: 'Sage domine Pennylane de 11 points, un écart large et régulier. Le retard est réel, il faudra le combler.',
-      questions: [
-        { q: 'logiciel de comptabilité pour PME ?', status: 'absent, Sage répond', tone: 'down' },
-        { q: 'compta en ligne pour expert-comptable ?', status: 'cité, derrière Sage', tone: 'mid' },
-        { q: 'alternative à Sage ?', status: 'absent, Indy répond', tone: 'down' }
-      ],
-      hits: [28, 26, 23, 25, 24, 21, 18, 15, 0, 0, 0, 20],
-      presenceBig: '9 / 12', presenceColor: '#B07452',
-      presenceText: 'Invisible dans Llama 4, DeepSeek et Grok 3.',
-      action: 'Exister d\'abord dans les 3 IA où vous êtes invisible : c\'est là que les 11 points se perdent.'
-    },
-    Alan: {
-      verdictTitle: 'Trop proche pour trancher.', verdictColor: '#D8CDBB',
-      verdictText: 'Alan et Malakoff Humanis se tiennent à 1 point, trop proche pour les départager. On préfère le dire que d\'inventer un gagnant.',
-      questions: [
-        { q: 'quelle mutuelle pour une petite entreprise ?', status: 'cité en premier', tone: 'up' },
-        { q: 'assurance santé pour une famille ?', status: 'cité, derrière Generali', tone: 'mid' },
-        { q: 'complémentaire santé senior ?', status: 'absent, Malakoff Humanis répond', tone: 'down' }
-      ],
-      hits: [33, 31, 28, 32, 30, 29, 27, 24, 21, 0, 22, 30],
-      presenceBig: '11 / 12', presenceColor: '#93A06E',
-      presenceText: 'Invisible dans DeepSeek uniquement.',
-      action: 'L\'écart avec Malakoff se joue à quelques citations. Gagner « complémentaire santé senior » suffit à faire pencher la mesure.'
-    }
+
+  /* The single REAL result the whole view renders from. null = idle / measuring
+     (nothing measured yet). buildResult(d) fills it from the /api/analyze body. */
+  var currentResult = null;
+
+  /* Empty card content used at idle / during measuring (the dock cards are held
+     at opacity 0 then, so this is never actually read by a human). */
+  var BLANK_CARD = {
+    verdictTitle: '', verdictColor: '#93A06E', verdictText: '',
+    questions: [], ticks: [], presenceBig: '', presenceColor: '#6E6250', presenceText: '', action: ''
   };
 
   /* density and breath were editor sliders -> constants = 1 in production */
   var props = { density: 1, breath: 1 };
 
+  /* Boot IDLE (not measuring, not settled): the page never auto-runs an audit,
+     because every real audit costs money. The user triggers it (run button,
+     Enter, or an example chip). focus/inputValue seed the input with an example. */
   var state = {
-    focus: 'Qonto', measuring: true, settled: false,
+    focus: 'Qonto', measuring: false, settled: false,
     unknownMsg: '', inputValue: 'Qonto', passCount: 0,
     tip: { open: false }, drawerOpen: false
   };
@@ -123,7 +74,12 @@
       tipOverH, tipOutH, tipFocusInH, tipFocusOutH, tipClickH, hoverTipEl = null;
 
   /* ---------- tracked dynamic node lists (for surgical re-render) ---------- */
-  var axisBrandNodes = [], brandBtnNodes = [], lastFocusRendered = null;
+  var axisBrandNodes = [], brandBtnNodes = [], lastChipFocus = null, lastContentSig = null;
+
+  /* ---------- real-audit control (async flow) ---------- */
+  var measureGen = 0;                 /* guards against overlapping runs */
+  var slowNoteEl = null, slowNoteT = null;   /* "instrument waking" note (>8s) */
+  var MIN_LOAD_MS = 1200;             /* minimum loading display so the animation reads */
 
   /* ---------- tooltip / drawer nodes ---------- */
   var tipEl = null, lastTipSig = '';
@@ -163,8 +119,8 @@
   function componentDidMount() {
     reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     measureStart = performance.now();
-    scheduleReveal();
-    startLog();
+    /* No auto-run: the page boots idle. The reveal is triggered by a real audit
+       (run button / Enter / example chip), and driven by DATA ARRIVAL, not a timer. */
     var tryFocus = function () {
       if (inputEl && (document.activeElement === document.body || document.activeElement === null)) inputEl.focus({ preventScroll: true });
     };
@@ -229,7 +185,7 @@
 
   function componentDidUpdate(prevProps, prevState) {
     if (prevProps && prevProps.density !== props.density) {
-      if (scene) buildClusters(state.focus, false);
+      if (scene) buildClusters(clusterRows(), false, clusterFocus());
     }
     if (prevState && !prevState.settled && state.settled && !userInteracted && !state.drawerOpen && inputEl && (document.activeElement === document.body || document.activeElement === null)) {
       inputEl.focus({ preventScroll: true });
@@ -312,53 +268,72 @@
     drawerDialog.setAttribute('aria-label', 'Le détail de la mesure');
     drawerDialog.setAttribute('style', 'position:fixed;top:0;right:0;bottom:0;z-index:71;width:min(620px,95vw);background:#14100C;border-left:1px solid #2A241C;display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);animation:drawerIn 0.28s cubic-bezier(0.2,0.8,0.2,1);');
 
-    var fn = esc(v.focusName);
+    var fn = esc(v.focusName || 'la marque');
+    var provider = esc(v.providerLabel || 'l\'IA');
+    var perQ = v.transpQ || [];
+    var runN = v.runN || 0;
 
-    /* models chips */
-    var mChips = '';
-    for (var i = 0; i < v.transpModels.length; i++) {
-      mChips += '<span style="font-size:11px;color:#C9BEAC;border:1px solid #2A241C;padding:5px 9px;">' + esc(v.transpModels[i].name) + '</span>';
+    /* REAL granularity is PER-QUESTION: for each question we show where the brand
+       ranks in Google (SERP) and in the one AI assistant actually queried. There
+       is NO 12-AI matrix - the backend measures one assistant, N runs. */
+    var srcNames = ['Google (SERP)', v.providerLabel || 'IA'];
+    var srcChips = '';
+    for (var i = 0; i < srcNames.length; i++) {
+      srcChips += '<span style="font-size:11px;color:#C9BEAC;border:1px solid #2A241C;padding:5px 9px;">' + esc(srcNames[i]) + '</span>';
     }
-    /* grid header (model shorts) */
+    /* grid header: two territories, Google + the assistant */
+    var colNames = ['Google', v.providerLabel || 'IA'];
     var hCols = '';
-    for (var j = 0; j < v.transpModels.length; j++) {
-      hCols += '<div title="' + esc(v.transpModels[j].name) + '" style="font-size:9px;color:#8A7D68;text-align:center;white-space:nowrap;overflow:hidden;">' + esc(v.transpModels[j].short) + '</div>';
+    for (var j = 0; j < colNames.length; j++) {
+      hCols += '<div title="' + esc(colNames[j]) + '" style="font-size:9px;color:#8A7D68;text-align:center;white-space:nowrap;overflow:hidden;">' + esc(colNames[j]) + '</div>';
     }
-    /* grid rows */
+    /* one cell = the brand's position for that question in that territory, or a
+       dot when absent. Same visual language as the demo (green = cited, sienna
+       border = absent), only the meaning is now honest (rank, not a fabricated
+       per-AI hit count). */
+    function detailCell(rank) {
+      var absent = (rank == null);
+      var rr = absent ? 0 : Math.round(rank);
+      var strong = !absent && rr <= 3;
+      var bg = absent ? 'transparent' : strong ? 'rgba(147,160,110,0.7)' : 'rgba(147,160,110,0.28)';
+      var border = absent ? 'rgba(176,116,82,0.55)' : 'transparent';
+      var textColor = absent ? '#7C5240' : strong ? '#141009' : '#D8CDBB';
+      var label = absent ? '·' : String(rr);
+      var title = absent ? 'absent' : 'rang ' + rr;
+      return '<div title="' + title + '" style="height:26px;display:flex;align-items:center;justify-content:center;font-size:10px;font-variant-numeric:tabular-nums;background:' + bg + ';border:1px solid ' + border + ';box-sizing:border-box;color:' + textColor + ';">' + label + '</div>';
+    }
     var rowsHtml = '';
-    for (var ri = 0; ri < v.transpRows.length; ri++) {
-      var row = v.transpRows[ri];
-      var cells = '';
-      for (var ci = 0; ci < row.cells.length; ci++) {
-        var c = row.cells[ci];
-        cells += '<div title="' + esc(c.title) + '" style="height:26px;display:flex;align-items:center;justify-content:center;font-size:10px;font-variant-numeric:tabular-nums;background:' + c.bg + ';border:1px solid ' + c.border + ';box-sizing:border-box;color:' + c.textColor + ';">' + esc(c.label) + '</div>';
-      }
-      rowsHtml += '<div style="display:grid;grid-template-columns:minmax(160px,1.7fr) repeat(12,minmax(28px,1fr));gap:3px;align-items:stretch;">' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#D8CDBB;display:flex;align-items:center;padding-right:8px;line-height:1.3;">« ' + esc(row.q) + ' »</div>' +
-        cells + '</div>';
+    for (var ri = 0; ri < perQ.length; ri++) {
+      var p = perQ[ri];
+      rowsHtml += '<div style="display:grid;grid-template-columns:minmax(160px,1.7fr) repeat(2,minmax(70px,1fr));gap:3px;align-items:stretch;">' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#D8CDBB;display:flex;align-items:center;padding-right:8px;line-height:1.3;">« ' + esc(p.q) + ' »</div>' +
+        detailCell(p.serpRank) + detailCell(p.aiRank) + '</div>';
+    }
+    if (!perQ.length) {
+      rowsHtml = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#8A7D68;">Lancez d\'abord une mesure pour voir le détail, question par question.</div>';
     }
 
     drawerDialog.innerHTML =
       '<div style="flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:clamp(16px,2.4vh,26px) clamp(18px,2.4vw,30px);border-bottom:1px solid #2A241C;">' +
         '<div style="display:flex;flex-direction:column;gap:5px;">' +
           '<div style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(17px,1.7vw,23px);letter-spacing:-0.01em;">Le détail, sans filtre</div>' +
-          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#A99C88;max-width:46ch;">Voici les questions posées à chaque IA pour mesurer ' + fn + ', et qui a été cité. Rien n\'est agrégé avant que vous le voyiez.</div>' +
+          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#A99C88;max-width:46ch;">Voici vos questions posées à Google et à ' + provider + ' pour mesurer ' + fn + ', et où la marque ressort. Rien n\'est agrégé avant que vous le voyiez.</div>' +
         '</div>' +
         '<button class="ndl-drawer-close" aria-label="fermer le détail" style="flex:none;cursor:pointer;background:none;border:1px solid #3A3128;color:#A99C88;font-family:inherit;font-size:15px;line-height:1;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">✕</button>' +
       '</div>' +
       '<div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:clamp(16px,2.4vh,26px) clamp(18px,2.4vw,30px);display:flex;flex-direction:column;gap:22px;">' +
         '<div style="display:flex;flex-direction:column;gap:9px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">les 12 IA interrogées</div>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + mChips + '</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">les sources interrogées</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + srcChips + '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:10px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">résultat par question et par IA</div>' +
-            '<div style="font-size:10px;color:#8A7D68;font-variant-numeric:tabular-nums;">8 passes chacune, 480 au total</div>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">résultat par question</div>' +
+            '<div style="font-size:10px;color:#8A7D68;font-variant-numeric:tabular-nums;">' + runN + ' mesures IA par question</div>' +
           '</div>' +
           '<div style="overflow-x:auto;overflow-y:hidden;">' +
-            '<div style="min-width:560px;display:flex;flex-direction:column;gap:4px;">' +
-              '<div style="display:grid;grid-template-columns:minmax(160px,1.7fr) repeat(12,minmax(28px,1fr));gap:3px;align-items:end;">' +
+            '<div style="min-width:340px;display:flex;flex-direction:column;gap:4px;">' +
+              '<div style="display:grid;grid-template-columns:minmax(160px,1.7fr) repeat(2,minmax(70px,1fr));gap:3px;align-items:end;">' +
                 '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#55483A;">question</div>' +
                 hCols +
               '</div>' +
@@ -366,11 +341,11 @@
             '</div>' +
           '</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:16px;padding-top:2px;">' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.7);"></span>cité souvent</div>' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.28);"></span>cité rarement</div>' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:transparent;border:1px solid rgba(176,116,82,0.6);box-sizing:border-box;"></span>jamais cité</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.7);"></span>cité en tête</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.28);"></span>cité plus bas</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:transparent;border:1px solid rgba(176,116,82,0.6);box-sizing:border-box;"></span>absent</div>' +
           '</div>' +
-          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;">Le chiffre d\'une case, c\'est le nombre de fois où ' + fn + ' a été cité sur 8 essais, pour cette question dans cette IA.</div>' +
+          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;">Le chiffre d\'une case, c\'est la position de ' + fn + ' pour cette question. Un point signifie absent. On lit Google une fois et on interroge ' + provider + ' ' + runN + ' fois par question, puis le score est borné sur ces mesures.</div>' +
         '</div>' +
       '</div>';
 
@@ -391,27 +366,51 @@
     else teardownDrawer();
   }
 
-  /* ============================ reveal / pass counter ============================ */
-  function scheduleReveal() {
-    clearTimeout(revealT);
-    revealT = setTimeout(function () {
-      clearInterval(logIv);
-      setState({ measuring: false, settled: true, passCount: 480 });
-      setTimeout(function () {
-        if (inputEl && !state.drawerOpen && (document.activeElement === document.body || document.activeElement === null)) inputEl.focus({ preventScroll: true });
-      }, 80);
-    }, reduced ? 250 : 1750);
+  /* ============================ reveal / loading ============================ */
+  /* The reveal is the CLIMAX and is triggered by DATA ARRIVAL, not a timer. It
+     keeps the exact demo choreography (verdict last, share rises, cards cascade,
+     3D calms per verdict confidence) - only the trigger changed. */
+  function reveal(gen) {
+    if (gen !== measureGen) return;
+    clearSlowNote();
+    setState({
+      measuring: false, settled: true,
+      passCount: currentResult ? currentResult.passTotal : 0,
+      unknownMsg: (currentResult && currentResult.notice) ? currentResult.notice : ''
+    });
+    setTimeout(function () {
+      if (inputEl && !state.drawerOpen && (document.activeElement === document.body || document.activeElement === null)) inputEl.focus({ preventScroll: true });
+    }, 80);
   }
 
-  /* the pass counter ticks up to 480 while the cloud converges (no log lines in v5) */
-  function startLog() {
-    clearInterval(logIv);
-    if (reduced) { setState({ passCount: 480 }); return; }
-    var pass = 0;
-    logIv = setInterval(function () {
-      pass = Math.min(480, pass + 18 + Math.floor(Math.random() * 14));
-      setState({ passCount: pass });
-    }, 82);
+  /* A real audit can take 30-60s. After 8s, append a subtle FR note (like
+     index.html's slow-dyno note) inside the "lecture en cours" overlay, cleared
+     on response. */
+  function showSlowNote() {
+    if (!overlayEl || slowNoteEl) return;
+    slowNoteEl = document.createElement('div');
+    slowNoteEl.setAttribute('style', 'font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#6E6250;margin-top:2px;');
+    slowNoteEl.textContent = 'L\'instrument se réveille. La première mesure après une période calme peut prendre jusqu\'à une minute.';
+    overlayEl.appendChild(slowNoteEl);
+  }
+  function clearSlowNote() {
+    clearTimeout(slowNoteT); slowNoteT = null;
+    if (slowNoteEl && slowNoteEl.parentNode) slowNoteEl.parentNode.removeChild(slowNoteEl);
+    slowNoteEl = null;
+  }
+
+  /* rows/focus the 3D instrument is built from: the real head-to-head once we
+     have a result, else a neutral converging cloud (no labels, no fake scores). */
+  function loadingRows() { return [{ n: '', s: 70, m: 8 }]; }
+  function clusterRows() { return (currentResult && currentResult.rows && currentResult.rows.length) ? currentResult.rows : loadingRows(); }
+  function clusterFocus() { return (currentResult && currentResult.rows && currentResult.rows.length) ? currentResult.focusName : ''; }
+
+  /* axis advantage/overlap band on the full 0..100 scale. */
+  function regionBox(aScore, bScore, fill, borderColor, borderStyle) {
+    var zspan = ZHI - ZLO;
+    var lo = Math.max(0, Math.min(100, (aScore - ZLO) / zspan * 100));
+    var hi = Math.max(0, Math.min(100, (bScore - ZLO) / zspan * 100));
+    return { leftPct: lo.toFixed(2), widthPct: Math.max(0, hi - lo).toFixed(2), fill: fill, borderColor: borderColor, borderStyle: borderStyle };
   }
 
   /* ============================ three.js instrument ============================ */
@@ -443,7 +442,7 @@
     ro = new ResizeObserver(function () { resize(); });
     ro.observe(mountEl);
     ro.observe(axisEl);
-    buildClusters(state.focus, true);
+    buildClusters(clusterRows(), true, clusterFocus());
     if (reduced) renderResolved(); else startLoop();
   }
 
@@ -460,11 +459,14 @@
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    if (points) buildClusters(state.focus, false);
+    if (points) buildClusters(clusterRows(), false, clusterFocus());
     if (reduced) renderResolved();
   }
 
   function clusterState(rows, i) {
+    /* Single cluster (no rival, or the loading cloud): treat as settled/calm.
+       During measuring the frame() loop overrides calmness anyway (measuring=1). */
+    if (rows.length < 2) return 'proven';
     var l = rows[0], s2 = rows[1], r = rows[i];
     var proven = (l.s - l.m) > (s2.s + s2.m);
     if (i === 0) return proven ? 'proven' : 'contested';
@@ -473,28 +475,32 @@
     return 'contested';
   }
 
-  function buildClusters(marketKey, scattered) {
+  function buildClusters(rowsIn, scattered, focusName) {
     var THREE = window.THREE;
     if (!THREE || !axisEl || !mountEl || !camera) return;
+    if (!rowsIn || !rowsIn.length) return;
     var density = props.density != null ? props.density : 1;
     var mrect = mountEl.getBoundingClientRect();
     var arect = axisEl.getBoundingClientRect();
     if (arect.width < 10) return;
     var axL = arect.left - mrect.left, axW = arect.width, axY = arect.top - mrect.top;
     var zspan = ZHI - ZLO;
-    var rows = MARKETS[marketKey].rows.slice().sort(function (a, b) { return b.s - a.s; });
+    var rows = rowsIn.slice().sort(function (a, b) { return b.s - a.s; });
     var l = rows[0], s2 = rows[1];
-    var oLo = Math.max(l.s - l.m, s2.s - s2.m), oHi = Math.min(l.s + l.m, s2.s + s2.m);
-    var hasOverlap = oLo < oHi;
+    var hasOverlap = false, oLo = 0, oHi = 0;
+    if (rows.length >= 2) { oLo = Math.max(l.s - l.m, s2.s - s2.m); oHi = Math.min(l.s + l.m, s2.s + s2.m); hasOverlap = oLo < oHi; }
     var brass = [0.86, 0.68, 0.37], hot = [0.78, 0.44, 0.29];
     var pts = [];
     rows.forEach(function (r, i) {
       var st = clusterState(rows, i);
-      var cxPx = axL + (r.s - ZLO) / zspan * axW;
+      /* clamp the cluster centre to the visible window so an out-of-range real
+         score never throws the cloud off-canvas; the axis spans 0..100. */
+      var sClamped = Math.max(ZLO, Math.min(ZHI, r.s));
+      var cxPx = axL + (sClamped - ZLO) / zspan * axW;
       var w0 = pxToWorld(cxPx, axY);
       var x = w0[0], y = w0[1], wpp = w0[2];
       var R = Math.max(r.m / zspan * axW * wpp, 0.12);
-      var isFocus = r.n === marketKey;
+      var isFocus = !!focusName && r.n === focusName;
       var dimK = st === 'behind' ? 0.45 : 1;
       var base;
       if (isFocus) base = [brass[0] * dimK, brass[1] * dimK, brass[2] * dimK];
@@ -592,136 +598,343 @@
   }
 
   /* ============================ measurement control ============================ */
-  function matchBrand(name) {
-    var q = (name || '').trim().toLowerCase();
-    return Object.keys(MARKETS).find(function (key) { return key.toLowerCase() === q; }) || null;
-  }
-  function runMeasure(name) {
-    var key = matchBrand(name);
-    if (!key) { setState({ unknownMsg: 'Cette démo mesure trois marques : Qonto, Pennylane et Alan.' }); return; }
-    setState({ focus: key, inputValue: key, measuring: true, settled: false, unknownMsg: '', passCount: 0 });
+  /* Real two-step flow, same-origin: /api/infer identifies the brand + proposes
+     the queries, then /api/analyze runs the bounded audit. The loading animation
+     starts optimistically at once; the reveal fires on DATA ARRIVAL. */
+  function runMeasure(rawName) {
+    var name = (rawName || '').trim();
+    if (!name) { setState({ unknownMsg: 'Tapez le nom d\'une marque.' }); return; }
+    var gen = ++measureGen;
+    currentResult = null;
+    setState({ focus: name, inputValue: name, measuring: true, settled: false, unknownMsg: '', passCount: 0 });
     measureStart = performance.now();
-    if (scene) buildClusters(key, !reduced);
+    if (scene) buildClusters(loadingRows(), !reduced, '');
     if (reduced) renderResolved();
-    scheduleReveal();
-    startLog();
+    clearSlowNote();
+    slowNoteT = setTimeout(function () { if (gen === measureGen && state.measuring) showSlowNote(); }, 8000);
+    runReal(name, gen);
+  }
+
+  function runReal(name, gen) {
+    var loadStart = performance.now();
+    fetch('/api/infer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: name }) })
+      .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, status: res.status, body: d }; }); })
+      .then(function (inf) {
+        if (gen !== measureGen) return null;
+        var d = inf.body || {};
+        var usable = inf.ok && !d.error && d.competitors && d.competitors.length && d.queries && d.queries.length;
+        if (!usable) {
+          failMeasure(gen, inf.status === 429
+            ? 'Trop de requêtes, patientez un instant.'
+            : 'Marque introuvable. Vérifiez l\'orthographe ou collez votre site.');
+          return null;
+        }
+        return fetch('/api/analyze', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            live: true, brand: d.brand || name, sector: d.sector,
+            competitors: d.competitors, queries: d.queries,
+            market_label: d.market, query_language: d.query_language,
+            identified_as: d.identified_as, confidence: d.confidence
+          })
+        }).then(function (res) { return res.json().then(function (b) { return { ok: res.ok, status: res.status, body: b }; }); });
+      })
+      .then(function (ana) {
+        if (ana == null || gen !== measureGen) return;
+        var d = ana.body || {};
+        if (!ana.ok || d.error || !d.ranking || !d.geo || d.geo.point == null) {
+          failMeasure(gen, (ana.status === 429 || d.error === 'quota_ip' || d.error === 'quota_global')
+            ? 'Limite du jour atteinte (3 audits gratuits par jour). Revenez demain ou passez au suivi Pro.'
+            : 'La mesure n\'a pas pu aboutir. Réessayez dans un instant.');
+          return;
+        }
+        currentResult = buildResult(d);
+        /* rebuild the 3D from the REAL rows and re-arm the burst so the cloud
+           visibly converges on the reveal, whatever the fetch latency was. */
+        measureStart = performance.now();
+        if (scene) buildClusters(currentResult.rows, !reduced, currentResult.focusName);
+        if (reduced) renderResolved();
+        var wait = reduced ? 0 : Math.max(0, MIN_LOAD_MS - (performance.now() - loadStart));
+        clearTimeout(revealT);
+        revealT = setTimeout(function () { reveal(gen); }, wait);
+      })
+      .catch(function () {
+        failMeasure(gen, 'Impossible de joindre l\'instrument. Rien n\'a été mesuré.');
+      });
+  }
+
+  function failMeasure(gen, msg) {
+    if (gen !== measureGen) return;
+    clearSlowNote();
+    clearTimeout(revealT);
+    currentResult = null;
+    setState({ measuring: false, settled: false, unknownMsg: msg, passCount: 0 });
+    if (scene) buildClusters(loadingRows(), false, '');
+    if (reduced) renderResolved();
+  }
+
+  /* ============================ adapter: d -> view model ============================ */
+  /* Turns the /api/analyze body into the single object renderVals() reads. The
+     bounded head-to-head (focus vs top rival) is the honest core; we never invent
+     scores for brands the backend did not bound. */
+  function buildResult(d) {
+    var focusName = d.brand || '';
+    var geo = d.geo || null;
+    var rival = (d.geo_rival && d.geo_rival.point != null) ? d.geo_rival : null;
+    var queries = d.queries || [];
+    var Q = queries.length;
+    var n = (geo && geo.n) ? geo.n : 0;
+
+    /* rows: focus + (optional) rival, from their bounded scores only */
+    var rows = [];
+    if (geo && geo.point != null) {
+      rows.push({ n: focusName, s: geo.point, m: (geo.half_width != null ? geo.half_width : 1) });
+      if (rival) rows.push({ n: rival.brand, s: rival.point, m: (rival.half_width != null ? rival.half_width : 1) });
+    }
+
+    var ranking = d.ranking || [];
+    var lc = String(focusName).toLowerCase();
+    var focusEntry = ranking.find(function (r) { return String(r.brand).toLowerCase() === lc; }) || null;
+
+    /* share of voice: the focus entry's name MUST equal d.brand */
+    var share = ranking.map(function (r) { return { n: r.brand, v: Math.max(0, Number(r.share_of_voice) || 0) }; });
+
+    /* per-question detail (drawer + cards) from the focus entry's real cells */
+    var perQ = queries.map(function (q) {
+      var serp = focusEntry && focusEntry.cells ? focusEntry.cells[q] : null;
+      var ai = focusEntry && focusEntry.ai_cells ? focusEntry.ai_cells[q] : null;
+      return {
+        q: q,
+        serpRank: (serp && serp.rank != null) ? serp.rank : null,
+        aiRank: (ai && ai.rank != null) ? ai.rank : null,
+        aiKind: ai ? ai.kind : null
+      };
+    });
+    var presentCount = perQ.filter(function (p) { return p.aiRank != null; }).length;
+
+    return {
+      sig: focusName + '|' + (geo ? geo.point : '') + '|' + (rival ? rival.point : '') + '|' + n + '|' + Q,
+      focusName: focusName, geo: geo, rival: rival,
+      rows: rows, share: share, perQ: perQ,
+      nQueries: Q, presentCount: presentCount, n: n,
+      passTotal: n * Q,                        /* n runs x Q queries, one assistant */
+      providerLabel: d.ai_provider_label || 'l\'IA',
+      notice: d.notice || '',
+      cards: buildCards(focusName, geo, rival, ranking, d.serp_landscape, perQ, presentCount, Q, d.ai_provider_label || 'l\'IA')
+    };
+  }
+
+  /* The verdict: bounded head-to-head. Confident and quantified, never planting
+     doubt, never restating the visible numbers. Mirrors index.html boundedCompare. */
+  function computeVerdict(focusName, geo, rival) {
+    if (!geo || geo.point == null) return { title: '', color: INK, text: '', kind: 'none' };
+    if (!rival) {
+      var p = geo.point, t, txt;
+      if (geo.verdict === 'SINGLE_RUN') { t = 'Première mesure.'; txt = focusName + ' obtient ' + p + ' sur 100 sur cette première lecture.'; }
+      else if (geo.verdict === 'STABLE') { t = 'Position tenue.'; txt = focusName + ' obtient ' + p + ' sur 100, un niveau qui tient à chaque mesure.'; }
+      else { t = 'Position mesurée.'; txt = focusName + ' obtient ' + p + ' sur 100, une visibilité réelle dans les réponses IA.'; }
+      return { title: t, color: SAGE, text: txt, kind: 'solo' };
+    }
+    var gLow = geo.half_width != null ? geo.low : geo.point;
+    var gHigh = geo.half_width != null ? geo.high : geo.point;
+    var rLow = rival.half_width != null ? rival.low : rival.point;
+    var rHigh = rival.half_width != null ? rival.high : rival.point;
+    var diff = geo.point - rival.point;
+    if (gLow > rHigh) {
+      var d1 = Math.max(1, Math.round(diff));
+      return {
+        title: 'Avance réelle.', color: SAGE, kind: 'ahead',
+        text: focusName + ' devance ' + rival.brand + ' de ' + d1 + ' point' + (d1 > 1 ? 's' : '') + ', une avance nette qui tient à chaque mesure.'
+      };
+    }
+    if (gHigh < rLow) {
+      var d2 = Math.max(1, Math.round(-diff));
+      return {
+        title: rival.brand + ' devant, écart réel.', color: SIENNA, kind: 'behind',
+        text: rival.brand + ' domine ' + focusName + ' de ' + d2 + ' point' + (d2 > 1 ? 's' : '') + ', un écart large et régulier. Le retard est réel, il faudra le combler.'
+      };
+    }
+    var d3 = Math.abs(Math.round(diff));
+    var gap = d3 === 0 ? 'sont à égalité' : ('se tiennent à ' + d3 + ' point' + (d3 > 1 ? 's' : ''));
+    return {
+      title: 'Trop proche pour trancher.', color: INK, kind: 'overlap',
+      text: focusName + ' et ' + rival.brand + ' ' + gap + ', trop proche pour les départager. On préfère le dire que d\'inventer un gagnant.'
+    };
+  }
+
+  /* Which brand (or SERP host) takes a question the focus brand misses. */
+  function whoTakes(q, ranking, focusName, landscape) {
+    var lc = String(focusName).toLowerCase(), best = null;
+    (ranking || []).forEach(function (r) {
+      if (String(r.brand).toLowerCase() === lc) return;
+      var c = r.ai_cells && r.ai_cells[q];
+      if (c && c.rank != null && (best === null || c.rank < best.rank)) best = { name: r.brand, rank: c.rank };
+    });
+    if (best) return best.name;
+    var lq = landscape && landscape.queries && landscape.queries[q];
+    if (lq && lq.length && lq[0].host) return lq[0].host;
+    return '';
+  }
+
+  function buildCards(focusName, geo, rival, ranking, landscape, perQ, presentCount, Q, providerLabel) {
+    var verdict = computeVerdict(focusName, geo, rival);
+    var toneColor = function (t) { return t === 'up' ? SAGE : t === 'down' ? SIENNA : '#A99C88'; };
+
+    /* card 0 - real questions with a present/absent status */
+    var q3 = perQ.slice(0, 3).map(function (p) {
+      var tone, status;
+      if (p.aiRank != null && (p.aiKind === 'primary' || Math.round(p.aiRank) === 1)) { tone = 'up'; status = 'cité en premier'; }
+      else if (p.aiRank != null) { tone = 'mid'; status = 'cité, rang ' + Math.round(p.aiRank) + ' dans l\'IA'; }
+      else if (p.serpRank != null) { tone = 'mid'; status = 'présent sur Google, rang ' + p.serpRank; }
+      else { tone = 'down'; status = 'absent des réponses'; }
+      return { q: p.q, status: status, statusColor: toneColor(tone), dot: toneColor(tone) };
+    });
+
+    /* card 1 - presence X / N across the real questions (AI coverage) */
+    var ratio = Q ? presentCount / Q : 0;
+    var presColor = ratio >= 0.67 ? '#93A06E' : '#B07452';
+    var ticks = perQ.map(function (p) {
+      var present = p.aiRank != null;
+      var strong = present && Math.round(p.aiRank) <= 3;
+      return {
+        bg: !present ? 'transparent' : strong ? 'rgba(147,160,110,0.85)' : 'rgba(147,160,110,0.32)',
+        border: present ? 'transparent' : 'rgba(176,116,82,0.6)'
+      };
+    });
+    var absentQ = perQ.filter(function (p) { return p.aiRank == null; }).map(function (p) { return p.q; });
+    var presenceText;
+    if (Q === 0) presenceText = '';
+    else if (presentCount === Q) presenceText = 'Présent dans toutes vos questions, mesuré sur ' + providerLabel + '.';
+    else if (presentCount === 0) presenceText = 'Absent des réponses IA sur vos ' + Q + ' questions.';
+    else presenceText = 'Absent sur : ' + absentQ.slice(0, 2).map(function (x) { return '« ' + x + ' »'; }).join(', ') + '.';
+
+    /* card 2 - one honest next step */
+    var action;
+    var firstAbsent = perQ.filter(function (p) { return p.aiRank == null; })[0];
+    if (firstAbsent) {
+      var who = whoTakes(firstAbsent.q, ranking, focusName, landscape);
+      action = 'Gagner « ' + firstAbsent.q + ' », la question où vous n\'apparaissez pas encore' + (who ? (', ' + who + ' y prend la réponse') : '') + '.';
+    } else if (rival && verdict.kind === 'overlap') {
+      action = 'L\'écart avec ' + rival.brand + ' se joue à quelques citations. Gagner une question de plus suffit à le trancher.';
+    } else if (rival && verdict.kind === 'behind') {
+      action = 'Combler le retard sur ' + rival.brand + ' : viser les questions où il passe devant.';
+    } else if (rival) {
+      action = 'Tenir l\'avance sur ' + rival.brand + ' en surveillant la mesure dans le temps.';
+    } else {
+      action = 'Surveiller la mesure dans le temps pour voir la position bouger.';
+    }
+
+    return {
+      verdictTitle: verdict.title, verdictColor: verdict.color, verdictText: verdict.text,
+      questions: q3, ticks: ticks,
+      presenceBig: presentCount + ' / ' + Q, presenceColor: presColor, presenceText: presenceText,
+      action: action
+    };
   }
 
   /* ============================ renderVals() ============================ */
+  /* Single source of truth. Reads currentResult (the real audit) when present,
+     else returns a blank/idle view (no fake brackets, no fake numbers). */
   function renderVals() {
     var st = state;
-    var market = MARKETS[st.focus];
-    var cardData = CARDS[st.focus];
-    var sorted = market.rows.slice().sort(function (a, b) { return b.s - a.s; });
+    var R = currentResult;
+    var haveResult = !!(R && R.rows && R.rows.length);
     var zspan = ZHI - ZLO;
-    var belowIdx = 0;
-    var axisBrands = sorted.map(function (r, i) {
-      var isFocus = r.n === st.focus;
-      var cState = clusterState(sorted, i);
-      var level = 0;
-      if (!isFocus) { belowIdx += 1; level = belowIdx; }
-      var bracketColor = isFocus ? BRASS : cState === 'behind' ? '#7C5240' : '#8A7D68';
-      return {
-        key: r.n, name: r.n,
-        focus: isFocus, notFocus: !isFocus,
-        loPct: ((r.s - r.m - ZLO) / zspan * 100).toFixed(2),
-        wPct: ((2 * r.m) / zspan * 100).toFixed(2),
-        midPct: ((r.s - ZLO) / zspan * 100).toFixed(2),
-        bracketColor: bracketColor,
-        nameColor: isFocus ? '#E8DFD2' : cState === 'behind' ? '#6E6250' : '#9A8D78',
-        scoreColor: isFocus ? BRASS : cState === 'behind' ? '#6E6250' : '#A99C88',
-        subColor: cState === 'behind' ? '#55483A' : '#8A7D68',
-        scoreDisplay: r.s,
-        rangeText: 'entre ' + (r.s - r.m) + ' et ' + (r.s + r.m),
-        showRange: isFocus,
-        leaderTop: isFocus ? 'calc(50% - 22px)' : 'calc(50% + 6px)',
-        leaderH: isFocus ? 16 : level === 1 ? 12 : 30,
-        labelPos: isFocus ? 'bottom:calc(50% + 24px)' : level === 1 ? 'top:calc(50% + 20px)' : 'top:calc(50% + 40px)'
-      };
-    });
-    var l = sorted[0], s2 = sorted[1];
-    var proven = (l.s - l.m) > (s2.s + s2.m);
-    var region;
-    if (proven) {
-      var a = s2.s + s2.m, b = l.s - l.m;
-      region = {
-        leftPct: ((a - ZLO) / zspan * 100).toFixed(2),
-        widthPct: ((b - a) / zspan * 100).toFixed(2),
-        fill: 'rgba(147,160,110,0.08)', borderColor: 'rgba(147,160,110,0.6)', borderStyle: 'dashed'
-      };
-    } else {
-      var a2 = Math.max(l.s - l.m, s2.s - s2.m), b2 = Math.min(l.s + l.m, s2.s + s2.m);
-      region = {
-        leftPct: ((a2 - ZLO) / zspan * 100).toFixed(2),
-        widthPct: ((b2 - a2) / zspan * 100).toFixed(2),
-        fill: 'rgba(176,116,82,0.14)', borderColor: 'rgba(176,116,82,0.7)', borderStyle: 'solid'
-      };
+
+    /* ---- axis brackets + advantage/overlap band (empty until a real result) ---- */
+    var axisBrands = [];
+    var region = { leftPct: '50.00', widthPct: '0.00', fill: 'transparent', borderColor: 'transparent', borderStyle: 'solid' };
+    if (haveResult) {
+      var sorted = R.rows.slice().sort(function (a, b) { return b.s - a.s; });
+      var belowIdx = 0;
+      axisBrands = sorted.map(function (r, i) {
+        var isFocus = r.n === R.focusName;
+        var cState = clusterState(sorted, i);
+        var level = 0;
+        if (!isFocus) { belowIdx += 1; level = belowIdx; }
+        var bracketColor = isFocus ? BRASS : cState === 'behind' ? '#7C5240' : '#8A7D68';
+        /* clamp to the visible 0..100 so an out-of-window real score never
+           renders a negative-width or off-axis bracket; the axis spans 0..100. */
+        var lo = Math.max(0, Math.min(100, (r.s - r.m - ZLO) / zspan * 100));
+        var hi = Math.max(0, Math.min(100, (r.s + r.m - ZLO) / zspan * 100));
+        return {
+          key: r.n, name: r.n,
+          focus: isFocus, notFocus: !isFocus,
+          loPct: lo.toFixed(2),
+          wPct: Math.max(0, hi - lo).toFixed(2),
+          midPct: Math.max(0, Math.min(100, (r.s - ZLO) / zspan * 100)).toFixed(2),
+          bracketColor: bracketColor,
+          nameColor: isFocus ? '#E8DFD2' : cState === 'behind' ? '#6E6250' : '#9A8D78',
+          scoreColor: isFocus ? BRASS : cState === 'behind' ? '#6E6250' : '#A99C88',
+          subColor: cState === 'behind' ? '#55483A' : '#8A7D68',
+          scoreDisplay: r.s,
+          rangeText: 'entre ' + Math.max(0, r.s - r.m) + ' et ' + Math.min(100, r.s + r.m),
+          showRange: isFocus,
+          leaderTop: isFocus ? 'calc(50% - 22px)' : 'calc(50% + 6px)',
+          leaderH: isFocus ? 16 : level === 1 ? 12 : 30,
+          labelPos: isFocus ? 'bottom:calc(50% + 24px)' : level === 1 ? 'top:calc(50% + 20px)' : 'top:calc(50% + 40px)'
+        };
+      });
+      if (sorted.length >= 2) {
+        var l = sorted[0], s2 = sorted[1];
+        var proven = (l.s - l.m) > (s2.s + s2.m);
+        region = proven
+          ? regionBox(s2.s + s2.m, l.s - l.m, 'rgba(147,160,110,0.08)', 'rgba(147,160,110,0.6)', 'dashed')
+          : regionBox(Math.max(l.s - l.m, s2.s - s2.m), Math.min(l.s + l.m, s2.s + s2.m), 'rgba(176,116,82,0.14)', 'rgba(176,116,82,0.7)', 'solid');
+      }
     }
-    var brands = Object.keys(MARKETS).map(function (key) {
-      return {
-        key: key, name: key,
-        run: function () { runMeasure(key); },
-        border: key === st.focus ? '#8A7D68' : '#3A3128',
-        color: key === st.focus ? '#E8DFD2' : '#8A7D68'
-      };
-    });
-    var ticks = MODELS.map(function (name, i) {
-      var h = cardData.hits[i];
+
+    /* ---- example quick-pick chips (each runs a REAL audit) ---- */
+    var brands = EXAMPLES.map(function (name) {
       return {
         key: name, name: name,
-        bg: h === 0 ? 'transparent' : h >= 24 ? 'rgba(147,160,110,0.85)' : 'rgba(147,160,110,0.32)',
-        border: h === 0 ? 'rgba(176,116,82,0.6)' : 'transparent'
+        run: function () { runMeasure(name); },
+        border: name === st.focus ? '#8A7D68' : '#3A3128',
+        color: name === st.focus ? '#E8DFD2' : '#8A7D68'
       };
     });
-    var toneColor = function (t) { return t === 'up' ? SAGE : t === 'down' ? SIENNA : '#A99C88'; };
-    var card = {};
-    for (var kk in cardData) card[kk] = cardData[kk];
-    card.ticks = ticks;
-    card.questions = cardData.questions.map(function (q, i) {
-      return { key: 'q' + i, q: q.q, status: q.status, statusColor: toneColor(q.tone), dot: toneColor(q.tone) };
-    });
-    var shareData = SHARE[st.focus];
-    var focusShareEntry = shareData.find(function (x) { return x.n === st.focus; }) || shareData[0];
-    var focusShare = focusShareEntry.v;
-    var shareSegs = shareData.map(function (x, i) {
-      return {
-        key: x.n, pct: x.v,
-        color: x.n === st.focus ? BRASS : 'rgba(216,205,187,' + (0.30 - i * 0.06).toFixed(2) + ')',
-        title: x.n + ' : ' + x.v + '% des citations du panel'
-      };
-    });
-    var passCounter = st.measuring ? st.passCount + ' / 480 réponses' : '480 réponses comptées';
-    var transpModels = MODELS.map(function (m, i) { return { key: m, name: m, short: MODELS_SHORT[i] }; });
-    var tq = TRANSP[st.focus];
-    var transpRows = tq.questions.map(function (q, qi) {
-      return {
-        key: 'trq' + qi, q: q,
-        cells: MODELS.map(function (mn, mi) {
-          var c = Math.max(0, Math.min(8, Math.round(8 * (cardData.hits[mi] / 40) * tq.weights[qi])));
-          return {
-            key: mn, count: c, label: c === 0 ? '·' : '' + c,
-            bg: c === 0 ? 'transparent' : c >= 4 ? 'rgba(147,160,110,0.7)' : 'rgba(147,160,110,0.28)',
-            border: c === 0 ? 'rgba(176,116,82,0.55)' : 'transparent',
-            textColor: c === 0 ? '#7C5240' : c >= 4 ? '#141009' : '#D8CDBB',
-            title: mn + ' : cité ' + c + ' fois sur 8'
-          };
-        })
-      };
-    });
+
+    /* ---- share of voice (focus entry name === d.brand) ---- */
+    var shareSegs = [], focusShare = 0, focusName = st.focus;
+    if (haveResult) {
+      focusName = R.focusName;
+      var fe = R.share.find(function (x) { return x.n === R.focusName; }) || R.share[0];
+      focusShare = fe ? fe.v : 0;
+      shareSegs = R.share.map(function (x, i) {
+        return {
+          key: x.n, pct: x.v,
+          color: x.n === R.focusName ? BRASS : 'rgba(216,205,187,' + Math.max(0.06, 0.30 - i * 0.06).toFixed(2) + ')',
+          title: x.n + ' : ' + Math.round(x.v) + '% des citations du panel'
+        };
+      });
+    }
+
+    var card = haveResult ? R.cards : BLANK_CARD;
+
+    /* ---- pass counter: real total once settled, indeterminate while measuring ---- */
+    var passCounter;
+    if (st.settled && haveResult) passCounter = R.passTotal + ' réponses lues';
+    else if (st.measuring) passCounter = 'mesure en cours';
+    else passCounter = 'en attente';
+
+    var revealed = st.settled && haveResult;
+    var contentSig = revealed ? ('R|' + R.sig) : ((st.measuring ? 'M|' : 'I|') + st.focus);
+
     return {
-      measuring: st.measuring, settled: st.settled,
+      measuring: st.measuring, settled: st.settled, haveResult: haveResult, contentSig: contentSig,
       measuringOverlayOp: st.measuring ? 1 : 0,
-      verdictOp: st.settled ? 1 : 0,
+      verdictOp: revealed ? 1 : 0,
       verdictTy: st.settled ? 0 : 14,
-      proofOp: st.measuring ? 0.5 : 1,
-      revealOp: st.settled ? 1 : 0,
+      proofOp: revealed ? 1 : 0,
+      revealOp: revealed ? 1 : 0,
       revealTy: st.settled ? 0 : 14,
       passColor: st.measuring ? '#C6A15B' : '#8A7D68',
       inputValue: st.inputValue,
       hasUnknown: !!st.unknownMsg, unknownMsg: st.unknownMsg,
       brands: brands, axisBrands: axisBrands, region: region, card: card,
-      shareSegs: shareSegs, focusShare: focusShare, passCounter: passCounter,
-      focusName: st.focus, transpModels: transpModels, transpRows: transpRows
+      shareSegs: shareSegs, focusShare: focusShare, passCounter: passCounter, focusName: focusName,
+      transpQ: haveResult ? R.perQ : [], providerLabel: haveResult ? R.providerLabel : 'l\'IA',
+      runN: haveResult ? R.n : 0, nQueries: haveResult ? R.nQueries : 0
     };
   }
 
@@ -789,8 +1002,8 @@
       html += '<div title="' + esc(sg.title) + '" style="width:' + sg.pct + '%;background:' + sg.color + ';transition:width 0.6s cubic-bezier(0.2,0.8,0.2,1),background 0.4s;"></div>';
     }
     if (shareSegsEl) shareSegsEl.innerHTML = html;
-    if (sharePctEl) sharePctEl.textContent = v.focusShare + '%';
-    if (shareNameEl) shareNameEl.textContent = 'des citations du panel vont à ' + v.focusName;
+    if (sharePctEl) sharePctEl.textContent = (v.haveResult ? Math.round(v.focusShare) : 0) + '%';
+    if (shareNameEl) shareNameEl.textContent = v.haveResult ? ('des citations du panel vont à ' + v.focusName) : '';
   }
 
   function renderVerdict(card) {
@@ -812,14 +1025,14 @@
       '<div style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">ce que les gens demandent</div>' +
       '<div style="display:flex;flex-direction:column;gap:6px;">' + qh + '</div>';
 
-    /* card 1 - "présence dans les 12 IA" (label is a tooltip trigger) */
+    /* card 1 - "présence dans vos questions" (label is a tooltip trigger) */
     var th = '';
     for (var j = 0; j < card.ticks.length; j++) {
       var t = card.ticks[j];
-      th += '<div title="' + esc(t.name) + '" style="width:11px;height:7px;background:' + t.bg + ';border:1px solid ' + t.border + ';box-sizing:border-box;"></div>';
+      th += '<div style="width:11px;height:7px;background:' + t.bg + ';border:1px solid ' + t.border + ';box-sizing:border-box;"></div>';
     }
     cardEls[1].innerHTML =
-      '<button data-tip="presence" class="ndl-tip-text" aria-label="présence dans les 12 IA, en savoir plus" style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;cursor:help;background:none;border:none;padding:0;font-family:inherit;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;border-bottom:1px dotted #3A3128;">présence dans les 12 IA<span style="display:inline-flex;width:12px;height:12px;border:1px solid #3A3128;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>' +
+      '<button data-tip="presence" class="ndl-tip-text" aria-label="présence dans vos questions, en savoir plus" style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;cursor:help;background:none;border:none;padding:0;font-family:inherit;font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;border-bottom:1px dotted #3A3128;">présence dans vos questions<span style="display:inline-flex;width:12px;height:12px;border:1px solid #3A3128;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>' +
       '<div style="display:flex;align-items:baseline;gap:9px;">' +
         '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(20px,2vw,30px);line-height:1;color:' + card.presenceColor + ';font-variant-numeric:tabular-nums;">' + esc(card.presenceBig) + '</span>' +
         '<div style="display:flex;gap:3px;">' + th + '</div>' +
@@ -876,13 +1089,20 @@
 
     renderAxisBrands(v.axisBrands);
 
-    /* brands + card + verdict + share content only depend on focus -> rebuild on focus change */
-    if (lastFocusRendered !== state.focus) {
+    /* quick-pick chips only reflect which example is focused -> rebuild on focus change */
+    if (lastChipFocus !== state.focus) {
       renderBrands(v.brands);
+      lastChipFocus = state.focus;
+    }
+
+    /* verdict + cards + share depend on the real result (or the loading/idle
+       phase) -> rebuild only when that signature changes, so the ~ticking during
+       loading never re-writes innerHTML needlessly. */
+    if (lastContentSig !== v.contentSig) {
       renderCards(v.card);
       renderVerdict(v.card);
       renderShare(v);
-      lastFocusRendered = state.focus;
+      lastContentSig = v.contentSig;
     }
 
     /* tooltip + drawer (mount/unmount only when their state changes) */

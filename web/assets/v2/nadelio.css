@@ -87,8 +87,8 @@ input{outline:none;}
 /* ---- responsive mobile (desktop >=860px stays identical) ----
    Ported from the v5 source <style>: below ~860px the 2-col body
    collapses to one column and the 3-up dock reflows to one column.
-   Added: a mobile-only order flip so the verdict hero (which lives in
-   the proof column) is the first block read once the columns stack.
+   The stacked order puts the console (brand input) first so a mobile
+   visitor can type immediately, then the verdict and proof read below.
    Desktop DOM and layout are left byte-for-byte as v5. */
 @media (max-width:860px){
   /* let the page grow taller than the viewport and scroll */
@@ -96,13 +96,22 @@ input{outline:none;}
   /* stack the two body columns */
   [data-nadelio-body]{grid-template-columns:1fr !important;gap:20px !important;}
   /* console drops its right divider, gains a bottom one, sits second */
-  [data-nadelio-console]{border-right:none !important;border-bottom:1px solid #2A241C;padding-right:0 !important;padding-bottom:18px !important;justify-content:flex-start;min-height:0;order:2;}
+  [data-nadelio-console]{border-right:none !important;border-bottom:1px solid #2A241C;padding-right:0 !important;padding-bottom:18px !important;justify-content:flex-start;min-height:0;order:1;}
   /* the 3-up dock reflows to a single column */
   [data-nadelio-dock]{grid-template-columns:1fr !important;}
   /* keep the WebGL instrument tall enough once stacked */
   [data-nadelio-proof]{min-height:200px !important;}
-  /* verdict hero leads: the proof column stacks above the console */
-  .ndl-right{order:1;}
+  /* the verdict/proof column reads below the input once stacked */
+  .ndl-right{order:2;}
+}
+
+/* ---- small phones (<=560px): drop the middle tagline and the header
+   badge so the wordmark and the transparency link own an uncramped top
+   row, and give the stacked WebGL instrument a bit more height ---- */
+@media (max-width:560px){
+  .ndl-tagline{display:none !important;}
+  .ndl-hbadge{display:none !important;}
+  [data-nadelio-proof]{min-height:220px !important;}
 }
 
 /* comfortable touch targets on coarse pointers (>=44px) */

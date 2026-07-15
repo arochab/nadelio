@@ -13,9 +13,9 @@
     <div id="ndl-mount" style="position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0.62;"></div>
     <header style="position:relative;z-index:2;display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-bottom:1px solid #2A241C;padding-bottom:11px;">
       <div style="font-family:'Archivo Black','Arial Black',sans-serif;font-size:16px;letter-spacing:0.1em;">NADELIO</div>
-      <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">Compte combien de fois les IA citent votre marque. Sans gonfler les chiffres.</div>
+      <div class="ndl-tagline" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">Compte combien de fois les IA citent votre marque. Sans gonfler les chiffres.</div>
       <div style="display:flex;align-items:baseline;gap:14px;white-space:nowrap;flex:none;">
-        <span style="font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#6E6250;">12 IA, mesure continue</span>
+        <span class="ndl-hbadge" style="font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#6E6250;">Google + IA, mesure bornée</span>
         <button id="ndl-transp-btn" class="ndl-transp" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding:0 0 2px;">transparence &rsaquo;</button>
       </div>
     </header>
@@ -39,9 +39,9 @@
         <div style="display:flex;flex-direction:column;gap:9px;border-top:1px solid #2A241C;padding-top:clamp(12px,1.8vh,18px);">
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
             <span style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">comment on mesure</span>
-            <span id="ndl-passcounter" style="font-family:'IBM Plex Mono',Menlo,monospace;font-size:10px;letter-spacing:0.06em;color:#C6A15B;font-variant-numeric:tabular-nums;">0 / 480 réponses</span>
+            <span id="ndl-passcounter" style="font-family:'IBM Plex Mono',Menlo,monospace;font-size:10px;letter-spacing:0.06em;color:#C6A15B;font-variant-numeric:tabular-nums;">en attente</span>
           </div>
-          <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#A99C88;max-width:44ch;">On pose de vraies questions à 12 IA, quarante fois chacune. Les réponses varient un peu, alors on donne une fourchette plutôt qu'un chiffre exact.</div>
+          <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#A99C88;max-width:44ch;">On pose vos questions à Google et à une IA, plusieurs fois chacune. Les réponses varient un peu, alors on donne une fourchette plutôt qu'un chiffre exact.</div>
         </div>
       </div>
       <div class="ndl-right" style="position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;gap:clamp(8px,1.4vh,16px);">
@@ -68,15 +68,15 @@
           <div id="ndl-axisarea" style="position:absolute;left:0;right:0;top:52px;bottom:42px;">
             <div id="ndl-axis" style="position:absolute;left:0;right:0;top:50%;height:1px;background:#3A3128;"></div>
             <div style="position:absolute;left:0.0%;top:calc(50% - 4px);width:1px;height:9px;background:#2E2820;"></div>
-            <div style="position:absolute;left:0.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">50</div>
+            <div style="position:absolute;left:0.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">0</div>
             <div style="position:absolute;left:25.0%;top:calc(50% - 4px);width:1px;height:9px;background:#2E2820;"></div>
-            <div style="position:absolute;left:25.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">60</div>
+            <div style="position:absolute;left:25.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">25</div>
             <div style="position:absolute;left:50.0%;top:calc(50% - 4px);width:1px;height:9px;background:#2E2820;"></div>
-            <div style="position:absolute;left:50.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">70</div>
+            <div style="position:absolute;left:50.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">50</div>
             <div style="position:absolute;left:75.0%;top:calc(50% - 4px);width:1px;height:9px;background:#2E2820;"></div>
-            <div style="position:absolute;left:75.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">80</div>
+            <div style="position:absolute;left:75.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">75</div>
             <div style="position:absolute;left:100.0%;top:calc(50% - 4px);width:1px;height:9px;background:#2E2820;"></div>
-            <div style="position:absolute;left:100.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">90</div>
+            <div style="position:absolute;left:100.0%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">100</div>
             <div style="position:absolute;left:5.00%;top:calc(50% - 2px);width:1px;height:5px;background:#2A241C;"></div>
             <div style="position:absolute;left:10.00%;top:calc(50% - 2px);width:1px;height:5px;background:#2A241C;"></div>
             <div style="position:absolute;left:15.00%;top:calc(50% - 2px);width:1px;height:5px;background:#2A241C;"></div>
@@ -96,19 +96,7 @@
             <div id="ndl-region" style="position:absolute;left:67.50%;width:5.00%;top:calc(50% - 14px);height:28px;background:rgba(147,160,110,0.08);border-left:1px dashed rgba(147,160,110,0.6);border-right:1px dashed rgba(147,160,110,0.6);box-sizing:border-box;transition:left 0.7s cubic-bezier(0.2,0.8,0.2,1),width 0.7s cubic-bezier(0.2,0.8,0.2,1);"></div>
           </div>
           <div style="position:absolute;left:0;right:0;bottom:0;height:34px;">
-            <div style="position:absolute;left:0;right:0;top:7px;height:1px;background:#2A241C;"></div>
-            <div style="position:absolute;left:50%;width:40%;top:6px;height:3px;background:#8A7D68;"></div>
-            <div style="position:absolute;left:0%;top:4px;width:1px;height:7px;background:#3A3128;"></div>
-            <div style="position:absolute;left:0%;top:14px;transform:translateX(0);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">0</div>
-            <div style="position:absolute;left:25%;top:4px;width:1px;height:7px;background:#3A3128;"></div>
-            <div style="position:absolute;left:25%;top:14px;transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">25</div>
-            <div style="position:absolute;left:50%;top:4px;width:1px;height:7px;background:#3A3128;"></div>
-            <div style="position:absolute;left:50%;top:14px;transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">50</div>
-            <div style="position:absolute;left:75%;top:4px;width:1px;height:7px;background:#3A3128;"></div>
-            <div style="position:absolute;left:75%;top:14px;transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">75</div>
-            <div style="position:absolute;left:100%;top:4px;width:1px;height:7px;background:#3A3128;"></div>
-            <div style="position:absolute;left:100%;top:14px;transform:translateX(-100%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">100</div>
-            <button data-tip="scale" class="ndl-tip-text" aria-label="échelle de mesure, en savoir plus" style="position:absolute;right:0;top:20px;display:inline-flex;align-items:center;gap:5px;cursor:help;background:none;border:none;padding:0;font-family:'IBM Plex Mono',Menlo,monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#6E6250;">vue 50 à 90<span style="display:inline-flex;width:12px;height:12px;border:1px solid #3A3128;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>
+            <button data-tip="scale" class="ndl-tip-text" aria-label="échelle de mesure, en savoir plus" style="position:absolute;right:0;top:20px;display:inline-flex;align-items:center;gap:5px;cursor:help;background:none;border:none;padding:0;font-family:'IBM Plex Mono',Menlo,monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#6E6250;">échelle 0 à 100<span style="display:inline-flex;width:12px;height:12px;border:1px solid #3A3128;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>
           </div>
         </div>
       </div>
