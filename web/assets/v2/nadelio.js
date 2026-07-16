@@ -136,6 +136,45 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+
+  /* ---------------- first-party funnel events ----------------
+     Same contract as index.html: POST /api/event with an ALLOWLISTED name.
+     app.py's _EVENT_ALLOWLIST rejects anything else with a 400, so the map
+     below is the whole permitted vocabulary and nothing dynamic is ever sent.
+     sendBeacon so the event survives the Stripe redirect; fetch keepalive as
+     the fallback. Fail-open and silent: analytics must never break the page
+     or block a measurement. This is separate from /assets/v2/track.js, which
+     is the generic click tracker posting to /api/track. */
+  var EVENT_ALLOWED = {
+    input_submitted: 1, result_seen: 1, sample_seen: 1, plan_shown: 1,
+    deep_click: 1, monitor_click: 1, checkout_started: 1
+  };
+  function track(name, extra) {
+    try {
+      if (!EVENT_ALLOWED[name]) return;
+      /* An explicit brand wins: at input_submitted time currentResult still
+         holds the PREVIOUS audit, so attributing the event to it would credit
+         the wrong company. */
+      var brand = (extra && extra.brand) ? String(extra.brand) : '';
+      if (!brand) {
+        try { brand = String((currentResult && currentResult.focusName) || (state && state.inputValue) || ''); } catch (e) {}
+      }
+      var payload = { name: name, brand: brand.slice(0, 120) };
+      var mk = '';
+      try { mk = String((currentResult && currentResult.market) || ''); } catch (e) {}
+      if (mk) payload.market = mk.slice(0, 60);
+      if (extra && extra.tier) payload.tier = String(extra.tier).slice(0, 40);
+      var body = JSON.stringify(payload);
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/event', new Blob([body], { type: 'application/json' }));
+      } else {
+        fetch('/api/event', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: body, keepalive: true
+        }).catch(function () {});
+      }
+    } catch (e) {}
+  }
   /* Only ever emit http(s) links built from backend-supplied strings (SERP /
      evidence sources are third-party content Nadelio did not author) - never a
      javascript: or data: URL. Returns '' (renders no link) for anything else. */
@@ -524,6 +563,13 @@
     /* the deep dossier (evidence, remediation report, geo score) lives below
        the fixed-height hero, only for a tier==='deep' result; hidden otherwise. */
     renderBelowFold();
+    /* Funnel: a result actually rendered. plan_shown mirrors index.html, where
+       it fires when a NON-deep result renders and therefore carries the offer
+       (a deep result has already been paid for, so there is no plan to show). */
+    if (currentResult) {
+      track('result_seen', { tier: currentResult.tier || '' });
+      if (currentResult.tier !== 'deep') track('plan_shown', { tier: currentResult.tier || '' });
+    }
     /* The field and the insight only render on this reveal, and they push the
        axis down. A ResizeObserver on the axis does NOT fire on a pure position
        change, so the cloud would stay projected on the axis' OLD position and
@@ -841,6 +887,10 @@
       return;
     }
     var market = (currentResult && currentResult.market) || '';
+    /* Funnel: the visitor asked for the paid product. Fired here rather than on
+       the raw click so an unconfirmed identity or a missing brand (both return
+       above) never counts as intent to buy. */
+    track('deep_click', { brand: brand, tier: 'deep' });
     deepCtaLock(true);
     deepMsg('Ouverture du paiement sécurisé...', false);
     fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: brand, hint: '', market: market }) })
@@ -854,6 +904,9 @@
           deepCtaLock(false);
           return;
         }
+        /* The last and most valuable step before the money: Stripe is open and
+           we are handing the visitor over. sendBeacon survives the navigation. */
+        track('checkout_started', { brand: brand, tier: 'deep' });
         window.location = d.url;
       })
       .catch(function () {
@@ -1230,6 +1283,9 @@
     if (state.measuring) return;
     var name = (rawName || '').trim();
     if (!name) { setState({ unknownMsg: 'Tapez le nom d\'une marque.' }); return; }
+    /* The visitor committed to a real measurement. Brand passed explicitly:
+       currentResult still holds the previous audit at this point. */
+    track('input_submitted', { brand: name });
     resetOverlayContent();
     var gen = ++measureGen;
     currentResult = null;
@@ -2148,6 +2204,22 @@
     inputEl.addEventListener('input', function (ev) { setState({ inputValue: ev.target.value, unknownMsg: '' }); });
     inputEl.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') runMeasure(ev.target.value); });
     runBtn.addEventListener('click', function () { runMeasure(state.inputValue || state.focus); });
+    /* Funnel: the monitoring links, wherever they are rendered (dock card and
+       deep dossier). Delegated because those nodes are rebuilt on every render.
+       Only ALLOWLISTED names are mapped: deep_click is deliberately absent (it
+       is fired inside startCheckout, after the identity and brand guards, so a
+       raw click on a CTA that then refuses to proceed is not counted as intent
+       to buy), and settlement_click has no allowlisted counterpart in app.py so
+       it stays with the generic /api/track click logger. */
+    var EV_MAP = { monitor_click: 'monitor_click', monitor_click_deep: 'monitor_click' };
+    document.addEventListener('click', function (ev) {
+      try {
+        var el = ev.target && ev.target.closest ? ev.target.closest('[data-ev]') : null;
+        if (!el) return;
+        var mapped = EV_MAP[el.getAttribute('data-ev')];
+        if (mapped) track(mapped);
+      } catch (e) {}
+    }, true);
     if (transpBtn) transpBtn.addEventListener('click', openDrawer);
 
     /* first render populates every dynamic region before first paint */
