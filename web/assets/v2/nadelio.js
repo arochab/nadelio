@@ -71,7 +71,7 @@
       verdictEl, verdictTitleEl, verdictTextEl,
       insightEl, insightTextEl, fieldEl, ticksEl, scaleLabelEl,
       passCounterEl, unknownEl, runBtn, brandsHost, transpBtn, cardEls = [],
-      subBannerEl, belowEl, deepDocEl;
+      subBannerEl, belowEl, deepDocEl, idleOffersEl;
   /* the overlay's original "le nuage converge / lecture en cours" markup,
      captured once at init so the Stripe-return paid flow (which borrows this
      same node) can hand it back exactly as it found it. */
@@ -826,16 +826,23 @@
      subject is the measured brand (state.focus / the real result), the market is
      the audit's own market label. Transparent, non-manipulative: everything free
      is already shown; this only goes deeper. */
+  /* Multiple Deep Audit CTAs can now exist on the page at once (the idle
+     offers strip AND the post-result dock card, never both visible at the
+     same time - see offersVisible in renderVals). Both share these two
+     classes, so a single deepMsg/deepCtaLock call keeps whichever one is on
+     screen in sync, exactly like index.html's document.querySelectorAll
+     over [data-deepmsg]/[data-deepcta]. */
   function deepMsg(text, isError) {
-    var el = cardEls[2] ? cardEls[2].querySelector('.ndl-deep-msg') : null;
-    if (!el) return;
-    el.textContent = text || '';
-    el.style.display = text ? 'block' : 'none';
-    el.style.color = isError ? '#B07452' : '#8A7D68';
+    var els = document.querySelectorAll('.ndl-deep-msg');
+    for (var i = 0; i < els.length; i++) {
+      els[i].textContent = text || '';
+      els[i].style.display = text ? 'block' : 'none';
+      els[i].style.color = isError ? '#B07452' : '#8A7D68';
+    }
   }
   function deepCtaLock(locked) {
-    var el = cardEls[2] ? cardEls[2].querySelector('.ndl-deep-cta') : null;
-    if (el) el.style.pointerEvents = locked ? 'none' : '';
+    var els = document.querySelectorAll('.ndl-deep-cta');
+    for (var i = 0; i < els.length; i++) els[i].style.pointerEvents = locked ? 'none' : '';
   }
   /* Guard-rail ported from index.html's resolver: a bare name with no web
      evidence can resolve to a famous homonym (Payflows -> Stripe, Toucan ->
@@ -878,6 +885,12 @@
     });
   }
   function startCheckout() {
+    /* Never let the idle offers CTA (reachable before any measurement, see
+       the idle offers strip in v2.html) or a stray click race a measurement
+       already in flight: state.measuring covers both a free run and a paid
+       Deep Audit resume (runDeepMeasure), and starting checkout mid-run would
+       read a brand that is about to change under it. */
+    if (state.measuring) return;
     var brand = (currentResult && currentResult.focusName) || state.focus || (state.inputValue || '').trim();
     if (!brand) { if (inputEl) inputEl.focus(); deepMsg('Lancez d\'abord un audit, le Deep Audit a besoin d\'une marque.', true); return; }
     /* Never let a low-confidence identification reach checkout unconfirmed:
@@ -944,6 +957,19 @@
         '</div>'
       : '';
 
+    /* The paid session is consumed server side the moment this dossier
+       renders (see reveal(): clearPendingDeep() fires exactly then), so a
+       reload or a closed tab afterwards can never re-render it - there is no
+       server copy left to fetch. This is the customer's only way to keep
+       what they paid for, so it is offered here, before the recurring
+       upsells, not buried after them. */
+    var downloadBlock =
+      '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #2A241C;">' +
+        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">garder ce dossier</div>' +
+        '<button class="ndl-dl-btn" id="ndl-download-btn" style="cursor:pointer;border:1px solid #3A3128;background:#171310;color:#E8DFD2;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:9px 14px;align-self:flex-start;">T&eacute;l&eacute;charger le dossier (HTML)</button>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;line-height:1.4;color:#6E6250;max-width:32ch;">Ce paiement est unique&nbsp;: sans ce fichier, un rechargement de la page ne pourra plus le r&eacute;afficher.</div>' +
+      '</div>';
+
     var priceBlock =
       '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #2A241C;">' +
         '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">continuer la mesure</div>' +
@@ -1006,7 +1032,7 @@
         '</div>' +
         '<div class="ndl-deepgrid">' +
           '<div style="display:flex;flex-direction:column;gap:28px;min-width:0;">' + identityHtml + (identityHtml && reportHtml ? '<div style="border-top:1px solid #2A241C;"></div>' : '') + reportHtml + '</div>' +
-          '<div style="display:flex;flex-direction:column;gap:0;">' + scoreBlock + priceBlock + '</div>' +
+          '<div style="display:flex;flex-direction:column;gap:0;">' + scoreBlock + downloadBlock + priceBlock + '</div>' +
         '</div>' +
         '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#6E6250;border-top:1px solid #2A241C;padding-top:14px;">' + esc(footNote) + '</div>' +
       '</div>'
@@ -1025,8 +1051,111 @@
       if (deepDocEl) deepDocEl.innerHTML = '';
       return;
     }
-    if (deepDocEl) deepDocEl.innerHTML = renderDeepDocHTML(R);
+    if (deepDocEl) {
+      deepDocEl.innerHTML = renderDeepDocHTML(R);
+      var dlBtn = deepDocEl.querySelector('#ndl-download-btn');
+      if (dlBtn) dlBtn.addEventListener('click', downloadDossier);
+    }
     belowEl.style.display = 'block';
+  }
+
+  /* ============================ standalone dossier export (download) ============================ */
+  /* The paid session is consumed server side the instant the deep dossier
+     renders (reveal() clears the pending-deep marker exactly then, see
+     PENDING_DEEP_KEY above) - there is no server-side copy left afterwards,
+     so a closed tab or a reload loses the 79-euro deliverable for good. This
+     is the customer's own durable copy: a single self-contained HTML file,
+     no external asset, no CDN, no remote font (system font stack only, so it
+     opens and prints identically offline), inline styles throughout, and
+     nothing in it that was not actually measured. Ported from index.html's
+     downloadDossier(), rebuilt on v2's own result shape (buildResult's
+     output) rather than the raw /api/analyze body index.html reads off
+     window.__lastDeep. */
+  function downloadDossier() {
+    var R = currentResult;
+    if (!R || R.tier !== 'deep') return;
+    var brandName = R.focusName || 'marque';
+    var when = new Date().toISOString().slice(0, 10);
+    var geo = R.geo || {};
+    var score = R.geoScore != null ? R.geoScore : (geo.point != null ? Math.round(geo.point) : null);
+    var hw = geo.half_width;
+    var verdictTag = geo.verdict ? (VERDICT_WORD_FR[geo.verdict] || '') : '';
+    var offUrl = safeHttpUrl(R.officialUrl);
+
+    var fieldHtml = (R.fieldRows || []).map(function (f) {
+      var g = f.serpRank != null ? ('Google rang ' + f.serpRank) : 'absent de Google';
+      return '<tr' + (f.isFocus ? ' class="you"' : '') + '><td>' + esc(f.name) + (f.isFocus ? ' (vous)' : '') + '</td><td>' + esc(aiLabel(f.ai)) + '</td><td>' + esc(g) + '</td><td>' + Math.round(f.share) + '%</td></tr>';
+    }).join('');
+
+    var evHtml = (R.evidence || []).slice(0, 6).map(function (e) {
+      var bits = [];
+      if (e.site_name) bits.push('<b>' + esc(e.site_name) + '</b>');
+      if (e.title) bits.push(esc(e.title));
+      if (e.description) bits.push(esc(e.description));
+      var s = safeHttpUrl(e.source || e.link || '');
+      return '<li>' + bits.join(', ') + (s ? ', <a href="' + esc(s) + '">' + esc(shortHost(s)) + '</a>' : '') + '</li>';
+    }).join('');
+
+    var rep = R.report || {};
+    var bsHtml = (rep.blind_spots || []).map(function (b) {
+      var by = (b.dominated_by || []).map(function (x) { return esc(x); }).join(', ');
+      return '<li><b>' + esc(b.query) + '</b>' + (by ? ', dominé par ' + by : '') + '</li>';
+    }).join('');
+    var actHtml = (rep.actions || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('');
+    var qHtml = (R.matrix || []).map(function (m) { return '<li>« ' + esc(m.q) + ' »</li>'; }).join('');
+
+    var geoPm = hw != null ? (' <span style="font-size:22px;color:#8A8578;">&plusmn;' + hw + '</span>') : '';
+    var geoVerdict = verdictTag ? (' <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#4C7A5C;">' + esc(verdictTag) + '</span>') : '';
+    var geoNote = hw != null
+      ? ('Intervalle de confiance à 95 pour cent, sur ' + R.n + ' mesures IA.')
+      : 'Mesure unique, non bornée : pas assez de passages réussis pour calculer une marge.';
+    var footNote = 'Mesuré : ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + ', 1 IA (' + R.providerLabel + '), ' + R.n + ' passage' + (R.n > 1 ? 's' : '') + ' par question' + (R.market ? ', marché ' + R.market : '') + '.';
+
+    var doc = '<!doctype html><html lang="fr"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>Nadelio, Deep Audit ' + esc(brandName) + '</title><style>' +
+      ':root{--sage:#3D6B5C;--sage-signal:#4C8F72;--surface:#EDEBE4;--card:#FBFAF6;--ink:#191510;--line:#D9D6CC;--muted:#6E6C64;}' +
+      '*{box-sizing:border-box;}body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--surface);line-height:1.55;margin:0;padding:40px 20px;}' +
+      '.wrap{max-width:820px;margin:0 auto;}' +
+      '.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:32px;margin-bottom:20px;}' +
+      '.badge{display:inline-block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:rgba(61,107,92,.12);color:var(--sage);padding:5px 11px;border-radius:8px;margin-bottom:14px;}' +
+      'h1{font-size:28px;letter-spacing:-.01em;margin:0 0 6px;}h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;}' +
+      '.meta{font-size:13px;color:var(--muted);margin-bottom:18px;}' +
+      '.geo{font-family:ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:48px;font-weight:700;letter-spacing:-.02em;color:var(--sage);}' +
+      '.insight{background:rgba(61,107,92,.08);border-left:3px solid var(--sage-signal);padding:14px 16px;border-radius:0 10px 10px 0;margin:14px 0;}' +
+      'table{border-collapse:collapse;width:100%;font-size:13px;}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);}th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.05em;}td{font-variant-numeric:tabular-nums;}' +
+      'tr.you{background:rgba(61,107,92,.1);font-weight:600;}' +
+      'a{color:var(--sage);}ul,ol{padding-left:20px;}li{margin-bottom:6px;}' +
+      'footer{text-align:center;font-size:12px;color:var(--muted);margin-top:20px;}' +
+      '@media print{body{background:#fff;padding:0;}.card{border:none;}}' +
+      '</style></head><body><div class="wrap">' +
+      '<div class="card"><span class="badge">Nadelio, Deep Audit, sourcé</span>' +
+      '<h1>' + esc(brandName) + '</h1>' +
+      '<div class="meta">Généré le ' + esc(when) + (R.market ? ', marché ' + esc(R.market) : '') + '.</div>' +
+      (R.identifiedAs ? ('<h2>Identité vérifiée</h2><p>' + esc(R.identifiedAs) + '</p>' + (offUrl ? ('<p class="meta">Source officielle : <a href="' + esc(offUrl) + '">' + esc(shortHost(offUrl)) + '</a></p>') : '')) : '') +
+      (evHtml ? ('<h2>Preuve sourcée</h2><ul>' + evHtml + '</ul>') : '') +
+      '</div>' +
+      '<div class="card"><h2>Score de visibilité IA</h2><div class="geo">' + (score != null ? score : '-') + geoPm + '<span style="font-size:20px;color:var(--muted);">/100</span></div>' + geoVerdict +
+      '<p class="meta" style="margin-top:10px;">' + geoNote + '</p></div>' +
+      '<div class="card"><h2>Le champ mesuré</h2><table><thead><tr><th>Marque</th><th>En IA</th><th>Sur Google</th><th>Part de voix</th></tr></thead><tbody>' + fieldHtml + '</tbody></table></div>' +
+      (qHtml ? ('<div class="card"><h2>Questions posées</h2><ul>' + qHtml + '</ul></div>') : '') +
+      ((rep.verdict || bsHtml || actHtml) ? ('<div class="card"><h2>Rapport de remédiation</h2><p style="color:#4C7A5C;font-size:12px;">Recommandations générées par IA, fondées sur la mesure ci-dessus.</p>' +
+        (rep.verdict ? ('<div class="insight">' + esc(rep.verdict) + '</div>') : '') +
+        (bsHtml ? ('<h2 style="margin-top:16px;">Angles morts nommés</h2><ul>' + bsHtml + '</ul>') : '') +
+        (actHtml ? ('<h2 style="margin-top:16px;">Plan d\'action</h2><ol>' + actHtml + '</ol>') : '') + '</div>') : '') +
+      '<div class="card"><p class="meta" style="margin:0;">' + esc(footNote) + '</p></div>' +
+      '<footer>Nadelio, nadelio.com, ' + esc(when) + '</footer>' +
+      '</div></body></html>';
+
+    var blob = new Blob([doc], { type: 'text/html' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'nadelio-deep-audit-' + String(brandName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + when + '.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
   /* ============================ Stripe return (paid / sub) ============================ */
@@ -1879,8 +2008,18 @@
     var revealed = st.settled && haveResult;
     var contentSig = revealed ? ('R|' + R.sig) : ((st.measuring ? 'M|' : 'I|') + st.focus);
 
+    /* idle offers strip (Deep Audit / Monitoring / Settlement, present at
+       idle - see the hard requirement this page had NO route to money before
+       a result existed). Visible at idle and while measuring; hidden the
+       moment a result actually settles (the dock card, or the deep dossier's
+       own price block, then own the pitch - never two copies of the same
+       offer on screen), and hidden on any error/payError state (never pitch
+       payment while the visitor is stuck on a failure). */
+    var offersVisible = !revealed && !st.payError && !st.unknownMsg;
+
     return {
       measuring: st.measuring, settled: st.settled, haveResult: haveResult, contentSig: contentSig,
+      offersVisible: offersVisible,
       measuringOverlayOp: (st.measuring || st.payError) ? 1 : 0,
       verdictOp: revealed ? 1 : 0,
       verdictTy: st.settled ? 0 : 14,
@@ -2094,6 +2233,14 @@
     }
     if (inputEl) inputEl.readOnly = !!v.measuring;
 
+    /* idle offers strip: present at idle, dimmed (never fully disabled here -
+       see the `if (state.measuring) return;` guard in startCheckout, which is
+       the actual functional lock) while a measurement is in flight, hidden
+       once a result settles or on any error (see offersVisible above). */
+    if (idleOffersEl) idleOffersEl.style.display = v.offersVisible ? '' : 'none';
+    var deepCtaDim = document.querySelectorAll('.ndl-deep-cta');
+    for (var dci = 0; dci < deepCtaDim.length; dci++) deepCtaDim[dci].style.opacity = v.measuring ? '0.45' : '1';
+
     /* "lecture en cours" overlay (fades out on settle) */
     if (overlayEl) overlayEl.style.opacity = v.measuringOverlayOp;
 
@@ -2198,6 +2345,7 @@
     subBannerEl = document.getElementById('ndl-subbanner');
     belowEl = document.getElementById('ndl-below');
     deepDocEl = document.getElementById('ndl-deepdoc');
+    idleOffersEl = document.getElementById('ndl-offers');
     if (overlayEl) defaultOverlayHTML = overlayEl.innerHTML;
 
     /* handlers on persistent nodes (was onChange / onKeyDown / onClick) */
@@ -2221,6 +2369,11 @@
       } catch (e) {}
     }, true);
     if (transpBtn) transpBtn.addEventListener('click', openDrawer);
+    /* the idle offers strip's own Deep Audit CTA is a static, persistent node
+       (unlike the dock's, which is rebuilt on every renderCards) - bind it
+       once here, exactly like runBtn/transpBtn above. */
+    var idleDeepCta = document.getElementById('ndl-idle-deep-cta');
+    if (idleDeepCta) idleDeepCta.addEventListener('click', startCheckout);
 
     /* first render populates every dynamic region before first paint */
     render();

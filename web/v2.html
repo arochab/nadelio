@@ -95,6 +95,44 @@
       <div class="ndl-card" style="background:#171310;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;opacity:0;transform:translateY(14px);transition:opacity 0.55s cubic-bezier(0.2,0.8,0.2,1) 240ms,transform 0.55s cubic-bezier(0.2,0.8,0.2,1) 240ms;"></div>
     </div>
   </div>
+  <!-- Idle route to the money: present at idle AND while measuring (hidden
+       only once a result settles, since the dock card or the deep dossier
+       then own the pitch, and on any error/payError - see offersVisible in
+       nadelio.js). Nothing here claims anything about a visitor's brand:
+       nothing has been measured yet, so this sells the product itself. -->
+  <section id="ndl-offers" aria-label="Offres payantes" style="position:relative;z-index:1;max-width:960px;margin:0 auto;width:100%;padding:clamp(28px,5vh,52px) clamp(16px,3vw,40px) clamp(40px,6vh,68px);display:flex;flex-direction:column;gap:18px;border-top:1px solid #2A241C;">
+    <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">quand l'échantillon ne suffit plus</div>
+    <div class="ndl-offers-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#2A241C;border:1px solid #2A241C;">
+      <div style="background:#171310;padding:20px 22px;display:flex;flex-direction:column;gap:9px;">
+        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;color:#D8CDBB;">Deep Audit</div>
+        <div style="display:flex;align-items:baseline;gap:6px;">
+          <span style="font-family:'IBM Plex Mono',Menlo,monospace;font-weight:600;font-size:22px;color:#E8DFD2;font-variant-numeric:tabular-nums;">79&euro;</span>
+          <span style="font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6250;">une fois</span>
+        </div>
+        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#8A7D68;">5 questions, 8 passages chacune sur une IA, contre 2 questions et 3 passages en gratuit. Vos angles morts nommés face à des concurrents identifiés, et un plan d'action sourcé.</div>
+        <button id="ndl-idle-deep-cta" class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:10px 14px;align-self:flex-start;margin-top:4px;">Lancer un Deep Audit</button>
+        <div class="ndl-deep-msg" style="display:none;font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#8A7D68;"></div>
+      </div>
+      <div style="background:#171310;padding:20px 22px;display:flex;flex-direction:column;gap:9px;">
+        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;color:#D8CDBB;">Suivi dans le temps</div>
+        <div style="display:flex;align-items:baseline;gap:6px;">
+          <span style="font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6250;">dès</span>
+          <span style="font-family:'IBM Plex Mono',Menlo,monospace;font-weight:600;font-size:22px;color:#E8DFD2;font-variant-numeric:tabular-nums;">99&euro;</span>
+          <span style="font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6250;">/ mois</span>
+        </div>
+        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#8A7D68;">Le même score borné, mesuré chaque semaine. Vous êtes alerté quand un mouvement sort du bruit, jamais sur le bruit lui-même.</div>
+        <a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;align-self:flex-start;margin-top:4px;">Voir les trois offres</a>
+      </div>
+      <div style="background:#171310;padding:20px 22px;display:flex;flex-direction:column;gap:9px;">
+        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;color:#D8CDBB;">Règlement de performance</div>
+        <div style="display:flex;align-items:baseline;gap:6px;">
+          <span style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:13px;color:#E8DFD2;">forfait fixe</span>
+        </div>
+        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#8A7D68;">Jamais un pourcentage. Nadelio arbitre les contrats de performance entre marques et agences. Un gain ne compte que s'il sort de la bande à 95 pour cent.</div>
+        <a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;align-self:flex-start;margin-top:4px;">Comment ça marche</a>
+      </div>
+    </div>
+  </section>
   <div id="ndl-subbanner" role="status" aria-live="polite" style="display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:65;max-width:min(560px,92vw);background:#171310;border:1px solid #2A241C;border-left:2px solid #93A06E;padding:14px 34px 14px 18px;box-shadow:0 10px 34px rgba(0,0,0,0.55);"></div>
   <div id="ndl-below" style="position:relative;z-index:1;display:none;">
     <div id="ndl-deepdoc"></div>

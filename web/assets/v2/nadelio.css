@@ -90,6 +90,10 @@ input{outline:none;}
 .ndl-mon-link:hover{color:#C6A15B !important;border-bottom-color:#C6A15B !important;}
 .ndl-mon-link:focus{outline:2px solid #E8DFD2;outline-offset:3px;color:#C6A15B;}
 
+/* standalone dossier download button (deep dossier, "garder ce dossier") */
+.ndl-dl-btn:hover{border-color:#E8DFD2 !important;color:#FFF6E4 !important;}
+.ndl-dl-btn:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+
 /* Stripe return path: retry button (pay error) + subscription banner close */
 .ndl-pay-retry:hover{background:#FFF6E4 !important;}
 .ndl-pay-retry:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
@@ -119,6 +123,8 @@ input{outline:none;}
   [data-nadelio-console]{border-right:none !important;border-bottom:1px solid #2A241C;padding-right:0 !important;padding-bottom:18px !important;justify-content:flex-start;min-height:0;order:1;}
   /* the 3-up dock reflows to a single column */
   [data-nadelio-dock]{grid-template-columns:1fr !important;}
+  /* the idle offers strip (Deep Audit / Monitoring / Settlement) reflows too */
+  .ndl-offers-grid{grid-template-columns:1fr !important;}
   /* keep the WebGL instrument tall enough once stacked */
   [data-nadelio-proof]{min-height:200px !important;}
   /* the verdict/proof column reads below the input once stacked */
@@ -143,4 +149,5 @@ input{outline:none;}
   .ndl-drawer-close{width:44px;height:44px;}
   .ndl-deep-cta{min-height:44px;}
   .ndl-mon-link{min-height:44px;display:inline-flex;align-items:center;}
+  .ndl-dl-btn{min-height:44px;}
 }

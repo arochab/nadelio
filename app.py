@@ -1931,12 +1931,61 @@ def settlement():
     return resp
 
 
+# Deploy-consistency fix (wave 2b): v2.html referenced /assets/v2/nadelio.js
+# and nadelio.css by a bare, unversioned path, while v2.html itself carried a
+# 1-hour Cache-Control below and the two assets got Flask's default static
+# handling (no explicit Cache-Control, conditional ETag caching only). Those
+# two facts combine badly: a returning visitor's browser can hold a FRESH
+# v2.html (from a new deploy) while still serving a STALE cached nadelio.js
+# or nadelio.css from before it (or the reverse, a cached old HTML fetching
+# assets that have since changed shape) - a silent pairing mismatch with no
+# error, since the two files are never versioned together.
+#
+# Fix: stamp both asset refs with a "?v=<build stamp>" query string that
+# changes on every deploy (Render restarts this process on every deploy, so a
+# time-of-import stamp is sufficient, no git lookup needed), and stop letting
+# v2.html itself be cached for an hour so a returning visitor's next request
+# always gets the current HTML/stamp pairing. This intentionally leaves the
+# three.js vendor script and the self-hosted fonts untouched (they are not
+# re-referenced here), so their existing default caching is unaffected.
+_ASSET_VERSION = str(int(time.time()))
+
+
+def _load_v2_html():
+    try:
+        with open(os.path.join(app.static_folder, "v2.html"), "r", encoding="utf-8") as f:
+            html = f.read()
+    except OSError:
+        return None
+    html = html.replace(
+        '"/assets/v2/nadelio.css"', '"/assets/v2/nadelio.css?v=' + _ASSET_VERSION + '"'
+    ).replace(
+        '"/assets/v2/nadelio.js"', '"/assets/v2/nadelio.js?v=' + _ASSET_VERSION + '"'
+    )
+    return html
+
+
+# Read and stamped once at import time (one Render process = one deploy, so
+# this never goes stale within a running process); recomputed on every
+# restart, i.e. every deploy.
+_V2_HTML = _load_v2_html()
+
+
 @app.route("/v2", strict_slashes=False)
 def v2():
     # Studio-grade one-pager (dark instrument world, WebGL measurement).
     # Served self-hosted: /assets/site.js and /assets/fonts are static, zero CDN.
-    resp = send_from_directory("web", "v2.html")
-    resp.headers["Cache-Control"] = "public, max-age=3600"
+    if _V2_HTML is None:
+        # Should not happen outside a broken deploy (the file always ships in
+        # web/) - fall back to the plain static file rather than a 500.
+        return send_from_directory("web", "v2.html")
+    resp = app.make_response(_V2_HTML)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    # no-cache (not no-store): still allows a fast conditional revalidation,
+    # but a returning visitor's browser must always check back with the
+    # server instead of serving a possibly-stale copy from a previous deploy -
+    # see _ASSET_VERSION above for why that pairing matters.
+    resp.headers["Cache-Control"] = "no-cache, must-revalidate"
     return resp
 
 
