@@ -140,6 +140,27 @@ input{outline:none;}
   [data-nadelio-proof]{min-height:220px !important;}
 }
 
+/* ---- short landscape (wide viewport, short height): a phone/tablet turned
+   sideways, or a small resized desktop window, keeps the >860px 2-column
+   desktop layout (it has the width for it) but that layout assumed a tall
+   viewport - [data-nadelio-main] is height:100dvh with grid-template-rows
+   auto minmax(0,1fr) auto and the header/console used vh-based clamps that
+   do not shrink enough under ~480px of height, so the header collided with
+   the h1 and the dock got clipped. Below 480px tall (and only where the
+   860px breakpoint above does NOT already apply, i.e. still wide enough for
+   2 columns) compact every vertical dimension and let the shell grow/scroll
+   instead of clipping, exactly like the narrow-width path already does. */
+@media (min-width:861px) and (max-height:480px) {
+  [data-nadelio-root]{overflow-y:auto !important;}
+  [data-nadelio-main]{height:auto !important;min-height:100dvh;padding:10px clamp(12px,1.8vw,26px) !important;gap:8px !important;}
+  header{padding-bottom:6px !important;}
+  [data-nadelio-console]{gap:10px !important;}
+  [data-nadelio-body]{gap:clamp(12px,2vw,24px) !important;}
+  #ndl-axiswrap{min-height:84px !important;}
+  [data-nadelio-proof]{gap:6px !important;}
+  [data-nadelio-dock]{min-height:76px !important;}
+}
+
 /* comfortable touch targets on coarse pointers (>=44px) */
 @media (pointer:coarse){
   .ndl-run{min-height:44px;}

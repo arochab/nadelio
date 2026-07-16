@@ -29,30 +29,36 @@
       <div style="font-family:'Archivo Black','Arial Black',sans-serif;font-size:16px;letter-spacing:0.1em;">NADELIO</div>
       <div class="ndl-tagline" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">Compte combien de fois les IA citent votre marque. Sans gonfler les chiffres.</div>
       <div style="display:flex;align-items:baseline;gap:14px;white-space:nowrap;flex:none;">
-        <span class="ndl-hbadge" style="font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#6E6250;">Google + IA, mesure bornée</span>
+        <span class="ndl-hbadge" style="font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#9A8D78;">Google + IA, mesure bornée</span>
         <button id="ndl-transp-btn" class="ndl-transp" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding:0 0 2px;">transparence &rsaquo;</button>
       </div>
     </header>
-    <div data-nadelio-body class="ndl-grid" role="status" aria-live="polite" style="position:relative;z-index:1;display:grid;grid-template-columns:minmax(288px,0.82fr) minmax(0,1.55fr);gap:clamp(18px,2.6vw,40px);min-height:0;">
+    <div data-nadelio-body class="ndl-grid" style="position:relative;z-index:1;display:grid;grid-template-columns:minmax(288px,0.82fr) minmax(0,1.55fr);gap:clamp(18px,2.6vw,40px);min-height:0;">
       <div data-nadelio-console class="ndl-left" style="display:flex;flex-direction:column;justify-content:center;gap:clamp(16px,3vh,34px);min-width:0;min-height:0;border-right:1px solid #2A241C;padding-right:clamp(16px,2vw,34px);">
         <div style="display:flex;flex-direction:column;gap:clamp(8px,1.4vh,13px);">
-          <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">audit de visibilité IA</div>
+          <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">audit de visibilité IA</div>
           <h1 style="margin:0;font-family:'Archivo Black','Arial Black',sans-serif;font-weight:400;font-size:min(3.6vh,clamp(19px,1.9vw,28px));line-height:1.12;letter-spacing:-0.01em;color:#E8DFD2;text-wrap:balance;">Les IA répondent à vos clients, êtes-vous dans la réponse ?</h1>
         </div>
         <div style="display:flex;flex-direction:column;gap:12px;">
           <div style="display:flex;align-items:baseline;gap:clamp(8px,1vw,13px);">
-            <span aria-hidden="true" style="font-size:min(3.4vh,clamp(15px,1.6vw,22px));color:#6E6250;white-space:nowrap;">mesurer &gt;</span>
-            <input class="ndl-input" id="ndl-input" autofocus value="Qonto" spellcheck="false" autocomplete="off" aria-label="nom de la marque à mesurer" style="flex:1;min-width:80px;background:transparent;border:none;border-bottom:2px solid #3A3128;font-family:'IBM Plex Mono',Menlo,monospace;font-weight:500;font-size:min(4.6vh,clamp(24px,2.6vw,38px));color:#E8DFD2;caret-color:#C6A15B;padding:0 0 6px 0;transition:border-color 0.25s cubic-bezier(0.2,0.8,0.2,1);">
+            <span aria-hidden="true" style="font-size:min(3.4vh,clamp(15px,1.6vw,22px));color:#9A8D78;white-space:nowrap;">mesurer &gt;</span>
+            <!-- No autofocus attribute: nadelio.js focuses this itself (inputRef/
+                 componentDidMount), and only after its own listeners are wired
+                 does that first focus fire, so the "select on first focus" fix
+                 (init(), select-on-pristine-focus) always gets to run before
+                 any keystroke - typing over the "Qonto" prefill replaces it
+                 instead of appending ("QontoNotion"). -->
+            <input class="ndl-input" id="ndl-input" value="Qonto" spellcheck="false" autocomplete="off" aria-label="nom de la marque à mesurer" style="flex:1;min-width:80px;background:transparent;border:none;border-bottom:2px solid #3A3128;font-family:'IBM Plex Mono',Menlo,monospace;font-weight:500;font-size:min(4.6vh,clamp(24px,2.6vw,38px));color:#E8DFD2;caret-color:#C6A15B;padding:0 0 6px 0;transition:border-color 0.25s cubic-bezier(0.2,0.8,0.2,1);">
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <button class="ndl-run" style="cursor:pointer;border:none;background:#E8DFD2;color:#14100C;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.11em;text-transform:uppercase;padding:10px 16px;">Lancer un audit</button>
-            <span style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#55483A;">ou</span>
+            <span style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#8A7D68;">ou</span>
           </div>
-          <div id="ndl-unknown" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#8A7D68;display:none;"></div>
+          <div id="ndl-unknown" role="alert" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#8A7D68;display:none;"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:9px;border-top:1px solid #2A241C;padding-top:clamp(12px,1.8vh,18px);">
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
-            <span style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">comment on mesure</span>
+            <span style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">comment on mesure</span>
             <span id="ndl-passcounter" style="font-family:'IBM Plex Mono',Menlo,monospace;font-size:10px;letter-spacing:0.06em;color:#C6A15B;font-variant-numeric:tabular-nums;">en attente</span>
           </div>
           <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#A99C88;max-width:44ch;">On pose vos questions à Google et à une IA, plusieurs fois chacune. Les réponses varient un peu, alors on donne une fourchette plutôt qu'un chiffre exact.</div>
@@ -61,17 +67,29 @@
       <div class="ndl-right" style="position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;gap:clamp(8px,1.4vh,16px);">
         <div style="position:relative;flex:none;min-height:clamp(72px,13vh,120px);display:flex;flex-direction:column;justify-content:center;">
           <div id="ndl-overlay" style="opacity:1;transition:opacity 0.3s;position:absolute;left:0;right:0;display:flex;flex-direction:column;gap:6px;pointer-events:none;">
-            <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">le nuage converge</div>
+            <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">le nuage converge</div>
             <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:15px;color:#A99C88;">lecture en cours<span style="animation:dotpulse 1s infinite;">.</span><span style="animation:dotpulse 1s 0.25s infinite;">.</span><span style="animation:dotpulse 1s 0.5s infinite;">.</span></div>
           </div>
-          <div id="ndl-verdict" style="opacity:0;transform:translateY(14px);transition:opacity 0.6s cubic-bezier(0.2,0.8,0.2,1) 0.14s,transform 0.6s cubic-bezier(0.2,0.8,0.2,1) 0.14s;display:flex;flex-direction:column;gap:clamp(5px,1vh,10px);">
-            <div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#6E6250;">verdict</div>
+          <!-- Verdict is the CLIMAX: it is retimed (0.28s delay, 0.56s duration
+               -> finishes ~840ms after reveal) to unmistakably land AFTER the
+               dock cards, the field and the insight (see nadelio.js render()),
+               never before or alongside them. role=status/aria-live scoped to
+               JUST this block (was the whole two-column body, re-announcing on
+               every unrelated render) and aria-hidden toggled by JS while the
+               h2 is empty (idle/measuring), so AT never reads a blank heading. -->
+          <div id="ndl-verdict" role="status" aria-live="polite" aria-hidden="true" style="opacity:0;transform:translateY(14px);transition:opacity 0.56s cubic-bezier(0.2,0.8,0.2,1) 0.28s,transform 0.56s cubic-bezier(0.2,0.8,0.2,1) 0.28s;display:flex;flex-direction:column;gap:clamp(5px,1vh,10px);">
+            <div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#9A8D78;">verdict</div>
             <h2 id="ndl-verdict-title" style="margin:0;font-family:'Archivo Black','Arial Black',sans-serif;font-weight:400;font-size:min(6.4vh,clamp(28px,4.6vw,62px));line-height:0.98;letter-spacing:-0.02em;color:#93A06E;text-wrap:balance;"></h2>
             <div id="ndl-verdict-text" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:min(2.3vh,clamp(12.5px,1.1vw,15px));line-height:1.5;color:#C9BEAC;font-variant-numeric:tabular-nums;max-width:52ch;"></div>
           </div>
         </div>
-        <div id="ndl-insight" style="flex:none;display:none;flex-direction:column;gap:4px;opacity:0;transition:opacity 0.5s ease 0.1s;border-left:2px solid #C6A15B;padding:2px 0 2px 12px;">
-          <div style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">l'écart qui compte</div>
+        <!-- display:none -> flex and opacity 0 -> 1 are deliberately never set
+             in the same tick (see render() in nadelio.js): the first paint of
+             a display:none element cannot transition, so the JS forces a
+             display:flex + opacity:0 frame to commit (reflow) before raising
+             opacity next frame - otherwise this used to pop in with no fade. -->
+        <div id="ndl-insight" aria-live="polite" style="flex:none;display:none;flex-direction:column;gap:4px;opacity:0;transition:opacity 0.5s ease 0.1s;border-left:2px solid #C6A15B;padding:2px 0 2px 12px;">
+          <div style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">l'écart qui compte</div>
           <div id="ndl-insight-text" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:min(2.05vh,clamp(12px,1.05vw,14.5px));line-height:1.5;color:#D8CDBB;font-variant-numeric:tabular-nums;max-width:58ch;"></div>
         </div>
         <div data-nadelio-proof class="ndl-proof" style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column;gap:clamp(8px,1.4vh,14px);">
@@ -84,62 +102,41 @@
             </div>
           </div>
           <div style="flex:none;position:relative;height:20px;">
-            <button data-tip="scale" class="ndl-tip-text" aria-label="échelle de mesure, en savoir plus" style="position:absolute;right:0;top:0;display:inline-flex;align-items:center;gap:5px;cursor:help;background:none;border:none;padding:0;font-family:'IBM Plex Mono',Menlo,monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#6E6250;"><span id="ndl-scale-label">échelle 0 à 100</span><span style="display:inline-flex;width:12px;height:12px;border:1px solid #3A3128;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>
+            <button data-tip="scale" class="ndl-tip-text" aria-label="échelle de mesure, en savoir plus" style="position:absolute;right:0;top:0;display:inline-flex;align-items:center;gap:5px;cursor:help;background:none;border:none;padding:0;font-family:'IBM Plex Mono',Menlo,monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#9A8D78;"><span id="ndl-scale-label">échelle 0 à 100</span><span style="display:inline-flex;width:12px;height:12px;border:1px solid #3A3128;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>
           </div>
         </div>
       </div>
     </div>
+    <!-- The 3 dock cards are now driven ENTIRELY by nadelio.js (swapDockContent
+         / populateDockCards): opacity/transform/transition are all set from
+         JS from the very first render(), so the dock is NEVER a blank #2A241C
+         slab in any state - idle carries the 3 products (Deep Audit / suivi /
+         règlement, ex-below-the-fold offers strip, now folded in here since
+         that strip lived below an internally-scrolling fold nobody reached),
+         measuring keeps that same pitch up, error swaps to a non-monetary
+         recovery panel, and a settled result swaps to the real per-audit cards
+         (en IA / sur Google / aller plus loin) - see dockMode in renderVals(). -->
     <div data-nadelio-dock class="ndl-cards" style="position:relative;z-index:1;min-height:clamp(96px,16vh,138px);display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#2A241C;border:1px solid #2A241C;">
-      <div class="ndl-card" style="background:#171310;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;opacity:0;transform:translateY(14px);transition:opacity 0.55s cubic-bezier(0.2,0.8,0.2,1) 0ms,transform 0.55s cubic-bezier(0.2,0.8,0.2,1) 0ms;"></div>
-      <div class="ndl-card" style="background:#171310;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;opacity:0;transform:translateY(14px);transition:opacity 0.55s cubic-bezier(0.2,0.8,0.2,1) 120ms,transform 0.55s cubic-bezier(0.2,0.8,0.2,1) 120ms;"></div>
-      <div class="ndl-card" style="background:#171310;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;opacity:0;transform:translateY(14px);transition:opacity 0.55s cubic-bezier(0.2,0.8,0.2,1) 240ms,transform 0.55s cubic-bezier(0.2,0.8,0.2,1) 240ms;"></div>
+      <div class="ndl-card" style="background:#171310;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;"></div>
+      <div class="ndl-card" style="background:#171310;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;"></div>
+      <div class="ndl-card" style="background:#171310;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;"></div>
     </div>
   </div>
-  <!-- Idle route to the money: present at idle AND while measuring (hidden
-       only once a result settles, since the dock card or the deep dossier
-       then own the pitch, and on any error/payError - see offersVisible in
-       nadelio.js). Nothing here claims anything about a visitor's brand:
-       nothing has been measured yet, so this sells the product itself. -->
-  <section id="ndl-offers" aria-label="Offres payantes" style="position:relative;z-index:1;max-width:960px;margin:0 auto;width:100%;padding:clamp(28px,5vh,52px) clamp(16px,3vw,40px) clamp(40px,6vh,68px);display:flex;flex-direction:column;gap:18px;border-top:1px solid #2A241C;">
-    <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">quand l'échantillon ne suffit plus</div>
-    <div class="ndl-offers-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#2A241C;border:1px solid #2A241C;">
-      <div style="background:#171310;padding:20px 22px;display:flex;flex-direction:column;gap:9px;">
-        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;color:#D8CDBB;">Deep Audit</div>
-        <div style="display:flex;align-items:baseline;gap:6px;">
-          <span style="font-family:'IBM Plex Mono',Menlo,monospace;font-weight:600;font-size:22px;color:#E8DFD2;font-variant-numeric:tabular-nums;">79&euro;</span>
-          <span style="font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6250;">une fois</span>
-        </div>
-        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#8A7D68;">5 questions, 8 passages chacune sur une IA, contre 2 questions et 3 passages en gratuit. Vos angles morts nommés face à des concurrents identifiés, et un plan d'action sourcé.</div>
-        <button id="ndl-idle-deep-cta" class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:10px 14px;align-self:flex-start;margin-top:4px;">Lancer un Deep Audit</button>
-        <div class="ndl-deep-msg" style="display:none;font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#8A7D68;"></div>
-      </div>
-      <div style="background:#171310;padding:20px 22px;display:flex;flex-direction:column;gap:9px;">
-        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;color:#D8CDBB;">Suivi dans le temps</div>
-        <div style="display:flex;align-items:baseline;gap:6px;">
-          <span style="font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6250;">dès</span>
-          <span style="font-family:'IBM Plex Mono',Menlo,monospace;font-weight:600;font-size:22px;color:#E8DFD2;font-variant-numeric:tabular-nums;">99&euro;</span>
-          <span style="font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6250;">/ mois</span>
-        </div>
-        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#8A7D68;">Le même score borné, mesuré chaque semaine. Vous êtes alerté quand un mouvement sort du bruit, jamais sur le bruit lui-même.</div>
-        <a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;align-self:flex-start;margin-top:4px;">Voir les trois offres</a>
-      </div>
-      <div style="background:#171310;padding:20px 22px;display:flex;flex-direction:column;gap:9px;">
-        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;color:#D8CDBB;">Règlement de performance</div>
-        <div style="display:flex;align-items:baseline;gap:6px;">
-          <span style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:13px;color:#E8DFD2;">forfait fixe</span>
-        </div>
-        <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#8A7D68;">Jamais un pourcentage. Nadelio arbitre les contrats de performance entre marques et agences. Un gain ne compte que s'il sort de la bande à 95 pour cent.</div>
-        <a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;align-self:flex-start;margin-top:4px;">Comment ça marche</a>
-      </div>
-    </div>
-  </section>
   <div id="ndl-subbanner" role="status" aria-live="polite" style="display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:65;max-width:min(560px,92vw);background:#171310;border:1px solid #2A241C;border-left:2px solid #93A06E;padding:14px 34px 14px 18px;box-shadow:0 10px 34px rgba(0,0,0,0.55);"></div>
   <div id="ndl-below" style="position:relative;z-index:1;display:none;">
     <div id="ndl-deepdoc"></div>
   </div>
 </div>
-<script src="/assets/v2/vendor/three.min.js"></script>
-<script src="/assets/v2/nadelio.js"></script>
+<!-- nadelio.js first and deferred: it is the whole interaction (brand input,
+     run button) and must never wait behind the 670KB three.js vendor bundle.
+     It already polls for window.THREE (see pollIv in init()) and degrades to
+     a fully working flat page if THREE never turns up, so three.min.js is
+     also deferred (downloads in parallel, blocks nothing) rather than a
+     blocking classic <script>. Deferred scripts still execute in this same
+     document order, so nadelio.js's polling loop is armed before three.min.js
+     can ever set window.THREE. -->
+<script defer src="/assets/v2/nadelio.js"></script>
+<script defer src="/assets/v2/vendor/three.min.js"></script>
 <script defer src="/assets/v2/track.js"></script>
 </body>
 </html>

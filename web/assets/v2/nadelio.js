@@ -14,7 +14,12 @@
    brackets serve it as proof. The bottom dock went from 4 cards to 3
    (questions, presence, action) via repeat(3,1fr). The live log is gone;
    the "comment on mesure" block is static copy.
-   Palette: brass #C6A15B, sage #93A06E, terracotta #B07452 / #7C5240.
+   Palette: brass #C6A15B, sage #93A06E, terracotta #B07452 / #A66F57.
+   Muted greys sit on a warm ramp raised to clear WCAG AA on ground #14100C:
+   #8A7D68 (~4.7:1) for the smallest data labels (axis ticks, field column
+   headers - this shade used to be a much darker, ~2.1:1 failing tone);
+   #9A8D78 (~5.8:1) for every section label/eyebrow (was a ~3.2:1 failing
+   tone); #A66F57 (~4.5:1) for the sienna "absent" state (was ~2.8:1).
    density and breath were editor sliders; in production they are constants = 1.
    three.js is provided by window.THREE (self-hosted vendor script).
    ============================================================================ */
@@ -44,8 +49,8 @@
      at opacity 0 then, so this is never actually read by a human). */
   var BLANK_CARD = {
     verdictTitle: '', verdictColor: '#93A06E', verdictText: '',
-    ia: { big: '', bigColor: '#6E6250', line: '', rival: '' },
-    google: { big: '', bigColor: '#6E6250', line: '', owners: '' },
+    ia: { big: '', bigColor: '#9A8D78', line: '', rival: '' },
+    google: { big: '', bigColor: '#9A8D78', line: '', owners: '' },
     deep: { free: '', adds: '', delivered: false }
   };
 
@@ -58,6 +63,14 @@
   var state = {
     focus: 'Qonto', measuring: false, settled: false,
     unknownMsg: '', inputValue: 'Qonto', passCount: 0,
+    /* elapsedS: real, honest elapsed-seconds counter shown next to "mesure en
+       cours" (see startMeasureTick). A real audit takes 30-60s; before this
+       the only feedback during that wait was the 3D cloud's breathing, which
+       is OFF entirely under prefers-reduced-motion (frame()/startLoop() never
+       run - see `reduced`), leaving those visitors with a static screen and
+       no sense that anything was happening. Ticking wall-clock seconds is
+       real feedback, never a fabricated progress percentage. */
+    elapsedS: 0,
     tip: { open: false }, drawerOpen: false,
     /* payError: a Stripe return (?paid) failed to verify or to run. Forces the
        "lecture en cours" overlay to stay up (like measuring) but with its own
@@ -71,7 +84,7 @@
       verdictEl, verdictTitleEl, verdictTextEl,
       insightEl, insightTextEl, fieldEl, ticksEl, scaleLabelEl,
       passCounterEl, unknownEl, runBtn, brandsHost, transpBtn, cardEls = [],
-      subBannerEl, belowEl, deepDocEl, idleOffersEl;
+      subBannerEl, belowEl, deepDocEl;
   /* the overlay's original "le nuage converge / lecture en cours" markup,
      captured once at init so the Stripe-return paid flow (which borrows this
      same node) can hand it back exactly as it found it. */
@@ -79,7 +92,7 @@
 
   /* ---------- three.js state ---------- */
   var renderer, scene, camera, group, sprite, material, points,
-      targets, dirs, meta, ro, rafId, pollIv, measureStart, reduced;
+      targets, dirs, meta, ro, rafId, pollIv, measureStart, reduced, resizeDebounceT;
 
   /* ---------- lifecycle / focus / reveal / log state ---------- */
   var revealT, logIv, focusArmed, focusOutHandler, userInteracted,
@@ -125,6 +138,10 @@
   /* ---------- tooltip / drawer nodes ---------- */
   var tipEl = null, lastTipSig = '';
   var drawerScrim = null, drawerDialog = null, drawerCloseBtn = null, lastDrawerOpen = false;
+  /* the element that had focus right before the drawer opened (usually the
+     "transparence" link) - aria-modal="true" alone does not trap focus or
+     restore it; both are done by hand below (buildDrawer/teardownDrawer). */
+  var preDrawerFocusEl = null, drawerTrapHandler = null;
 
   /* ============================ helpers ============================ */
   /* Escapes ALL five HTML-significant characters, because the output is used
@@ -277,6 +294,13 @@
     document.addEventListener('pointerdown', interactHandler, true);
     document.addEventListener('wheel', interactHandler, { capture: true, passive: true });
     keyHandler = function (e) {
+      /* The auto-refocus loop (armFocusLoop/componentDidUpdate) only ever
+         disarmed on pointerdown/wheel (see interactHandler), so a keyboard-
+         only visitor tabbing through the page (transparence link, dock
+         links...) kept getting yanked back into the brand input every time
+         focus briefly landed on <body>. Any real keydown is just as much a
+         sign of active use as a click. */
+      if (e.isTrusted) userInteracted = true;
       if (e.key === 'Escape') { if (state.drawerOpen) closeDrawer(); if (state.tip.open) closeTip(true); }
     };
     document.addEventListener('keydown', keyHandler);
@@ -330,6 +354,7 @@
   /* kept for fidelity; the page never unmounts the component in production */
   function componentWillUnmount() {
     stopLoop(); clearInterval(pollIv); clearTimeout(revealT); clearInterval(logIv);
+    stopMeasureTick();
     if (focusOutHandler) document.removeEventListener('focusout', focusOutHandler);
     document.removeEventListener('wheel', interactHandler, { capture: true });
     document.removeEventListener('visibilitychange', visHandler);
@@ -387,10 +412,59 @@
   function openDrawer() {
     userInteracted = true;
     closeTip(true);
+    /* captured BEFORE the drawer mounts, so focus can return to exactly where
+       it started (usually the "transparence" trigger) once it closes. */
+    preDrawerFocusEl = document.activeElement;
     setState({ drawerOpen: true });
     setTimeout(function () { if (drawerCloseBtn) drawerCloseBtn.focus(); }, 40);
   }
-  function closeDrawer() { setState({ drawerOpen: false }); }
+  /* aria-modal="true" on the dialog does not, by itself, hide the rest of the
+     page from assistive tech - a screen reader can still read straight
+     through into the hero behind the scrim. Marks every OTHER direct child
+     of the root aria-hidden while the drawer is open, restoring whatever was
+     there before (never clobbering a real aria-hidden the app itself set). */
+  function setBackgroundHidden(hidden) {
+    if (!screenEl) return;
+    var kids = screenEl.children;
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i];
+      if (k === drawerScrim || k === drawerDialog) continue;
+      if (hidden) {
+        k.setAttribute('data-ndl-prev-ah', k.hasAttribute('aria-hidden') ? k.getAttribute('aria-hidden') : '__none__');
+        k.setAttribute('aria-hidden', 'true');
+      } else {
+        var prev = k.getAttribute('data-ndl-prev-ah');
+        k.removeAttribute('data-ndl-prev-ah');
+        if (prev === '__none__' || prev === null) k.removeAttribute('aria-hidden');
+        else k.setAttribute('aria-hidden', prev);
+      }
+    }
+  }
+
+  /* focus trap: aria-modal="true" is a hint, not an enforcement - without this,
+     Tab/Shift+Tab walk straight out of the dialog into the hidden background.
+     Cycles among the dialog's own focusable elements only. */
+  function trapDrawerFocus(e) {
+    if (e.key !== 'Tab' || !drawerDialog) return;
+    var focusable = drawerDialog.querySelectorAll('a[href],button:not([disabled]),input,[tabindex]:not([tabindex="-1"])');
+    if (!focusable.length) { e.preventDefault(); return; }
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    else if (!drawerDialog.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  }
+
+  function closeDrawer() {
+    setState({ drawerOpen: false });
+    /* teardownDrawer() has already run synchronously inside the setState
+       above (setState -> render -> syncDrawer -> teardownDrawer), so the
+       drawer's own nodes are gone and it is safe to hand focus back. Falls
+       back to the transparency trigger (still in the DOM) if the original
+       triggering element is gone for any reason. */
+    var back = (preDrawerFocusEl && document.contains(preDrawerFocusEl)) ? preDrawerFocusEl : transpBtn;
+    preDrawerFocusEl = null;
+    if (back && back.focus) back.focus();
+  }
 
   function buildDrawer(v) {
     drawerScrim = document.createElement('div');
@@ -436,7 +510,7 @@
     function matrixCell(cell) {
       var aiTxt, aiBg, aiFg, aiBorder = 'transparent';
       if (cell.aiRank == null) {
-        aiTxt = 'absent'; aiBg = 'transparent'; aiFg = '#7C5240'; aiBorder = 'rgba(176,116,82,0.55)';
+        aiTxt = 'absent'; aiBg = 'transparent'; aiFg = '#A66F57'; aiBorder = 'rgba(176,116,82,0.55)';
       } else if (cell.aiKind === 'primary') {
         aiTxt = 'principal n' + cell.aiRank; aiBg = 'rgba(147,160,110,0.7)'; aiFg = '#141009';
       } else {
@@ -496,18 +570,18 @@
       '</div>' +
       '<div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:clamp(16px,2.4vh,26px) clamp(18px,2.4vw,30px);display:flex;flex-direction:column;gap:22px;">' +
         '<div style="display:flex;flex-direction:column;gap:9px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">les sources interrogées</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">les sources interrogées</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + srcChips + '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:10px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">chaque marque, question par question</div>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">chaque marque, question par question</div>' +
             '<div style="font-size:10px;color:#8A7D68;font-variant-numeric:tabular-nums;">' + runN + ' mesures IA par question</div>' +
           '</div>' +
           '<div style="overflow-x:auto;overflow-y:hidden;">' +
             '<div style="min-width:' + minW + 'px;display:flex;flex-direction:column;gap:4px;">' +
               '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:3px;align-items:end;">' +
-                '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#55483A;">question</div>' +
+                '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8A7D68;">question</div>' +
                 hCols +
               '</div>' +
               rowsHtml +
@@ -520,7 +594,7 @@
           '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:12px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">qui tient la page Google</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">qui tient la page Google</div>' +
           '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;">Souvent, la page Google n\'est pas tenue par les marques mais par des comparateurs et des agrégateurs. Voici les domaines en tête, question par question.</div>' +
           ownerHtml +
         '</div>' +
@@ -531,8 +605,14 @@
     screenEl.appendChild(drawerDialog);
     drawerCloseBtn = drawerDialog.querySelector('.ndl-drawer-close');
     if (drawerCloseBtn) drawerCloseBtn.addEventListener('click', closeDrawer);
+    drawerTrapHandler = trapDrawerFocus;
+    drawerDialog.addEventListener('keydown', drawerTrapHandler);
+    setBackgroundHidden(true);
   }
   function teardownDrawer() {
+    setBackgroundHidden(false);
+    if (drawerDialog && drawerTrapHandler) drawerDialog.removeEventListener('keydown', drawerTrapHandler);
+    drawerTrapHandler = null;
     if (drawerScrim && drawerScrim.parentNode) drawerScrim.parentNode.removeChild(drawerScrim);
     if (drawerDialog && drawerDialog.parentNode) drawerDialog.parentNode.removeChild(drawerDialog);
     drawerScrim = null; drawerDialog = null; drawerCloseBtn = null;
@@ -551,6 +631,7 @@
   function reveal(gen) {
     if (gen !== measureGen) return;
     clearSlowNote();
+    stopMeasureTick();
     /* The paid session is only "spent for good" from the visitor's point of
        view once its deep dossier has actually rendered - clear the reload-
        recovery marker (see resumeDeepAudit) exactly here, never earlier. */
@@ -595,7 +676,7 @@
   function showSlowNote() {
     if (!overlayEl || slowNoteEl) return;
     slowNoteEl = document.createElement('div');
-    slowNoteEl.setAttribute('style', 'font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#6E6250;margin-top:2px;');
+    slowNoteEl.setAttribute('style', 'font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#9A8D78;margin-top:2px;');
     slowNoteEl.textContent = 'L\'instrument se réveille. La première mesure après une période calme peut prendre jusqu\'à une minute.';
     overlayEl.appendChild(slowNoteEl);
   }
@@ -604,6 +685,25 @@
     if (slowNoteEl && slowNoteEl.parentNode) slowNoteEl.parentNode.removeChild(slowNoteEl);
     slowNoteEl = null;
   }
+
+  /* ---- real elapsed-time feedback during a measurement ----
+     Ticks state.elapsedS once a second while state.measuring is true, so the
+     pass counter reads "mesure en cours (12s)" instead of a static label that
+     just jumps straight to the final count on settle. This is the ONLY motion
+     feedback prefers-reduced-motion users get during the 30-60s wait (the 3D
+     cloud's breathing is intentionally off for them, see `reduced`), and it
+     is honest: real wall-clock seconds, never an invented percentage. */
+  var measureTickIv = null, measureTickStart = 0;
+  function startMeasureTick() {
+    clearInterval(measureTickIv);
+    measureTickStart = performance.now();
+    setState({ elapsedS: 0 });
+    measureTickIv = setInterval(function () {
+      if (!state.measuring) { clearInterval(measureTickIv); measureTickIv = null; return; }
+      setState({ elapsedS: Math.round((performance.now() - measureTickStart) / 1000) });
+    }, 1000);
+  }
+  function stopMeasureTick() { clearInterval(measureTickIv); measureTickIv = null; }
 
   /* rows/focus the 3D instrument is built from: the real head-to-head once we
      have a result, else a neutral cloud that encodes NO score. At idle, while
@@ -652,7 +752,16 @@
     sprite = new THREE.CanvasTexture(c);
     material = new THREE.PointsMaterial({ size: 0.045, vertexColors: true, map: sprite, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
     resize();
-    ro = new ResizeObserver(function () { resize(); });
+    /* Debounced: a live window/container resize (dragging the browser edge)
+       fires this callback many times a second, and each one used to rebuild
+       the ENTIRE particle geometry (buildClusters allocates and uploads a
+       fresh BufferGeometry for every point in the cloud). Coalescing to the
+       last event in a 120ms quiet window keeps the resize itself smooth
+       instead of stalling on repeated full rebuilds mid-drag. */
+    ro = new ResizeObserver(function () {
+      clearTimeout(resizeDebounceT);
+      resizeDebounceT = setTimeout(resize, 120);
+    });
     ro.observe(mountEl);
     ro.observe(axisEl);
     buildClusters(clusterRows(), true, clusterFocus());
@@ -790,9 +899,24 @@
     renderer.render(scene, camera);
   }
 
+  /* Throttled to ~30fps: this loop runs continuously the whole time the tab
+     is visible (by design - the cloud is always gently "breathing"), so an
+     uncapped rAF was spending full display-refresh-rate (60-120Hz) worth of
+     particle-position math and draw calls on an ambient effect that reads
+     identically at half that rate. requestAnimationFrame is still requested
+     every frame (needed to keep sampling the clock cheaply) but the actual
+     per-particle work (frame()) only runs on the frames that clear the
+     interval, so the visible motion is unchanged. */
+  var FRAME_INTERVAL_MS = 1000 / 30, lastFrameT = 0;
   function startLoop() {
     if (rafId || !renderer || reduced) return;
-    var tick = function () { rafId = requestAnimationFrame(tick); frame(); };
+    lastFrameT = 0;
+    var tick = function (now) {
+      rafId = requestAnimationFrame(tick);
+      if (now - lastFrameT < FRAME_INTERVAL_MS) return;
+      lastFrameT = now;
+      frame();
+    };
     rafId = requestAnimationFrame(tick);
   }
   function stopLoop() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
@@ -941,16 +1065,16 @@
   function renderDeepDocHTML(R) {
     var geo = R.geo || {};
     var score = R.geoScore != null ? R.geoScore : (geo.point != null ? Math.round(geo.point) : null);
-    var scoreColor = score != null ? scoreColorFor(score) : '#6E6250';
+    var scoreColor = score != null ? scoreColorFor(score) : '#9A8D78';
     var hw = geo.half_width;
     var verdictTag = geo.verdict ? (VERDICT_WORD_FR[geo.verdict] || '') : '';
 
     var scoreBlock = score != null
       ? '<div style="display:flex;flex-direction:column;gap:8px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">score de visibilité IA</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">score de visibilité IA</div>' +
           '<div style="display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;">' +
             '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(38px,4.6vw,58px);line-height:1;color:' + scoreColor + ';font-variant-numeric:tabular-nums;">' + score + '</span>' +
-            (hw != null ? '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:14px;color:#6E6250;font-variant-numeric:tabular-nums;">&plusmn;' + hw + '</span>' : '') +
+            (hw != null ? '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:14px;color:#9A8D78;font-variant-numeric:tabular-nums;">&plusmn;' + hw + '</span>' : '') +
             '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:12px;color:#8A7D68;">/ 100</span>' +
           '</div>' +
           (verdictTag ? '<div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#8A7D68;">' + esc(verdictTag) + '</div>' : '') +
@@ -965,14 +1089,14 @@
        upsells, not buried after them. */
     var downloadBlock =
       '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #2A241C;">' +
-        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">garder ce dossier</div>' +
+        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">garder ce dossier</div>' +
         '<button class="ndl-dl-btn" id="ndl-download-btn" style="cursor:pointer;border:1px solid #3A3128;background:#171310;color:#E8DFD2;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:9px 14px;align-self:flex-start;">T&eacute;l&eacute;charger le dossier (HTML)</button>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;line-height:1.4;color:#6E6250;max-width:32ch;">Ce paiement est unique&nbsp;: sans ce fichier, un rechargement de la page ne pourra plus le r&eacute;afficher.</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;line-height:1.4;color:#9A8D78;max-width:32ch;">Ce paiement est unique&nbsp;: sans ce fichier, un rechargement de la page ne pourra plus le r&eacute;afficher.</div>' +
       '</div>';
 
     var priceBlock =
       '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #2A241C;">' +
-        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">continuer la mesure</div>' +
+        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">continuer la mesure</div>' +
         '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#C9BEAC;border-bottom:1px solid #4A4234;align-self:flex-start;">Suivre cette marque, dès 99&euro;/mois</a>' +
         '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;align-self:flex-start;">Réglement de performance</a>' +
       '</div>';
@@ -991,7 +1115,7 @@
       if (items) {
         identityHtml =
           '<div style="display:flex;flex-direction:column;gap:10px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">preuve sourcée</div>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">preuve sourcée</div>' +
             '<ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + items + '</ul>' +
           '</div>';
       }
@@ -1010,12 +1134,12 @@
       reportHtml =
         '<div style="display:flex;flex-direction:column;gap:18px;">' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">rapport de remédiation</div>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">rapport de remédiation</div>' +
             '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:8.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8A7D68;border:1px solid #2A241C;padding:2px 6px;">généré par IA</span>' +
           '</div>' +
           (rep.verdict ? '<div style="border-left:2px solid #C6A15B;padding:2px 0 2px 14px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#D8CDBB;">' + esc(rep.verdict) + '</div>' : '') +
-          (bsItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#6E6250;margin-bottom:8px;">angles morts nommés</div><ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + bsItems + '</ul></div>' : '') +
-          (actItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#6E6250;margin-bottom:8px;">plan d\'action</div><ol style="margin:0;padding-left:20px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + actItems + '</ol></div>' : '') +
+          (bsItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#9A8D78;margin-bottom:8px;">angles morts nommés</div><ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + bsItems + '</ul></div>' : '') +
+          (actItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#9A8D78;margin-bottom:8px;">plan d\'action</div><ol style="margin:0;padding-left:20px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + actItems + '</ol></div>' : '') +
         '</div>';
     }
 
@@ -1034,7 +1158,7 @@
           '<div style="display:flex;flex-direction:column;gap:28px;min-width:0;">' + identityHtml + (identityHtml && reportHtml ? '<div style="border-top:1px solid #2A241C;"></div>' : '') + reportHtml + '</div>' +
           '<div style="display:flex;flex-direction:column;gap:0;">' + scoreBlock + downloadBlock + priceBlock + '</div>' +
         '</div>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#6E6250;border-top:1px solid #2A241C;padding-top:14px;">' + esc(footNote) + '</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#9A8D78;border-top:1px solid #2A241C;padding-top:14px;">' + esc(footNote) + '</div>' +
       '</div>'
     );
   }
@@ -1166,10 +1290,10 @@
      opacity via renderVals()), so a paying customer always lands on the exact
      same instrument, mid read, never a blank or a dead page. */
   function payStepsHTML(lines) {
-    var html = '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">paiement</div>';
+    var html = '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">paiement</div>';
     html += '<div style="display:flex;flex-direction:column;gap:5px;margin-top:2px;">';
     lines.forEach(function (l) {
-      var color = l.state === 'done' ? SAGE : (l.state === 'active' ? '#E8DFD2' : '#6E6250');
+      var color = l.state === 'done' ? SAGE : (l.state === 'active' ? '#E8DFD2' : '#9A8D78');
       var mark = l.state === 'done' ? '&#10003; ' : '';
       var dots = l.state === 'active'
         ? '<span style="animation:dotpulse 1s infinite;">.</span><span style="animation:dotpulse 1s 0.25s infinite;">.</span><span style="animation:dotpulse 1s 0.5s infinite;">.</span>'
@@ -1184,10 +1308,11 @@
     if (overlayEl) overlayEl.innerHTML = payStepsHTML(lines);
   }
   function showPayError(msg, retryFn) {
+    stopMeasureTick();
     setState({ measuring: false, settled: false, payError: true });
     if (!overlayEl) return;
     overlayEl.innerHTML =
-      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">paiement</div>' +
+      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">paiement</div>' +
       '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#D8CDBB;max-width:52ch;">' + esc(msg) + '</div>' +
       '<div style="display:flex;align-items:center;gap:16px;margin-top:8px;flex-wrap:wrap;">' +
         (retryFn ? '<button class="ndl-pay-retry" style="cursor:pointer;border:none;background:#E8DFD2;color:#14100C;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Réessayer</button>' : '') +
@@ -1219,6 +1344,7 @@
     measureStart = performance.now();
     setState({ focus: brand, inputValue: brand, measuring: true, settled: false, payError: false, unknownMsg: '', passCount: 0 });
     renderBelowFold();
+    startMeasureTick();
     if (scene) buildClusters(loadingRows(), !reduced, '');
     if (reduced) renderResolved();
     showPayStep([
@@ -1294,11 +1420,12 @@
 
   function showConsumedMessage() {
     /* Terminal state - this session has nothing left to resume. */
+    stopMeasureTick();
     clearPendingDeep();
     setState({ measuring: false, settled: false, payError: true });
     if (!overlayEl) return;
     overlayEl.innerHTML =
-      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">paiement</div>' +
+      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">paiement</div>' +
       '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#D8CDBB;max-width:52ch;">Ce Deep Audit a déjà été utilisé. Chaque paiement débloque un dossier unique. Lancez un nouveau Deep Audit pour en obtenir un autre, ou contactez le support si ceci est une erreur.</div>' +
       '<div style="display:flex;align-items:center;gap:16px;margin-top:8px;">' +
         '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;">Contacter le support</a>' +
@@ -1347,7 +1474,7 @@
     if (!subBannerEl) return;
     var html;
     if (failed) {
-      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">suivi</div>' +
+      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">suivi</div>' +
         '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#D8CDBB;margin-top:4px;">Nous n\'avons pas pu confirmer cet abonnement. Si vous venez de payer, patientez un instant et actualisez, ou contactez le support.</div>';
     } else {
       var b = esc(brand || 'votre marque');
@@ -1355,7 +1482,7 @@
       html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#93A06E;">suivi actif</div>' +
         '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#D8CDBB;margin-top:4px;">Le suivi est actif pour <b style="color:#E8DFD2;">' + b + '</b>' + (t ? ' (plan ' + t + ')' : '') + '. La première mesure bornée tourne cette semaine, vous serez alerté dès que le score devient volatil.</div>';
     }
-    html += '<button class="ndl-subbanner-close" aria-label="fermer" style="position:absolute;top:8px;right:8px;cursor:pointer;background:none;border:none;color:#6E6250;font-family:inherit;font-size:13px;line-height:1;padding:4px;">&times;</button>';
+    html += '<button class="ndl-subbanner-close" aria-label="fermer" style="position:absolute;top:8px;right:8px;cursor:pointer;background:none;border:none;color:#9A8D78;font-family:inherit;font-size:13px;line-height:1;padding:4px;">&times;</button>';
     subBannerEl.innerHTML = html;
     subBannerEl.style.display = 'block';
     var closeBtn = subBannerEl.querySelector('.ndl-subbanner-close');
@@ -1421,6 +1548,7 @@
     identityConfirmed = false;
     setState({ focus: name, inputValue: name, measuring: true, settled: false, payError: false, unknownMsg: '', passCount: 0 });
     renderBelowFold();
+    startMeasureTick();
     measureStart = performance.now();
     if (scene) buildClusters(loadingRows(), !reduced, '');
     if (reduced) renderResolved();
@@ -1440,9 +1568,23 @@
         officialUrl = d.official_url || '';
         var usable = inf.ok && !d.error && d.competitors && d.competitors.length && d.queries && d.queries.length;
         if (!usable) {
+          /* Attribute the failure honestly. app.py answers 502 for BOTH its own
+             breakage (missing key, or the identification model overloaded and
+             giving up after its retries) AND for a genuine "Could not infer
+             competitors for this brand". Only the latter is the visitor's
+             brand: telling someone to check the spelling of their own company
+             name because OUR model was overloaded blames them for our outage.
+             The backend's error string is the only signal that separates the
+             two, so match on it and default to blaming ourselves. */
+          var errTxt = String((d && d.error) || '');
+          var brandProblem = /could not infer competitors/i.test(errTxt);
           failMeasure(gen, inf.status === 429
             ? 'Trop de requêtes, patientez un instant.'
-            : 'Marque introuvable. Vérifiez l\'orthographe ou collez votre site.');
+            : brandProblem
+              ? 'Marque introuvable. Vérifiez l\'orthographe ou collez votre site.'
+              : (inf.status >= 500)
+                ? 'L\'instrument est momentanément indisponible. Rien n\'a été mesuré, réessayez dans un instant.'
+                : 'Marque introuvable. Vérifiez l\'orthographe ou collez votre site.');
           return null;
         }
         return fetch('/api/analyze', {
@@ -1492,6 +1634,7 @@
   function failMeasure(gen, msg) {
     if (gen !== measureGen) return;
     clearSlowNote();
+    stopMeasureTick();
     clearTimeout(revealT);
     currentResult = null;
     setState({ measuring: false, settled: false, payError: false, unknownMsg: msg, passCount: 0 });
@@ -1905,7 +2048,7 @@
         var cState = clusterState(sorted, i);
         var level = 0;
         if (!isFocus) { belowIdx += 1; level = belowIdx; }
-        var bracketColor = isFocus ? BRASS : cState === 'behind' ? '#7C5240' : '#8A7D68';
+        var bracketColor = isFocus ? BRASS : cState === 'behind' ? '#A66F57' : '#8A7D68';
         var bounded = r.bounded !== false;
         /* clamp to the visible 0..100 so an out-of-window real score never
            renders a negative-width or off-axis bracket; the axis spans 0..100.
@@ -1920,9 +2063,9 @@
           wPct: Math.max(0, hi - lo).toFixed(2),
           midPct: Math.max(0, Math.min(100, (r.s - ZLO) / zspan * 100)).toFixed(2),
           bracketColor: bracketColor,
-          nameColor: isFocus ? '#E8DFD2' : cState === 'behind' ? '#6E6250' : '#9A8D78',
-          scoreColor: isFocus ? BRASS : cState === 'behind' ? '#6E6250' : '#A99C88',
-          subColor: cState === 'behind' ? '#55483A' : '#8A7D68',
+          nameColor: isFocus ? '#E8DFD2' : cState === 'behind' ? '#9A8D78' : '#9A8D78',
+          scoreColor: isFocus ? BRASS : cState === 'behind' ? '#9A8D78' : '#A99C88',
+          subColor: cState === 'behind' ? '#8A7D68' : '#8A7D68',
           scoreDisplay: r.s,
           /* A real 95% interval only when the backend actually bounded it.
              Never fabricate "entre X et Y" (nor its "why a range" tooltip,
@@ -1970,9 +2113,9 @@
           name: f.name, isFocus: f.isFocus,
           nameColor: f.isFocus ? BRASS : '#C9BEAC',
           ai: aiLabel(f.ai),
-          aiColor: !f.ai.present ? '#7C5240' : f.ai.kind === 'primary' ? '#93A06E' : '#A99C88',
+          aiColor: !f.ai.present ? '#A66F57' : f.ai.kind === 'primary' ? '#93A06E' : '#A99C88',
           google: g,
-          googleColor: f.serpRank != null ? '#8A7D68' : '#7C5240',
+          googleColor: f.serpRank != null ? '#8A7D68' : '#A66F57',
           sharePct: f.share,
           /* The bar width IS the share (0-100), never normalized to the
              leader's share - normalizing to the leader always drew the top
@@ -2002,30 +2145,37 @@
       passCounter = R.n + ' réponse' + (R.n > 1 ? 's' : '') + ' IA lues sur ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + (R.cached ? ', mesure en cache' : '');
     }
     else if (st.payError) passCounter = 'paiement';
-    else if (st.measuring) passCounter = 'mesure en cours';
+    /* real elapsed seconds (see startMeasureTick), not a fabricated percentage -
+       the only progress feedback prefers-reduced-motion users get while the
+       breathing 3D cloud is intentionally off for them (see `reduced`). */
+    else if (st.measuring) passCounter = 'mesure en cours' + (st.elapsedS ? (', ' + st.elapsedS + 's') : '');
     else passCounter = 'en attente';
 
     var revealed = st.settled && haveResult;
     var contentSig = revealed ? ('R|' + R.sig) : ((st.measuring ? 'M|' : 'I|') + st.focus);
 
-    /* idle offers strip (Deep Audit / Monitoring / Settlement, present at
-       idle - see the hard requirement this page had NO route to money before
-       a result existed). Visible at idle and while measuring; hidden the
-       moment a result actually settles (the dock card, or the deep dossier's
-       own price block, then own the pitch - never two copies of the same
-       offer on screen), and hidden on any error/payError state (never pitch
-       payment while the visitor is stuck on a failure). */
-    var offersVisible = !revealed && !st.payError && !st.unknownMsg;
+    /* ---- dock mode (see swapDockContent/populateDockCards) ----
+       The 3-card dock is the page's best above-the-fold real estate and must
+       never sit empty: 'result' once a real measurement has settled (the per-
+       audit "en IA / sur Google / aller plus loin" cards); 'error' on any
+       failed measurement OR a Stripe payError (recovery copy, deliberately
+       NOT a payment pitch: never sell a Deep Audit at the exact moment a
+       measurement, or a payment, just failed); 'idle' otherwise, which also
+       covers 'measuring' (a run in flight is neither an error nor a result
+       yet) and carries the three products (this used to be a separate strip
+       below an internally-scrolling fold nobody ever reached - folded into
+       the dock so it is finally visible). Idle copy here names no brand and
+       claims nothing about the visitor's measurement, since nothing has been
+       measured yet. */
+    var mode = revealed ? 'result' : ((st.unknownMsg || st.payError) ? 'error' : 'idle');
 
     return {
       measuring: st.measuring, settled: st.settled, haveResult: haveResult, contentSig: contentSig,
-      offersVisible: offersVisible,
+      mode: mode,
       measuringOverlayOp: (st.measuring || st.payError) ? 1 : 0,
       verdictOp: revealed ? 1 : 0,
       verdictTy: st.settled ? 0 : 14,
       proofOp: revealed ? 1 : 0,
-      revealOp: revealed ? 1 : 0,
-      revealTy: st.settled ? 0 : 14,
       passColor: st.measuring ? '#C6A15B' : '#8A7D68',
       inputValue: st.inputValue,
       hasUnknown: !!st.unknownMsg, unknownMsg: st.unknownMsg,
@@ -2054,7 +2204,7 @@
          is honest to show. */
       s += '<span style="display:inline-flex;align-items:center;gap:5px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;color:' + ab.subColor + ';">' + esc(ab.rangeText);
       if (ab.focus) {
-        s += '<button data-tip="range" class="ndl-tip-dot" aria-label="pourquoi une fourchette" style="cursor:help;background:none;border:1px solid #55483A;border-radius:50%;width:13px;height:13px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:8px;line-height:1;color:#8A7D68;">i</button>';
+        s += '<button data-tip="range" class="ndl-tip-dot" aria-label="pourquoi une fourchette" style="cursor:help;background:none;border:1px solid #8A7D68;border-radius:50%;width:13px;height:13px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:8px;line-height:1;color:#8A7D68;">i</button>';
       }
       s += '</span>';
     } else if (ab.showSingle) {
@@ -2064,6 +2214,25 @@
     }
     s += '</div>';
     return s;
+  }
+
+  /* Signature of the axis brand brackets: renderAxisBrands used to be called
+     UNCONDITIONALLY on every single render() (including every keystroke while
+     typing, before any result exists), tearing down and rebuilding every node
+     every time - wasted DOM churn (item: perf), and worse, it also destroyed
+     the "pourquoi une fourchette" info-dot the instant it received keyboard
+     focus (focusin -> openTip -> setState -> render -> renderAxisBrands
+     removes and recreates that very button), which silently killed focus and
+     closed the tooltip it was trying to open. Only rebuild when the actual
+     bracket geometry/labels changed. */
+  var lastAxisBrandsSig = '';
+  function axisBrandsSig(list) {
+    var parts = [];
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      parts.push(a.key + ':' + a.loPct + ':' + a.wPct + ':' + a.midPct + ':' + a.scoreDisplay + ':' + a.bracketColor + ':' + a.rangeText + ':' + a.showRange + ':' + a.showSingle);
+    }
+    return parts.join('|');
   }
 
   function renderAxisBrands(list) {
@@ -2123,7 +2292,7 @@
     for (val = Math.ceil(zlo / step) * step; val <= zhi + 0.001; val += step) {
       pos = ((val - zlo) / span * 100).toFixed(2);
       html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% - 4px);width:1px;height:9px;background:#2E2820;"></div>';
-      html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#55483A;font-variant-numeric:tabular-nums;">' + val + '</div>';
+      html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#8A7D68;font-variant-numeric:tabular-nums;">' + val + '</div>';
     }
     ticksEl.innerHTML = html;
   }
@@ -2136,7 +2305,7 @@
     if (!v.fieldRows.length) { fieldEl.innerHTML = ''; return; }
     var rowCols = 'minmax(74px,1fr) minmax(126px,1.4fr) minmax(84px,0.9fr) 92px';
     var head =
-      '<div style="display:grid;grid-template-columns:' + rowCols + ';gap:10px;align-items:baseline;font-size:8.5px;letter-spacing:0.14em;text-transform:uppercase;color:#55483A;">' +
+      '<div style="display:grid;grid-template-columns:' + rowCols + ';gap:10px;align-items:baseline;font-size:8.5px;letter-spacing:0.14em;text-transform:uppercase;color:#8A7D68;">' +
         '<span>marque</span><span>en IA</span><span>sur Google</span><span style="text-align:right;">part de voix</span>' +
       '</div>';
     var rows = '';
@@ -2165,7 +2334,7 @@
   }
 
   function labelRow(txt) {
-    return '<div style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">' + esc(txt) + '</div>';
+    return '<div style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + esc(txt) + '</div>';
   }
 
   function renderCards(card) {
@@ -2213,6 +2382,110 @@
     if (cta) cta.addEventListener('click', startCheckout);
   }
 
+  /* ============================ dock modes: idle / measuring / error ============================
+     Before a real result exists (or after one fails), the dock used to be
+     either an empty #2A241C slab (opacity:0 the whole time) or, briefly, a
+     below-the-fold strip nobody scrolled to reach. Now it always carries
+     real content: the three products at idle/while measuring, an honest,
+     non-monetary recovery panel on error. Exactly ONE Deep Audit CTA can
+     exist at a time across the whole page (idle dock XOR the settled result
+     dock's card 2, via swapDockContent's mode switch - never both). */
+  function idleFigureRow(big, bigColor, line) {
+    return '<div style="display:flex;align-items:baseline;gap:10px;">' +
+      '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(19px,1.9vw,28px);line-height:1;color:' + bigColor + ';font-variant-numeric:tabular-nums;">' + big + '</span>' +
+      '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#A99C88;">' + esc(line) + '</span>' +
+    '</div>';
+  }
+  /* the idle/measuring dock: same three products the below-the-fold strip
+     used to carry (Deep Audit / suivi dans le temps / règlement de
+     performance), now living where a visitor actually sees them. Static,
+     brand-agnostic copy: nothing here claims anything about the visitor's
+     own measurement, because nothing has been measured yet. */
+  function renderIdleCards() {
+    cardEls[0].innerHTML =
+      labelRow('deep audit') +
+      idleFigureRow('79&euro;', '#E8DFD2', 'une fois, 5 questions et 8 passages sur une IA (contre 2 questions, 3 passages en gratuit).') +
+      '<div style="display:flex;align-items:center;gap:10px;margin-top:2px;">' +
+        '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Lancer un Deep Audit</button>' +
+      '</div>' +
+      '<div class="ndl-deep-msg" style="display:none;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#8A7D68;"></div>';
+    cardEls[1].innerHTML =
+      labelRow('suivi dans le temps') +
+      idleFigureRow('99&euro;', '#E8DFD2', 'par mois, dès. Le même score borné, mesuré chaque semaine, une alerte seulement quand ça sort du bruit.') +
+      '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">voir les trois offres</a>';
+    cardEls[2].innerHTML =
+      labelRow('règlement de performance') +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#C9BEAC;">Jamais un pourcentage. Nadelio arbitre les contrats entre marques et agences, un gain ne compte que hors de la bande à 95 pour cent.</div>' +
+      '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">comment ça marche</a>';
+    var cta = cardEls[0].querySelector('.ndl-deep-cta');
+    if (cta) cta.addEventListener('click', startCheckout);
+  }
+  /* the error dock (a failed free measurement OR a Stripe payError): honest
+     recovery information, deliberately NEVER a Deep Audit / payment pitch -
+     selling 79 EUR at the exact moment something just failed would read as
+     predatory, and on a payError the overlay above already carries its own
+     Réessayer button, so this never duplicates it. */
+  function renderErrorCards(v) {
+    cardEls[0].innerHTML =
+      labelRow('zero simulation') +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#C9BEAC;">Une mesure qui échoue ne devient jamais un chiffre inventé. Rien n\'a été mesuré cette fois.</div>';
+    var retryTxt = state.payError
+      ? 'Votre paiement est en sécurité. Le détail et le bouton Réessayer sont juste au-dessus.'
+      : (v.unknownMsg || 'Vérifiez le nom, ou collez le site officiel de la marque, puis relancez.');
+    cardEls[1].innerHTML =
+      labelRow('pour continuer') +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#C9BEAC;">' + esc(retryTxt) + '</div>';
+    cardEls[2].innerHTML =
+      labelRow('comment on mesure') +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#C9BEAC;">Sources, passages et méthode, sans filtre.</div>' +
+      '<button class="ndl-transp" id="ndl-dock-transp-btn" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding:0 0 2px;align-self:flex-start;margin-top:2px;">transparence &rsaquo;</button>';
+    var btn = cardEls[2].querySelector('#ndl-dock-transp-btn');
+    if (btn) btn.addEventListener('click', openDrawer);
+  }
+  function populateDockCards(mode, v) {
+    if (mode === 'result') renderCards(v.card);
+    else if (mode === 'error') renderErrorCards(v);
+    else renderIdleCards();
+  }
+
+  /* Content-swap choreography for the dock. The climactic idle/measuring ->
+     result transition is the ONE that must read as a deliberate reveal (see
+     the "verdict lands last" retiming in render()): cards are snapped to
+     invisible with transitions disabled (imperceptible, same tick as the
+     content swap), then released on the next frame with the ORIGINAL
+     staggered cascade restored, so it plays exactly like the pre-existing
+     first-ever reveal used to. Any other mode change (idle<->error, etc.) is
+     secondary housekeeping and gets a soft, unstaggered crossfade. */
+  var DOCK_STAGGER = [
+    'opacity 0.48s cubic-bezier(0.2,0.8,0.2,1) 0ms, transform 0.48s cubic-bezier(0.2,0.8,0.2,1) 0ms',
+    'opacity 0.48s cubic-bezier(0.2,0.8,0.2,1) 90ms, transform 0.48s cubic-bezier(0.2,0.8,0.2,1) 90ms',
+    'opacity 0.48s cubic-bezier(0.2,0.8,0.2,1) 180ms, transform 0.48s cubic-bezier(0.2,0.8,0.2,1) 180ms'
+  ];
+  var DOCK_SOFT = 'opacity 0.3s cubic-bezier(0.2,0.8,0.2,1) 0ms, transform 0.3s cubic-bezier(0.2,0.8,0.2,1) 0ms';
+  var lastDockMode = null;
+  function swapDockContent(mode, v) {
+    var i;
+    for (i = 0; i < cardEls.length; i++) {
+      cardEls[i].style.transition = 'none';
+      cardEls[i].style.opacity = '0';
+      cardEls[i].style.transform = 'translateY(10px)';
+    }
+    populateDockCards(mode, v);
+    /* force the "opacity:0, transition:none" frame to commit before the next
+       rAF restores a real transition and raises opacity - without this the
+       browser can coalesce both writes into one frame and skip the fade
+       entirely, exactly the "insight pops in" bug this mirrors (see render()). */
+    void cardEls[0].offsetWidth;
+    var staggered = mode === 'result';
+    requestAnimationFrame(function () {
+      for (i = 0; i < cardEls.length; i++) {
+        cardEls[i].style.transition = staggered ? DOCK_STAGGER[i] : DOCK_SOFT;
+        cardEls[i].style.opacity = '1';
+        cardEls[i].style.transform = 'translateY(0)';
+      }
+    });
+  }
+
   /* ============================ render() ============================ */
   function render() {
     var v = renderVals();
@@ -2233,39 +2506,63 @@
     }
     if (inputEl) inputEl.readOnly = !!v.measuring;
 
-    /* idle offers strip: present at idle, dimmed (never fully disabled here -
-       see the `if (state.measuring) return;` guard in startCheckout, which is
-       the actual functional lock) while a measurement is in flight, hidden
-       once a result settles or on any error (see offersVisible above). */
-    if (idleOffersEl) idleOffersEl.style.display = v.offersVisible ? '' : 'none';
+    /* idle Deep Audit CTA: dimmed (never fully disabled here - see the
+       `if (state.measuring) return;` guard in startCheckout, which is the
+       actual functional lock) while a measurement is in flight. */
     var deepCtaDim = document.querySelectorAll('.ndl-deep-cta');
     for (var dci = 0; dci < deepCtaDim.length; dci++) deepCtaDim[dci].style.opacity = v.measuring ? '0.45' : '1';
 
     /* "lecture en cours" overlay (fades out on settle) */
     if (overlayEl) overlayEl.style.opacity = v.measuringOverlayOp;
 
-    /* verdict hero reveal - the climax (opacity + translateY, own 0.14s delay) */
+    /* verdict hero reveal - the CLIMAX. Retimed (0.28s delay/0.56s duration in
+       the markup, see v2.html) to finish clearly after the dock cards, the
+       field and the insight below - it must unmistakably land last, never
+       just barely after them. aria-hidden mirrors visibility: the h2 inside
+       is empty at idle/measuring, and an empty heading is noise for AT. */
     if (verdictEl) {
       verdictEl.style.opacity = v.verdictOp;
       verdictEl.style.transform = 'translateY(' + v.verdictTy + 'px)';
+      if (v.haveResult) verdictEl.removeAttribute('aria-hidden');
+      else verdictEl.setAttribute('aria-hidden', 'true');
     }
 
     /* named competitive field fades to full on settle */
     if (fieldEl) fieldEl.style.opacity = v.proofOp;
 
-    /* headline insight (shown only with a real result), revealed with the proof */
+    /* headline insight (shown only with a real result), revealed with the
+       proof. display:none -> flex and opacity 0 -> 1 must never land in the
+       same tick: a display:none element has no previous rendered frame to
+       transition FROM, so the very first paint after un-hiding used to just
+       show it already at opacity:1, no fade at all. Forcing a reflow while
+       still at opacity:0 gives the browser a real "before" frame to animate
+       away from once the next rAF raises it to v.proofOp. */
     if (insightEl) {
-      if (v.haveResult && v.insight) { insightEl.style.display = 'flex'; insightEl.style.opacity = v.proofOp; }
-      else { insightEl.style.display = 'none'; insightEl.style.opacity = 0; }
+      var showInsight = v.haveResult && !!v.insight;
+      if (showInsight) {
+        if (insightEl.style.display !== 'flex') {
+          insightEl.style.display = 'flex';
+          insightEl.style.opacity = '0';
+          void insightEl.offsetWidth;
+          requestAnimationFrame(function () { insightEl.style.opacity = String(v.proofOp); });
+        } else {
+          insightEl.style.opacity = v.proofOp;
+        }
+      } else {
+        insightEl.style.display = 'none';
+        insightEl.style.opacity = 0;
+      }
     }
 
     /* dynamic scale label (shows the zoom window once measured) */
     if (scaleLabelEl) scaleLabelEl.textContent = v.scaleLabel;
 
-    /* dock cards reveal (opacity + translateY on the persistent outer nodes) */
-    for (var i = 0; i < cardEls.length; i++) {
-      cardEls[i].style.opacity = v.revealOp;
-      cardEls[i].style.transform = 'translateY(' + v.revealTy + 'px)';
+    /* dock cards: content + reveal choreography both live in swapDockContent,
+       triggered only on an actual mode change (idle/measuring share 'idle',
+       see renderVals) - never an empty slab, in any state. */
+    if (v.mode !== lastDockMode) {
+      swapDockContent(v.mode, v);
+      lastDockMode = v.mode;
     }
 
     /* overlap / advantage band (persistent node -> its transition can fire) */
@@ -2286,7 +2583,16 @@
     }
 
     renderTicks(v);
-    renderAxisBrands(v.axisBrands);
+    /* axis brackets: only rebuilt when their own signature changes (was
+       unconditional on every render, including every keystroke while typing -
+       see axisBrandsSig - and that unconditional rebuild is exactly what used
+       to destroy the "pourquoi une fourchette" info-dot the instant it
+       received keyboard focus). */
+    var axSig = axisBrandsSig(v.axisBrands);
+    if (axSig !== lastAxisBrandsSig) {
+      renderAxisBrands(v.axisBrands);
+      lastAxisBrandsSig = axSig;
+    }
 
     /* quick-pick chips only reflect which example is focused -> rebuild on focus change */
     if (lastChipFocus !== state.focus) {
@@ -2294,11 +2600,12 @@
       lastChipFocus = state.focus;
     }
 
-    /* verdict + cards + field + insight depend on the real result (or the
+    /* verdict text + field + insight text depend on the real result (or the
        loading/idle phase) -> rebuild only when that signature changes, so the
-       ~ticking during loading never re-writes innerHTML needlessly. */
+       ~ticking during loading never re-writes innerHTML needlessly. The dock
+       cards themselves are handled above by swapDockContent (they need their
+       own reveal choreography, not just a content refresh). */
     if (lastContentSig !== v.contentSig) {
-      renderCards(v.card);
       renderVerdict(v.card);
       renderField(v);
       if (insightTextEl) insightTextEl.textContent = v.insight;
@@ -2321,6 +2628,14 @@
 
   /* ============================ bootstrap ============================ */
   function init() {
+    /* computed here (not just in componentDidMount, which runs AFTER the
+       first render() below) so the very first dock swap - the load-time
+       idle-cards fade-in - already knows whether to respect reduced motion.
+       In practice the global `@media (prefers-reduced-motion: reduce)`
+       transition-duration:0.001ms override in nadelio.css neutralises any
+       transition regardless, but this keeps the JS's own notion of `reduced`
+       correct from the first frame instead of only after componentDidMount. */
+    reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     screenEl = document.querySelector('[data-nadelio-root]');
     mountEl = document.getElementById('ndl-mount');
     axisEl = document.getElementById('ndl-axis');
@@ -2345,12 +2660,21 @@
     subBannerEl = document.getElementById('ndl-subbanner');
     belowEl = document.getElementById('ndl-below');
     deepDocEl = document.getElementById('ndl-deepdoc');
-    idleOffersEl = document.getElementById('ndl-offers');
     if (overlayEl) defaultOverlayHTML = overlayEl.innerHTML;
 
     /* handlers on persistent nodes (was onChange / onKeyDown / onClick) */
     inputEl.addEventListener('input', function (ev) { setState({ inputValue: ev.target.value, unknownMsg: '' }); });
     inputEl.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') runMeasure(ev.target.value); });
+    /* The input ships prefilled with "Qonto" (an example, not a placeholder)
+       so autofocus alone used to leave a caret AFTER it - typing then gave
+       "QontoNotion". Selecting it on the first genuine focus (before the
+       visitor has done anything else) means the first keystroke replaces it
+       cleanly, exactly like a search box. Stops doing this once the visitor
+       has actually interacted (userInteracted), so refocusing the input
+       later (post-reveal, tab-return, etc.) never nukes what they typed. */
+    inputEl.addEventListener('focus', function () {
+      if (!userInteracted) { try { inputEl.select(); } catch (e) {} }
+    });
     runBtn.addEventListener('click', function () { runMeasure(state.inputValue || state.focus); });
     /* Funnel: the monitoring links, wherever they are rendered (dock card and
        deep dossier). Delegated because those nodes are rebuilt on every render.
@@ -2369,11 +2693,6 @@
       } catch (e) {}
     }, true);
     if (transpBtn) transpBtn.addEventListener('click', openDrawer);
-    /* the idle offers strip's own Deep Audit CTA is a static, persistent node
-       (unlike the dock's, which is rebuilt on every renderCards) - bind it
-       once here, exactly like runBtn/transpBtn above. */
-    var idleDeepCta = document.getElementById('ndl-idle-deep-cta');
-    if (idleDeepCta) idleDeepCta.addEventListener('click', startCheckout);
 
     /* first render populates every dynamic region before first paint */
     render();
