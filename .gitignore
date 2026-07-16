@@ -25,6 +25,9 @@ venv/
 # Node (dev-only build tooling, never shipped)
 node_modules/
 
+# Playwright MCP browser artifacts (screenshots, snapshots, console logs)
+.playwright-mcp/
+
 # OS
 .DS_Store
 Thumbs.db

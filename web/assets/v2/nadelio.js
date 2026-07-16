@@ -466,6 +466,20 @@
       passCount: currentResult ? currentResult.passTotal : 0,
       unknownMsg: (currentResult && currentResult.notice) ? currentResult.notice : ''
     });
+    /* The field and the insight only render on this reveal, and they push the
+       axis down. A ResizeObserver on the axis does NOT fire on a pure position
+       change, so the cloud would stay projected on the axis' OLD position and
+       float over the field. Re-project once the new layout is settled (two
+       frames: one for the DOM write, one for layout). */
+    if (scene) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          if (gen !== measureGen) return;
+          buildClusters(clusterRows(), false, clusterFocus());
+          if (reduced) renderResolved();
+        });
+      });
+    }
     setTimeout(function () {
       if (inputEl && !state.drawerOpen && (document.activeElement === document.body || document.activeElement === null)) inputEl.focus({ preventScroll: true });
     }, 80);
