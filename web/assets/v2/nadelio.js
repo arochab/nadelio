@@ -31,7 +31,7 @@
   var EXAMPLES = ['Qonto', 'Pennylane', 'Alan'];
 
   var TIP_TEXT = {
-    scale: 'L\'échelle réelle va de 0 à 100. On zoome sur la zone utile pour rendre l\'écart lisible, sans jamais le grossir : les positions et la distance entre les marques restent exactes.',
+    scale: 'L\'échelle réelle va de 0 à 100. On zoome sur la zone utile pour rendre l\'écart lisible : l\'écart parait donc plus grand qu\'il ne l\'est sur 100. Les chiffres et les proportions restent exacts, l\'axe indique toujours sa fenêtre de zoom.',
     range: 'Le vrai score se trouve dans cette fourchette 95 fois sur 100. Plus elle est étroite, plus la mesure est sûre.',
     presence: 'Dans combien de vos questions la marque ressort. Absente d\'une question, elle est invisible pour tous ceux qui la posent.'
   };
@@ -94,14 +94,54 @@
   var measureGen = 0;                 /* guards against overlapping runs */
   var slowNoteEl = null, slowNoteT = null;   /* "instrument waking" note (>8s) */
   var MIN_LOAD_MS = 1200;             /* minimum loading display so the animation reads */
+  /* Whether the visitor has explicitly confirmed the identified entity for the
+     CURRENT result. Reset to false every time a new measurement starts; a paid
+     checkout on a low-confidence identification is blocked until this is true
+     (see startCheckout / showIdentityConfirm). */
+  var identityConfirmed = false;
+
+  /* A paid deep audit is single-use and takes 30-60s. If the tab is closed or
+     reloaded mid-run, the ?paid= URL is already scrubbed (see resumeDeepAudit),
+     so without this the session id would be unrecoverable even though Stripe
+     still shows it unconsumed. Persisted to sessionStorage (survives a reload,
+     not a new tab) and cleared only once the deep dossier actually renders or
+     the session is confirmed already spent. */
+  var PENDING_DEEP_KEY = 'ndl_pending_deep';
+  function savePendingDeep(sessionId, brand) {
+    try { sessionStorage.setItem(PENDING_DEEP_KEY, JSON.stringify({ sessionId: sessionId, brand: brand || '' })); } catch (e) {}
+  }
+  function readPendingDeep() {
+    try {
+      var raw = sessionStorage.getItem(PENDING_DEEP_KEY);
+      if (!raw) return null;
+      var o = JSON.parse(raw);
+      return (o && o.sessionId) ? o : null;
+    } catch (e) { return null; }
+  }
+  function clearPendingDeep() {
+    try { sessionStorage.removeItem(PENDING_DEEP_KEY); } catch (e) {}
+  }
 
   /* ---------- tooltip / drawer nodes ---------- */
   var tipEl = null, lastTipSig = '';
   var drawerScrim = null, drawerDialog = null, drawerCloseBtn = null, lastDrawerOpen = false;
 
   /* ============================ helpers ============================ */
+  /* Escapes ALL five HTML-significant characters, because the output is used
+     in BOTH text nodes and double-quoted HTML attributes (title=, href=) built
+     by string concatenation. Escaping only & < > left a reflected-XSS hole via
+     ?brand= for any attribute site (a brand name containing a double quote
+     broke out of title="..."). */
   function esc(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  /* Only ever emit http(s) links built from backend-supplied strings (SERP /
+     evidence sources are third-party content Nadelio did not author) - never a
+     javascript: or data: URL. Returns '' (renders no link) for anything else. */
+  function safeHttpUrl(u) {
+    var s = String(u || '').trim();
+    return (/^https?:\/\//i).test(s) ? s : '';
   }
   function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5); }
 
@@ -445,7 +485,7 @@
           '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;">Souvent, la page Google n\'est pas tenue par les marques mais par des comparateurs et des agrégateurs. Voici les domaines en tête, question par question.</div>' +
           ownerHtml +
         '</div>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;border-top:1px solid #2A241C;padding-top:14px;">Mesuré : ' + matrix.length + ' question' + (matrix.length > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + runN + ' passage' + (runN > 1 ? 's' : '') + ' par question, une lecture de Google. Chaque case montre le rang réel de la marque, sans agrégation cachée. Le Deep Audit élargit cette même lecture à plus de questions et plusieurs IA recoupées.</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;border-top:1px solid #2A241C;padding-top:14px;">Mesuré : ' + matrix.length + ' question' + (matrix.length > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + runN + ' passage' + (runN > 1 ? 's' : '') + ' par question, ' + matrix.length + ' lecture' + (matrix.length > 1 ? 's' : '') + ' de Google. Chaque case montre le rang réel de la marque, sans agrégation cachée. Le Deep Audit élargit cette même lecture à 5 questions et 8 passages par question, toujours sur ' + provider + '.</div>' +
       '</div>';
 
     screenEl.appendChild(drawerScrim);
@@ -472,6 +512,10 @@
   function reveal(gen) {
     if (gen !== measureGen) return;
     clearSlowNote();
+    /* The paid session is only "spent for good" from the visitor's point of
+       view once its deep dossier has actually rendered - clear the reload-
+       recovery marker (see resumeDeepAudit) exactly here, never earlier. */
+    if (currentResult && currentResult.tier === 'deep') clearPendingDeep();
     setState({
       measuring: false, settled: true, payError: false,
       passCount: currentResult ? currentResult.passTotal : 0,
@@ -516,8 +560,15 @@
   }
 
   /* rows/focus the 3D instrument is built from: the real head-to-head once we
-     have a result, else a neutral converging cloud (no labels, no fake scores). */
-  function loadingRows() { return [{ n: '', s: 70, m: 8 }]; }
+     have a result, else a neutral cloud that encodes NO score. At idle, while
+     measuring and on failure, currentResult is null, so computeWindow(null)
+     is always {lo:0,hi:100} - a fixed point (e.g. 70) would render as a real,
+     confident measurement on that labelled axis before anything was measured.
+     Centring on the window's midpoint with a span covering half the window
+     spreads the cloud across most of the visible axis instead, which reads as
+     "nothing measured" rather than "score 50". bounded:false keeps it out of
+     the proven/behind classification (see clusterState). */
+  function loadingRows() { return [{ n: '', s: 50, m: 50, bounded: false }]; }
   function clusterRows() { return (currentResult && currentResult.rows && currentResult.rows.length) ? currentResult.rows : loadingRows(); }
   function clusterFocus() { return (currentResult && currentResult.rows && currentResult.rows.length) ? currentResult.focusName : ''; }
 
@@ -584,10 +635,16 @@
        During measuring the frame() loop overrides calmness anyway (measuring=1). */
     if (rows.length < 2) return 'proven';
     var l = rows[0], s2 = rows[1], r = rows[i];
-    var proven = (l.s - l.m) > (s2.s + s2.m);
+    /* Never render "proven" (a confident, settled cluster) or "behind" from an
+       UNBOUNDED read (half_width was null - a single successful run). Two bare
+       points are not disjoint confidence bands; the honest visual state is the
+       same "contested" (higher-motion, undecided) look computeVerdict now also
+       falls back to for that case. */
+    var bothBounded = l.bounded !== false && s2.bounded !== false;
+    var proven = bothBounded && (l.s - l.m) > (s2.s + s2.m);
     if (i === 0) return proven ? 'proven' : 'contested';
     if (i === 1 && !proven) return 'contested';
-    if ((l.s - l.m) > (r.s + r.m)) return 'behind';
+    if (bothBounded && (l.s - l.m) > (r.s + r.m)) return 'behind';
     return 'contested';
   }
 
@@ -734,9 +791,55 @@
     var el = cardEls[2] ? cardEls[2].querySelector('.ndl-deep-cta') : null;
     if (el) el.style.pointerEvents = locked ? 'none' : '';
   }
+  /* Guard-rail ported from index.html's resolver: a bare name with no web
+     evidence can resolve to a famous homonym (Payflows -> Stripe, Toucan ->
+     Duolingo). The backend marks that "low" confidence (app.py _sanitize_
+     strategy). Before spending 79 euro on possibly the WRONG company, the
+     visitor must see who was identified and explicitly confirm it. Renders
+     inline in the deep card (native to the v2 language, no modal). */
+  function identityConfirmHTML(R) {
+    var name = esc((R && (R.identifiedAs || R.focusName)) || '');
+    var url = safeHttpUrl(R && R.officialUrl);
+    var urlHtml = url ? (' (<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="color:#A99C88;border-bottom:1px solid #4A4234;">' + esc(shortHost(url)) + '</a>)') : '';
+    return '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:11px 13px;border:1px solid #3A3128;background:#171310;">' +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#D8CDBB;">Avant de payer, confirmez : nous avons identifié <b style="color:#E8DFD2;">' + name + '</b>' + urlHtml + '.</div>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+        '<button class="ndl-identity-yes" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:8px 12px;">Oui, lancer le paiement</button>' +
+        '<button class="ndl-identity-no" style="cursor:pointer;border:1px solid #4A4234;background:none;color:#A99C88;font-family:inherit;font-size:10.5px;padding:8px 12px;">Ce n\'est pas ma marque</button>' +
+      '</div>' +
+    '</div>';
+  }
+  function showIdentityConfirm() {
+    var card = cardEls[2];
+    if (!card || card.querySelector('.ndl-identity-confirm')) return;
+    deepCtaLock(true);
+    var wrap = document.createElement('div');
+    wrap.className = 'ndl-identity-confirm';
+    wrap.innerHTML = identityConfirmHTML(currentResult);
+    card.appendChild(wrap);
+    var yes = wrap.querySelector('.ndl-identity-yes');
+    var no = wrap.querySelector('.ndl-identity-no');
+    if (yes) yes.addEventListener('click', function () {
+      identityConfirmed = true;
+      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      startCheckout();
+    });
+    if (no) no.addEventListener('click', function () {
+      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      deepCtaLock(false);
+      deepMsg('Corrigez le nom ou l\'URL de la marque puis relancez une mesure.', true);
+      if (inputEl) inputEl.focus();
+    });
+  }
   function startCheckout() {
     var brand = (currentResult && currentResult.focusName) || state.focus || (state.inputValue || '').trim();
     if (!brand) { if (inputEl) inputEl.focus(); deepMsg('Lancez d\'abord un audit, le Deep Audit a besoin d\'une marque.', true); return; }
+    /* Never let a low-confidence identification reach checkout unconfirmed:
+       the 79-euro dossier must never be sold on possibly the wrong company. */
+    if (currentResult && currentResult.confidence === 'low' && !identityConfirmed) {
+      showIdentityConfirm();
+      return;
+    }
     var market = (currentResult && currentResult.market) || '';
     deepCtaLock(true);
     deepMsg('Ouverture du paiement sécurisé...', false);
@@ -802,8 +905,8 @@
         if (e.site_name) bits.push('<b style="color:#E8DFD2;font-weight:600;">' + esc(e.site_name) + '</b>');
         if (e.title) bits.push(esc(e.title));
         if (e.description) bits.push('<span style="color:#8A7D68;">' + esc(e.description) + '</span>');
-        var src = e.source || e.link || '';
-        var srcHtml = src ? ' <a href="' + esc(src) + '" target="_blank" rel="noopener" style="color:#A99C88;border-bottom:1px solid #4A4234;">source</a>' : '';
+        var src = safeHttpUrl(e.source || e.link || '');
+        var srcHtml = src ? ' <a href="' + esc(src) + '" target="_blank" rel="noopener noreferrer" style="color:#A99C88;border-bottom:1px solid #4A4234;">source</a>' : '';
         return bits.length ? '<li style="margin-bottom:8px;line-height:1.55;">' + bits.join(', ') + srcHtml + '</li>' : '';
       }).join('');
       if (items) {
@@ -837,7 +940,10 @@
         '</div>';
     }
 
-    var footNote = 'Mesuré : ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + ', 1 IA (' + esc(R.providerLabel) + '), ' + R.n + ' passage' + (R.n > 1 ? 's' : '') + ' par question' + (R.market ? ', marché ' + esc(R.market) : '') + '.';
+    /* Escaped exactly ONCE, at output (line below): esc()'ing these fragments
+       here too double-escaped any "&" in a provider/market label ("&amp;" ->
+       "&amp;amp;") in the paid dossier. */
+    var footNote = 'Mesuré : ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + ', 1 IA (' + R.providerLabel + '), ' + R.n + ' passage' + (R.n > 1 ? 's' : '') + ' par question' + (R.market ? ', marché ' + R.market : '') + '.';
 
     return (
       '<div style="max-width:960px;margin:0 auto;padding:clamp(32px,6vh,64px) clamp(16px,3vw,40px) clamp(48px,8vh,88px);display:flex;flex-direction:column;gap:28px;border-top:1px solid #2A241C;">' +
@@ -919,10 +1025,15 @@
      measurement, but {deep:true, paid_session} on the analyze call, exactly
      like index.html's runDeepAnalysis. A failure here never loses the
      payment: it always offers Retry + support, the audit can be re-run on the
-     same paid_session (the slot is only consumed once analyze truly succeeds). */
-  function runDeepMeasure(brand, sessionId) {
+     same paid_session (the slot is only consumed once analyze truly succeeds).
+     `market` (optional) is the market the FREE preview already measured in
+     (recovered from the Stripe session via /api/verify-payment) - forced onto
+     both calls so the 79-euro dossier is never geolocated to a different
+     market than the free read the customer paid on. */
+  function runDeepMeasure(brand, sessionId, market) {
     var gen = ++measureGen;
     currentResult = null;
+    identityConfirmed = false;
     measureStart = performance.now();
     setState({ focus: brand, inputValue: brand, measuring: true, settled: false, payError: false, unknownMsg: '', passCount: 0 });
     renderBelowFold();
@@ -934,16 +1045,26 @@
       { text: 'Dossier prêt', state: 'pending' }
     ]);
     var loadStart = performance.now();
-    fetch('/api/infer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: brand, deep: true }) })
+    var officialUrl = '';
+    var inferBody = { brand: brand, deep: true };
+    if (market) inferBody.market = market;
+    fetch('/api/infer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inferBody) })
       .then(function (res) { return res.json().catch(function () { return {}; }); })
       .catch(function () { return {}; })
       .then(function (inf) {
         if (gen !== measureGen) return null;
+        officialUrl = (inf && inf.official_url) || '';
         var body = { live: true, brand: brand, deep: true, paid_session: sessionId };
         if (inf && !inf.error && inf.competitors && inf.competitors.length && inf.queries && inf.queries.length) {
           body.competitors = inf.competitors; body.queries = inf.queries; body.sector = inf.sector;
           body.market_label = inf.market; body.query_language = inf.query_language;
+          /* Anchor the paid run's identity confirmation at least as well as
+             the free one: forward what /api/infer resolved, so a low-confidence
+             identification stays low-confidence here too (never silently
+             upgraded just because the customer already paid). */
+          body.identified_as = inf.identified_as; body.confidence = inf.confidence;
         }
+        if (market) body.market = market;
         return fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, body: d }; }); });
       })
@@ -951,17 +1072,31 @@
         if (ana == null || gen !== measureGen) return;
         var d = ana.body || {};
         if (!ana.ok || d.error || !d.ranking || !d.geo || d.geo.point == null) {
-          showPayError('Le paiement est confirmé mais l\'audit n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.', function () { runDeepMeasure(brand, sessionId); });
+          showPayError('Le paiement est confirmé mais l\'audit n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.', function () { runDeepMeasure(brand, sessionId, market); });
           return;
         }
         /* Same guard on the paid path: the backend falls back to its demo
            fixture on a live failure. A customer who just paid must never be
            handed another brand's sample as their dossier. */
         if (d.mode !== 'live') {
-          showPayError('Le paiement est confirmé mais la mesure n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.', function () { runDeepMeasure(brand, sessionId); });
+          showPayError('Le paiement est confirmé mais la mesure n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.', function () { runDeepMeasure(brand, sessionId, market); });
+          return;
+        }
+        /* The paid gate (app.py _resolve_paid_depth) fails CLOSED to a FREE
+           2-question audit on six distinct backend conditions (expired
+           session, restart, Stripe unreachable, ...) and still answers 200
+           with mode:"live". Without this check a payer who hit one of those
+           would silently be served the free tier AND shown the "Deep Audit,
+           79 EUR" button again, having already paid once. Never present a
+           non-deep response as the paid dossier, and never offer a naive
+           retry here: the session is already durably consumed on Stripe, so
+           retrying only re-runs the same downgrade. Support can unlock it. */
+        if (d.tier !== 'deep') {
+          showPayError('Le paiement est confirmé mais l\'audit approfondi n\'a pas pu être débloqué automatiquement. Contactez le support avec votre reçu Stripe, nous le lançons pour vous, votre paiement est en sécurité.', null);
           return;
         }
         currentResult = buildResult(d);
+        currentResult.officialUrl = officialUrl;
         measureStart = performance.now();
         if (scene) buildClusters(currentResult.rows, !reduced, currentResult.focusName);
         if (reduced) renderResolved();
@@ -971,11 +1106,13 @@
         revealT = setTimeout(function () { reveal(gen); }, wait);
       })
       .catch(function () {
-        showPayError('Impossible de joindre l\'instrument. Votre paiement est en sécurité, réessayez ou contactez le support.', function () { runDeepMeasure(brand, sessionId); });
+        showPayError('Impossible de joindre l\'instrument. Votre paiement est en sécurité, réessayez ou contactez le support.', function () { runDeepMeasure(brand, sessionId, market); });
       });
   }
 
   function showConsumedMessage() {
+    /* Terminal state - this session has nothing left to resume. */
+    clearPendingDeep();
     setState({ measuring: false, settled: false, payError: true });
     if (!overlayEl) return;
     overlayEl.innerHTML =
@@ -988,9 +1125,15 @@
 
   /* Entry point for a ?paid={CHECKOUT_SESSION_ID}&brand=<enc> return. Verifies
      first (never trusts the URL alone), then either runs the deep audit, says
-     the session is already consumed, or offers Retry + support on failure. The
-     URL is scrubbed immediately so a refresh never re-spends the same link. */
+     the session is already consumed, or offers Retry + support on failure.
+     The URL is scrubbed immediately (a refresh must never resend the same
+     link to Stripe's verify endpoint as a fresh navigation), but the session
+     id is first persisted to sessionStorage (see PENDING_DEEP_KEY) and is only
+     cleared once the deep dossier actually renders (reveal()) or the session
+     is confirmed already spent (showConsumedMessage()) - so a reload or a
+     crash mid-audit can always resume the SAME paid run instead of losing it. */
   function resumeDeepAudit(sessionId, brandParam) {
+    savePendingDeep(sessionId, brandParam || '');
     try { history.replaceState({}, document.title, window.location.pathname); } catch (e) {}
     if (brandParam) { if (inputEl) inputEl.value = brandParam; }
     setState({ focus: brandParam || state.focus, inputValue: brandParam || state.inputValue });
@@ -1005,7 +1148,10 @@
         }
         if (d.consumed) { showConsumedMessage(); return; }
         var brand = d.brand || brandParam || state.focus;
-        runDeepMeasure(brand, sessionId);
+        /* d.market is the market the FREE preview was measured in, recovered
+           from the Stripe session metadata - forces the paid dossier onto the
+           same market instead of letting it re-infer a possibly different one. */
+        runDeepMeasure(brand, sessionId, d.market || '');
       })
       .catch(function () {
         showPayError('Impossible de confirmer le paiement pour le moment. Si vous avez été débité, réessayez ou contactez le support avec votre reçu.', function () { resumeDeepAudit(sessionId, brandParam); });
@@ -1046,18 +1192,28 @@
 
   /* Reads ?paid / ?sub / ?brand once at boot and routes to the matching
      resume flow. ?paid takes priority (a returning payer must always land on
-     a working page, per the task's hard requirement), then ?sub, then a plain
-     ?brand= prefill + measure. */
+     a working page, per the task's hard requirement); then a sessionStorage-
+     -persisted deep session interrupted earlier (reload recovery, see
+     resumeDeepAudit); then ?sub; then a plain ?brand=, which only PREFILLS
+     the input - it never auto-runs. A real audit costs money on every load
+     (SERP + LLM calls), and this URL param is exactly the one an outreach
+     link or a bare page share puts in front of link-preview bots and casual
+     clicks with no user intent to spend anything; the visitor must press
+     "Lancer un audit" themselves. */
   function bootstrapParams() {
     var params;
     try { params = new URLSearchParams(window.location.search); } catch (e) { params = null; }
-    if (!params) return;
-    var paid = params.get('paid');
-    var sub = params.get('sub');
-    var brandParam = (params.get('brand') || '').trim();
+    var paid = params ? params.get('paid') : null;
+    var sub = params ? params.get('sub') : null;
+    var brandParam = params ? (params.get('brand') || '').trim() : '';
     if (paid) { resumeDeepAudit(paid, brandParam); return; }
+    var pending = readPendingDeep();
+    if (pending) { resumeDeepAudit(pending.sessionId, pending.brand || ''); return; }
     if (sub) { resumeSubscription(sub); return; }
-    if (brandParam) { runMeasure(brandParam); }
+    if (brandParam) {
+      setState({ focus: brandParam, inputValue: brandParam });
+      try { history.replaceState({}, document.title, window.location.pathname); } catch (e) {}
+    }
   }
 
   /* ============================ measurement control ============================ */
@@ -1065,11 +1221,19 @@
      the queries, then /api/analyze runs the bounded audit. The loading animation
      starts optimistically at once; the reveal fires on DATA ARRIVAL. */
   function runMeasure(rawName) {
+    /* Refuse to start a new run while one is already in flight (free OR paid -
+       state.measuring covers both, see runDeepMeasure). Without this, one
+       Enter/click during a 30-60s paid Deep Audit silently starts a competing
+       free run: it bumps measureGen, so the paid result's own `gen !==
+       measureGen` guard then discards it on arrival even though the server
+       already delivered (and billed) it. DOM-enforced too, see render(). */
+    if (state.measuring) return;
     var name = (rawName || '').trim();
     if (!name) { setState({ unknownMsg: 'Tapez le nom d\'une marque.' }); return; }
     resetOverlayContent();
     var gen = ++measureGen;
     currentResult = null;
+    identityConfirmed = false;
     setState({ focus: name, inputValue: name, measuring: true, settled: false, payError: false, unknownMsg: '', passCount: 0 });
     renderBelowFold();
     measureStart = performance.now();
@@ -1082,11 +1246,13 @@
 
   function runReal(name, gen) {
     var loadStart = performance.now();
+    var officialUrl = '';
     fetch('/api/infer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: name }) })
       .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, status: res.status, body: d }; }); })
       .then(function (inf) {
         if (gen !== measureGen) return null;
         var d = inf.body || {};
+        officialUrl = d.official_url || '';
         var usable = inf.ok && !d.error && d.competitors && d.competitors.length && d.queries && d.queries.length;
         if (!usable) {
           failMeasure(gen, inf.status === 429
@@ -1123,6 +1289,7 @@
           return;
         }
         currentResult = buildResult(d);
+        currentResult.officialUrl = officialUrl;
         /* rebuild the 3D from the REAL rows and re-arm the burst so the cloud
            visibly converges on the reveal, whatever the fetch latency was. */
         measureStart = performance.now();
@@ -1241,11 +1408,18 @@
     var report = (d.report && typeof d.report === 'object') ? d.report : null;
     var geoScore = (d.geo_score != null) ? Math.max(0, Math.min(100, parseInt(d.geo_score, 10) || 0)) : null;
 
-    /* rows: focus + (optional) rival, from their bounded scores only */
+    /* rows: focus + (optional) rival, from their bounded scores only. The
+       backend explicitly refuses to bound a single successful run (half_width
+       null, verdict SINGLE_RUN, its own comment: "a bound on n=1 would be a
+       lie") - defaulting that to +-1 here would draw a fabricated 95%
+       confidence bracket on an interval that was never computed. Carry the
+       null through as bounded:false and m:0 instead; renderVals/axisBrandHTML
+       render a bare point (no bracket, no range text, no "why a range"
+       tooltip) for an unbounded row. */
     var rows = [];
     if (geo && geo.point != null) {
-      rows.push({ n: focusName, s: geo.point, m: (geo.half_width != null ? geo.half_width : 1) });
-      if (rival) rows.push({ n: rival.brand, s: rival.point, m: (rival.half_width != null ? rival.half_width : 1) });
+      rows.push({ n: focusName, s: geo.point, m: (geo.half_width != null ? geo.half_width : 0), bounded: geo.half_width != null });
+      if (rival) rows.push({ n: rival.brand, s: rival.point, m: (rival.half_width != null ? rival.half_width : 0), bounded: rival.half_width != null });
     }
 
     var ranking = d.ranking || [];
@@ -1343,6 +1517,16 @@
       market: d.market || '',
       notice: d.notice || '',
       tier: tier, evidence: evidence, report: report, geoScore: geoScore, planche: planche,
+      /* identity confirmation (see startCheckout / showIdentityConfirm): the
+         backend only ever returns confidence "high" when real web evidence
+         backed the identification (app.py _sanitize_strategy). officialUrl is
+         NOT part of this response (only /api/infer returns it) - the callers
+         (runReal/runDeepMeasure) attach it after buildResult() returns. */
+      identifiedAs: d.identified_as || '', confidence: (d.confidence || '').toLowerCase().trim(),
+      /* a cache hit is served verbatim from a prior run (possibly for a
+         different visitor, possibly old) - never presented as this visitor's
+         own fresh live measurement without saying so (see passCounter). */
+      cached: !!d.cached,
       insight: buildInsight(ctx),
       cards: buildCards(ctx)
     };
@@ -1356,7 +1540,10 @@
     var Y = c.Q, plural = Y > 1 ? 's' : '';
     if (c.focusPrimaryN >= 1) {
       var citedTxt = (c.focusPrimaryCited && c.runs) ? (c.focusPrimaryCited + ' fois sur ' + c.runs) : ('sur ' + c.runs + ' mesures');
-      var s = 'En IA, ' + c.focusName + ' est la réponse mise en avant, n1 sur ' + c.focusPrimaryN + ' de vos ' + Y + ' question' + plural + ', ' + citedTxt + '.';
+      /* "primary" (kind==='primary') is a coverage majority across runs, not a
+         rank-1 guarantee (a brand named primary in 2 of 3 runs while ranked
+         2nd on average still has kind==='primary'). Never assert "n1" here. */
+      var s = 'En IA, ' + c.focusName + ' est la réponse mise en avant sur ' + c.focusPrimaryN + ' de vos ' + Y + ' question' + plural + ', ' + citedTxt + '.';
       if (c.ownersPhrase) s += ' Sur Google, ce sont les comparateurs (' + c.ownersPhrase + ') qui tiennent la page. Vous gagnez la réponse IA, pas encore le référencement.';
       else if (c.focusSerp.best != null) s += ' Sur Google, votre meilleure position est le rang ' + c.focusSerp.best + '. L\'avantage IA est réel, tenez-le dans le temps.';
       else s += ' L\'avantage IA est réel, tenez-le dans le temps.';
@@ -1390,10 +1577,19 @@
       else { t = 'Position mesurée.'; txt = focusName + ' obtient ' + p + ' sur 100, une visibilité réelle dans les réponses IA.'; }
       return { title: t, color: SAGE, text: txt, kind: 'solo' };
     }
-    var gLow = geo.half_width != null ? geo.low : geo.point;
-    var gHigh = geo.half_width != null ? geo.high : geo.point;
-    var rLow = rival.half_width != null ? rival.low : rival.point;
-    var rHigh = rival.half_width != null ? rival.high : rival.point;
+    /* Refuse the head-to-head entirely when either side is unbounded
+       (half_width null, verdict SINGLE_RUN - only one run succeeded). Two bare
+       points are not disjoint confidence bands: comparing them as points used
+       to collapse a 1-point gap measured once into "une avance nette qui tient
+       à chaque mesure" - a stability claim from a single measurement, exactly
+       the over-claim this product exists to refuse. */
+    if (geo.half_width == null || rival.half_width == null) {
+      return {
+        title: 'Trop tôt pour comparer.', color: INK, kind: 'unbounded',
+        text: focusName + ' et ' + rival.brand + ' ne sont mesurés qu\'une fois chacun sur cette lecture. On ne départage jamais deux marques sur une seule mesure.'
+      };
+    }
+    var gLow = geo.low, gHigh = geo.high, rLow = rival.low, rHigh = rival.high;
     var diff = geo.point - rival.point;
     if (gLow > rHigh) {
       var d1 = Math.max(1, Math.round(diff));
@@ -1476,12 +1672,19 @@
       };
     } else {
       var free = 'Gratuit : ' + Y + ' question' + (Y > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + c.runs + ' passage' + (c.runs > 1 ? 's' : '') + ' par question.';
+      /* Ground truth (app.py): a Deep Audit measures 5 questions (vs 2 free)
+         and 8 passages per question on the SAME assistant (vs c.runs, 3 by
+         default) - a tighter confidence interval, never a second assistant.
+         "plusieurs IA recoupées" / "triple mesure" both over-claimed this;
+         the free card above already says c.runs, so state the real deep
+         number (8) against it and name the assistant explicitly so nobody
+         reads this as a cross-model check. */
       var adds;
       if (c.planche && c.planche.query) {
         var holderTxt = c.planche.holder ? (', où ' + c.planche.holder + ' tient la réponse aujourd\'hui') : '';
-        adds = 'Le Deep Audit élargit à 5 questions en triple mesure et nomme vos angles morts, par exemple « ' + c.planche.query + ' »' + holderTxt + '.';
+        adds = 'Le Deep Audit élargit à 5 questions et 8 passages par question sur ' + provider + ' (contre ' + c.runs + ' aujourd\'hui), un intervalle plus étroit, et nomme vos angles morts, par exemple « ' + c.planche.query + ' »' + holderTxt + '.';
       } else {
-        adds = 'Le Deep Audit élargit à 5 questions en triple mesure, plusieurs IA recoupées, et remet un plan d\'action sourcé.';
+        adds = 'Le Deep Audit élargit à 5 questions et 8 passages par question sur ' + provider + ' (contre ' + c.runs + ' aujourd\'hui), un intervalle plus étroit, et remet un plan d\'action sourcé.';
       }
       deepBlock = { delivered: false, free: free, adds: adds };
     }
@@ -1518,8 +1721,11 @@
         var level = 0;
         if (!isFocus) { belowIdx += 1; level = belowIdx; }
         var bracketColor = isFocus ? BRASS : cState === 'behind' ? '#7C5240' : '#8A7D68';
+        var bounded = r.bounded !== false;
         /* clamp to the visible 0..100 so an out-of-window real score never
-           renders a negative-width or off-axis bracket; the axis spans 0..100. */
+           renders a negative-width or off-axis bracket; the axis spans 0..100.
+           An unbounded row (m:0, see buildResult) collapses to a zero-width
+           bracket - i.e. no visible bracket at all, just the point. */
         var lo = Math.max(0, Math.min(100, (r.s - r.m - ZLO) / zspan * 100));
         var hi = Math.max(0, Math.min(100, (r.s + r.m - ZLO) / zspan * 100));
         return {
@@ -1533,14 +1739,24 @@
           scoreColor: isFocus ? BRASS : cState === 'behind' ? '#6E6250' : '#A99C88',
           subColor: cState === 'behind' ? '#55483A' : '#8A7D68',
           scoreDisplay: r.s,
-          rangeText: 'entre ' + Math.max(0, r.s - r.m) + ' et ' + Math.min(100, r.s + r.m),
-          showRange: isFocus,
+          /* A real 95% interval only when the backend actually bounded it.
+             Never fabricate "entre X et Y" (nor its "why a range" tooltip,
+             see axisBrandHTML) on a SINGLE_RUN read the backend explicitly
+             refused to bound - that would sell a confidence claim that was
+             never computed. */
+          rangeText: bounded ? ('entre ' + Math.max(0, r.s - r.m) + ' et ' + Math.min(100, r.s + r.m)) : 'mesure unique, non bornée',
+          showRange: isFocus && bounded,
+          showSingle: isFocus && !bounded,
           leaderTop: isFocus ? 'calc(50% - 22px)' : 'calc(50% + 6px)',
           leaderH: isFocus ? 16 : level === 1 ? 12 : 30,
           labelPos: isFocus ? 'bottom:calc(50% + 24px)' : level === 1 ? 'top:calc(50% + 20px)' : 'top:calc(50% + 40px)'
         };
       });
-      if (sorted.length >= 2) {
+      /* The advantage/overlap band is itself a certainty claim (a shaded
+         "proven lead" or "overlap" zone) - only draw it when BOTH rows are
+         actually bounded; otherwise leave the default transparent region so
+         nothing implies a comparison that was never made (see computeVerdict). */
+      if (sorted.length >= 2 && sorted[0].bounded !== false && sorted[1].bounded !== false) {
         var l = sorted[0], s2 = sorted[1];
         var proven = (l.s - l.m) > (s2.s + s2.m);
         region = proven
@@ -1560,10 +1776,9 @@
     });
 
     /* ---- named competitive field (replaces the anonymous share bar) ---- */
-    var fieldRows = [], focusName = st.focus, maxShare = 0;
+    var fieldRows = [], focusName = st.focus;
     if (haveResult) {
       focusName = R.focusName;
-      R.fieldRows.forEach(function (f) { if (f.share > maxShare) maxShare = f.share; });
       fieldRows = R.fieldRows.map(function (f) {
         var g = f.serpRank != null ? ('Google rang ' + f.serpRank) : 'absent de Google';
         return {
@@ -1574,7 +1789,11 @@
           google: g,
           googleColor: f.serpRank != null ? '#8A7D68' : '#7C5240',
           sharePct: f.share,
-          shareW: maxShare > 0 ? Math.max(3, Math.round(f.share / maxShare * 100)) : 0,
+          /* The bar width IS the share (0-100), never normalized to the
+             leader's share - normalizing to the leader always drew the top
+             brand's bar at full width even when its label read e.g. "33%",
+             and the 3%-floor drew a visible bar for a brand measured at 0%. */
+          shareW: Math.max(0, Math.min(100, Math.round(f.share))),
           shareColor: f.isFocus ? BRASS : 'rgba(216,205,187,0.28)',
           shareLabel: Math.round(f.share) + '%'
         };
@@ -1586,9 +1805,17 @@
     /* dynamic scale label: shows the zoom window once a result is present */
     var scaleLabel = haveResult ? ('zoom ' + ZLO + ' à ' + ZHI + ' sur 100') : 'échelle 0 à 100';
 
-    /* ---- pass counter: real total once settled, indeterminate while measuring ---- */
+    /* ---- pass counter: real total once settled, indeterminate while measuring ----
+       R.n is the number of AI responses actually read (one API call per run,
+       each covering every question) - R.passTotal (n x nQueries) counts
+       question-coverage, not responses, and was mislabelled "réponses lues"
+       (doubling the true count for a 2-question audit). A cached result is
+       surfaced honestly here too: it is not this visitor's own fresh
+       measurement (see buildResult / app.py _cache). */
     var passCounter;
-    if (st.settled && haveResult) passCounter = R.passTotal + ' réponses lues';
+    if (st.settled && haveResult) {
+      passCounter = R.n + ' réponse' + (R.n > 1 ? 's' : '') + ' IA lues sur ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + (R.cached ? ', mesure en cache' : '');
+    }
     else if (st.payError) passCounter = 'paiement';
     else if (st.measuring) passCounter = 'mesure en cours';
     else passCounter = 'en attente';
@@ -1628,11 +1855,17 @@
     s += '<div style="position:absolute;left:' + ab.midPct + '%;' + ab.labelPos + ';transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;white-space:nowrap;transition:left 0.6s cubic-bezier(0.2,0.8,0.2,1);">';
     s += '<span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;letter-spacing:0.06em;color:' + ab.nameColor + ';">' + esc(ab.name) + '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-weight:500;color:' + ab.scoreColor + ';font-variant-numeric:tabular-nums;">' + esc(ab.scoreDisplay) + '</span></span>';
     if (ab.showRange) {
+      /* Bounded: a real 95% interval was computed, the tooltip explaining it
+         is honest to show. */
       s += '<span style="display:inline-flex;align-items:center;gap:5px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;color:' + ab.subColor + ';">' + esc(ab.rangeText);
       if (ab.focus) {
         s += '<button data-tip="range" class="ndl-tip-dot" aria-label="pourquoi une fourchette" style="cursor:help;background:none;border:1px solid #55483A;border-radius:50%;width:13px;height:13px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:8px;line-height:1;color:#8A7D68;">i</button>';
       }
       s += '</span>';
+    } else if (ab.showSingle) {
+      /* Unbounded (SINGLE_RUN): no interval was computed, so no "why a range"
+         tooltip either - just the honest caveat, plain text. */
+      s += '<span style="display:inline-flex;align-items:center;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;color:' + ab.subColor + ';">' + esc(ab.rangeText) + '</span>';
     }
     s += '</div>';
     return s;
@@ -1791,6 +2024,19 @@
 
     /* controlled input (only touch it when the value actually differs) */
     if (inputEl && inputEl.value !== v.inputValue) inputEl.value = v.inputValue;
+
+    /* Enforce "no new run while one is in flight" IN THE DOM, not just as a
+       function guard (see runMeasure): a disabled button and a read-only
+       input make it structurally impossible to fire a competing free run
+       (and bump measureGen) while a paid Deep Audit is still running - the
+       exact interaction that used to silently discard an already-billed
+       79-euro dossier. */
+    if (runBtn) {
+      runBtn.disabled = !!v.measuring;
+      runBtn.style.opacity = v.measuring ? '0.45' : '1';
+      runBtn.style.cursor = v.measuring ? 'default' : 'pointer';
+    }
+    if (inputEl) inputEl.readOnly = !!v.measuring;
 
     /* "lecture en cours" overlay (fades out on settle) */
     if (overlayEl) overlayEl.style.opacity = v.measuringOverlayOp;

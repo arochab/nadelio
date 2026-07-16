@@ -264,7 +264,7 @@ def _inspect_paid_session(session_id):
     an unverifiable session is never granted a deep audit. `ok` is only True when
     we positively confirmed the session is paid.
     """
-    result = {"ok": False, "brand": "", "created": 0, "pi_id": "",
+    result = {"ok": False, "brand": "", "market": "", "created": 0, "pi_id": "",
               "consumed": False, "inspectable": False}
     secret_key, _ = _stripe_config()
     if not secret_key or not session_id:
@@ -290,6 +290,10 @@ def _inspect_paid_session(session_id):
     meta = session.get("metadata") or {}
     if isinstance(meta, dict):
         result["brand"] = str(meta.get("brand") or "").strip()
+        # The free preview's market (stamped at /api/checkout time, see
+        # api_checkout) - returned so a resumed paid deep audit can force the
+        # SAME market instead of silently re-inferring a different one.
+        result["market"] = str(meta.get("market") or "").strip()
 
     # The expanded PaymentIntent is where the durable consumption stamp lives.
     pi = session.get("payment_intent")
@@ -367,12 +371,13 @@ def _unmark_session_consumed_on_stripe(pi_id):
 
 
 def _verify_paid_session(session_id):
-    """Back-compat wrapper: return (ok, brand) for a real, fully-paid session.
-    Used by /api/verify-payment, which only reports payment status and does NOT
-    consume the unlock. Deep-audit authorization/consumption goes through
-    _resolve_paid_depth(), which uses the richer _inspect_paid_session()."""
+    """Back-compat wrapper: return (ok, brand, market) for a real, fully-paid
+    session. Used by /api/verify-payment, which only reports payment status
+    and does NOT consume the unlock. Deep-audit authorization/consumption
+    goes through _resolve_paid_depth(), which uses the richer
+    _inspect_paid_session()."""
     info = _inspect_paid_session(session_id)
-    return info["ok"], info["brand"]
+    return info["ok"], info["brand"], info["market"]
 
 
 # ---------------------------------------------------------------------------
@@ -2099,14 +2104,16 @@ def api_verify_payment():
     if not session_id:
         return jsonify({"ok": False, "error": "Missing session_id"}), 400
 
-    ok, brand = _verify_paid_session(session_id)
+    ok, brand, market = _verify_paid_session(session_id)
     if not ok:
         return jsonify({"ok": False})
     with _live_lock:
         already = session_id in _consumed_sessions
     # Report whether this paid session still has its (single) deep audit unused,
     # so the frontend can message clearly if the user refreshes an old link.
-    return jsonify({"ok": True, "brand": brand, "consumed": already})
+    # market: the FREE preview's market, stamped on checkout - so the resumed
+    # paid deep audit can force the same market instead of re-inferring one.
+    return jsonify({"ok": True, "brand": brand, "market": market, "consumed": already})
 
 
 # ---------------------------------------------------------------------------
