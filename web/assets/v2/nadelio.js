@@ -24,6 +24,7 @@
   /* ---------- constants (copied verbatim from the source) ---------- */
   var ZLO = 0, ZHI = 100;
   var BRASS = '#C6A15B', SAGE = '#93A06E', SIENNA = '#B07452', INK = '#D8CDBB';
+  var SUPPORT_EMAIL = 'adam.chabbi94@gmail.com';
 
   /* Example quick-picks: REAL brands. The chips no longer replay demo data,
      they run a real audit through the backend, exactly like a typed brand. */
@@ -45,7 +46,7 @@
     verdictTitle: '', verdictColor: '#93A06E', verdictText: '',
     ia: { big: '', bigColor: '#6E6250', line: '', rival: '' },
     google: { big: '', bigColor: '#6E6250', line: '', owners: '' },
-    deep: { free: '', adds: '' }
+    deep: { free: '', adds: '', delivered: false }
   };
 
   /* density and breath were editor sliders -> constants = 1 in production */
@@ -57,14 +58,24 @@
   var state = {
     focus: 'Qonto', measuring: false, settled: false,
     unknownMsg: '', inputValue: 'Qonto', passCount: 0,
-    tip: { open: false }, drawerOpen: false
+    tip: { open: false }, drawerOpen: false,
+    /* payError: a Stripe return (?paid) failed to verify or to run. Forces the
+       "lecture en cours" overlay to stay up (like measuring) but with its own
+       message + retry, and keeps the passcounter honest ("paiement", not
+       "mesure en cours"). Cleared the moment a normal measurement starts. */
+    payError: false
   };
 
   /* ---------- DOM refs (persistent nodes, never re-created) ---------- */
   var screenEl, mountEl, axisEl, axisAreaEl, inputEl, regionEl, overlayEl,
       verdictEl, verdictTitleEl, verdictTextEl,
       insightEl, insightTextEl, fieldEl, ticksEl, scaleLabelEl,
-      passCounterEl, unknownEl, runBtn, brandsHost, transpBtn, cardEls = [];
+      passCounterEl, unknownEl, runBtn, brandsHost, transpBtn, cardEls = [],
+      subBannerEl, belowEl, deepDocEl;
+  /* the overlay's original "le nuage converge / lecture en cours" markup,
+     captured once at init so the Stripe-return paid flow (which borrows this
+     same node) can hand it back exactly as it found it. */
+  var defaultOverlayHTML = '';
 
   /* ---------- three.js state ---------- */
   var renderer, scene, camera, group, sprite, material, points,
@@ -462,10 +473,13 @@
     if (gen !== measureGen) return;
     clearSlowNote();
     setState({
-      measuring: false, settled: true,
+      measuring: false, settled: true, payError: false,
       passCount: currentResult ? currentResult.passTotal : 0,
       unknownMsg: (currentResult && currentResult.notice) ? currentResult.notice : ''
     });
+    /* the deep dossier (evidence, remediation report, geo score) lives below
+       the fixed-height hero, only for a tier==='deep' result; hidden otherwise. */
+    renderBelowFold();
     /* The field and the insight only render on this reveal, and they push the
        axis down. A ResizeObserver on the axis does NOT fire on a pure position
        change, so the cloud would stay projected on the axis' OLD position and
@@ -745,6 +759,307 @@
       });
   }
 
+  /* ============================ deep dossier (below the hero) ============================ */
+  /* Renders ONLY for a tier==='deep' result, into #ndl-deepdoc (a sibling of
+     the fixed-height hero, appended after it). The free hero stays a single
+     screen; the deep dossier is deliberately the one place the page scrolls,
+     because there is now a lot more to show, and it is what the 79 euro
+     bought. Every field guarded: evidence/report/geo_score can all be absent
+     if the backend could not produce them for this brand. */
+  function scoreColorFor(s) { return s >= 71 ? SAGE : (s >= 41 ? BRASS : SIENNA); }
+  var VERDICT_WORD_FR = { STABLE: 'stable', MODERE: 'modéré', VOLATIL: 'volatil', SINGLE_RUN: 'mesure unique' };
+
+  function renderDeepDocHTML(R) {
+    var geo = R.geo || {};
+    var score = R.geoScore != null ? R.geoScore : (geo.point != null ? Math.round(geo.point) : null);
+    var scoreColor = score != null ? scoreColorFor(score) : '#6E6250';
+    var hw = geo.half_width;
+    var verdictTag = geo.verdict ? (VERDICT_WORD_FR[geo.verdict] || '') : '';
+
+    var scoreBlock = score != null
+      ? '<div style="display:flex;flex-direction:column;gap:8px;">' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">score de visibilité IA</div>' +
+          '<div style="display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;">' +
+            '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(38px,4.6vw,58px);line-height:1;color:' + scoreColor + ';font-variant-numeric:tabular-nums;">' + score + '</span>' +
+            (hw != null ? '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:14px;color:#6E6250;font-variant-numeric:tabular-nums;">&plusmn;' + hw + '</span>' : '') +
+            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:12px;color:#8A7D68;">/ 100</span>' +
+          '</div>' +
+          (verdictTag ? '<div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#8A7D68;">' + esc(verdictTag) + '</div>' : '') +
+        '</div>'
+      : '';
+
+    var priceBlock =
+      '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #2A241C;">' +
+        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">continuer la mesure</div>' +
+        '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#C9BEAC;border-bottom:1px solid #4A4234;align-self:flex-start;">Suivre cette marque, dès 99&euro;/mois</a>' +
+        '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;align-self:flex-start;">Réglement de performance</a>' +
+      '</div>';
+
+    var identityHtml = '';
+    if (R.evidence && R.evidence.length) {
+      var items = R.evidence.slice(0, 6).map(function (e) {
+        var bits = [];
+        if (e.site_name) bits.push('<b style="color:#E8DFD2;font-weight:600;">' + esc(e.site_name) + '</b>');
+        if (e.title) bits.push(esc(e.title));
+        if (e.description) bits.push('<span style="color:#8A7D68;">' + esc(e.description) + '</span>');
+        var src = e.source || e.link || '';
+        var srcHtml = src ? ' <a href="' + esc(src) + '" target="_blank" rel="noopener" style="color:#A99C88;border-bottom:1px solid #4A4234;">source</a>' : '';
+        return bits.length ? '<li style="margin-bottom:8px;line-height:1.55;">' + bits.join(', ') + srcHtml + '</li>' : '';
+      }).join('');
+      if (items) {
+        identityHtml =
+          '<div style="display:flex;flex-direction:column;gap:10px;">' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">preuve sourcée</div>' +
+            '<ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + items + '</ul>' +
+          '</div>';
+      }
+    }
+
+    var reportHtml = '';
+    if (R.report) {
+      var rep = R.report;
+      var bsItems = (rep.blind_spots || []).map(function (b) {
+        var by = (b.dominated_by || []).map(function (x) { return esc(x); }).join(', ');
+        return '<li style="margin-bottom:8px;line-height:1.5;"><b style="color:#E8DFD2;font-weight:600;">' + esc(b.query) + '</b>' + (by ? ', dominé par ' + by : '') + '</li>';
+      }).join('');
+      var actItems = (rep.actions || []).map(function (a) {
+        return '<li style="margin-bottom:9px;line-height:1.55;">' + esc(a) + '</li>';
+      }).join('');
+      reportHtml =
+        '<div style="display:flex;flex-direction:column;gap:18px;">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">rapport de remédiation</div>' +
+            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:8.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8A7D68;border:1px solid #2A241C;padding:2px 6px;">généré par IA</span>' +
+          '</div>' +
+          (rep.verdict ? '<div style="border-left:2px solid #C6A15B;padding:2px 0 2px 14px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#D8CDBB;">' + esc(rep.verdict) + '</div>' : '') +
+          (bsItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#6E6250;margin-bottom:8px;">angles morts nommés</div><ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + bsItems + '</ul></div>' : '') +
+          (actItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#6E6250;margin-bottom:8px;">plan d\'action</div><ol style="margin:0;padding-left:20px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + actItems + '</ol></div>' : '') +
+        '</div>';
+    }
+
+    var footNote = 'Mesuré : ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + ', 1 IA (' + esc(R.providerLabel) + '), ' + R.n + ' passage' + (R.n > 1 ? 's' : '') + ' par question' + (R.market ? ', marché ' + esc(R.market) : '') + '.';
+
+    return (
+      '<div style="max-width:960px;margin:0 auto;padding:clamp(32px,6vh,64px) clamp(16px,3vw,40px) clamp(48px,8vh,88px);display:flex;flex-direction:column;gap:28px;border-top:1px solid #2A241C;">' +
+        '<div style="display:flex;flex-direction:column;gap:6px;">' +
+          '<div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#C6A15B;">deep audit, le dossier</div>' +
+          '<h2 style="margin:0;font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-weight:400;font-size:clamp(22px,2.6vw,34px);line-height:1.05;letter-spacing:-0.01em;color:#E8DFD2;">' + esc(R.focusName) + '</h2>' +
+        '</div>' +
+        '<div class="ndl-deepgrid">' +
+          '<div style="display:flex;flex-direction:column;gap:28px;min-width:0;">' + identityHtml + (identityHtml && reportHtml ? '<div style="border-top:1px solid #2A241C;"></div>' : '') + reportHtml + '</div>' +
+          '<div style="display:flex;flex-direction:column;gap:0;">' + scoreBlock + priceBlock + '</div>' +
+        '</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#6E6250;border-top:1px solid #2A241C;padding-top:14px;">' + esc(footNote) + '</div>' +
+      '</div>'
+    );
+  }
+
+  /* Shows/hides #ndl-below (the deep dossier). Only ever populated for a
+     settled tier==='deep' result; hidden on idle, error, or a free result (the
+     free hero stays a single screen, see the hard constraint in the task). */
+  function renderBelowFold() {
+    if (!belowEl) return;
+    var R = currentResult;
+    var haveResult = !!(R && R.rows && R.rows.length);
+    if (!state.settled || !haveResult || R.tier !== 'deep') {
+      belowEl.style.display = 'none';
+      if (deepDocEl) deepDocEl.innerHTML = '';
+      return;
+    }
+    if (deepDocEl) deepDocEl.innerHTML = renderDeepDocHTML(R);
+    belowEl.style.display = 'block';
+  }
+
+  /* ============================ Stripe return (paid / sub) ============================ */
+  /* Ported from index.html (resumeDeepAudit / resumeVerifyRetry / payError /
+     runDeepAnalysis / resumeSubscription), recast in the v2 language: the
+     Stripe return borrows the SAME #ndl-overlay node the normal "lecture en
+     cours" loading state uses (state.measuring / state.payError both flip its
+     opacity via renderVals()), so a paying customer always lands on the exact
+     same instrument, mid read, never a blank or a dead page. */
+  function payStepsHTML(lines) {
+    var html = '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">paiement</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:5px;margin-top:2px;">';
+    lines.forEach(function (l) {
+      var color = l.state === 'done' ? SAGE : (l.state === 'active' ? '#E8DFD2' : '#6E6250');
+      var mark = l.state === 'done' ? '&#10003; ' : '';
+      var dots = l.state === 'active'
+        ? '<span style="animation:dotpulse 1s infinite;">.</span><span style="animation:dotpulse 1s 0.25s infinite;">.</span><span style="animation:dotpulse 1s 0.5s infinite;">.</span>'
+        : '';
+      html += '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;color:' + color + ';">' + mark + esc(l.text) + dots + '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+  function showPayStep(lines) {
+    setState({ measuring: true, settled: false, payError: false });
+    if (overlayEl) overlayEl.innerHTML = payStepsHTML(lines);
+  }
+  function showPayError(msg, retryFn) {
+    setState({ measuring: false, settled: false, payError: true });
+    if (!overlayEl) return;
+    overlayEl.innerHTML =
+      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">paiement</div>' +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#D8CDBB;max-width:52ch;">' + esc(msg) + '</div>' +
+      '<div style="display:flex;align-items:center;gap:16px;margin-top:8px;flex-wrap:wrap;">' +
+        (retryFn ? '<button class="ndl-pay-retry" style="cursor:pointer;border:none;background:#E8DFD2;color:#14100C;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Réessayer</button>' : '') +
+        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;">Contacter le support</a>' +
+      '</div>';
+    if (retryFn) {
+      var btn = overlayEl.querySelector('.ndl-pay-retry');
+      if (btn) btn.addEventListener('click', retryFn);
+    }
+  }
+  function resetOverlayContent() {
+    if (overlayEl && defaultOverlayHTML) overlayEl.innerHTML = defaultOverlayHTML;
+  }
+
+  /* Runs the deep audit itself once a payment is confirmed (fresh session or a
+     retried one). Same two-step /api/infer -> /api/analyze flow as a normal
+     measurement, but {deep:true, paid_session} on the analyze call, exactly
+     like index.html's runDeepAnalysis. A failure here never loses the
+     payment: it always offers Retry + support, the audit can be re-run on the
+     same paid_session (the slot is only consumed once analyze truly succeeds). */
+  function runDeepMeasure(brand, sessionId) {
+    var gen = ++measureGen;
+    currentResult = null;
+    measureStart = performance.now();
+    setState({ focus: brand, inputValue: brand, measuring: true, settled: false, payError: false, unknownMsg: '', passCount: 0 });
+    renderBelowFold();
+    if (scene) buildClusters(loadingRows(), !reduced, '');
+    if (reduced) renderResolved();
+    showPayStep([
+      { text: 'Paiement confirmé', state: 'done' },
+      { text: 'Audit en cours (30 à 60s)', state: 'active' },
+      { text: 'Dossier prêt', state: 'pending' }
+    ]);
+    var loadStart = performance.now();
+    fetch('/api/infer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: brand, deep: true }) })
+      .then(function (res) { return res.json().catch(function () { return {}; }); })
+      .catch(function () { return {}; })
+      .then(function (inf) {
+        if (gen !== measureGen) return null;
+        var body = { live: true, brand: brand, deep: true, paid_session: sessionId };
+        if (inf && !inf.error && inf.competitors && inf.competitors.length && inf.queries && inf.queries.length) {
+          body.competitors = inf.competitors; body.queries = inf.queries; body.sector = inf.sector;
+          body.market_label = inf.market; body.query_language = inf.query_language;
+        }
+        return fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, body: d }; }); });
+      })
+      .then(function (ana) {
+        if (ana == null || gen !== measureGen) return;
+        var d = ana.body || {};
+        if (!ana.ok || d.error || !d.ranking || !d.geo || d.geo.point == null) {
+          showPayError('Le paiement est confirmé mais l\'audit n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.', function () { runDeepMeasure(brand, sessionId); });
+          return;
+        }
+        /* Same guard on the paid path: the backend falls back to its demo
+           fixture on a live failure. A customer who just paid must never be
+           handed another brand's sample as their dossier. */
+        if (d.mode !== 'live') {
+          showPayError('Le paiement est confirmé mais la mesure n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.', function () { runDeepMeasure(brand, sessionId); });
+          return;
+        }
+        currentResult = buildResult(d);
+        measureStart = performance.now();
+        if (scene) buildClusters(currentResult.rows, !reduced, currentResult.focusName);
+        if (reduced) renderResolved();
+        resetOverlayContent();
+        var wait = reduced ? 0 : Math.max(0, MIN_LOAD_MS - (performance.now() - loadStart));
+        clearTimeout(revealT);
+        revealT = setTimeout(function () { reveal(gen); }, wait);
+      })
+      .catch(function () {
+        showPayError('Impossible de joindre l\'instrument. Votre paiement est en sécurité, réessayez ou contactez le support.', function () { runDeepMeasure(brand, sessionId); });
+      });
+  }
+
+  function showConsumedMessage() {
+    setState({ measuring: false, settled: false, payError: true });
+    if (!overlayEl) return;
+    overlayEl.innerHTML =
+      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6E6250;">paiement</div>' +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#D8CDBB;max-width:52ch;">Ce Deep Audit a déjà été utilisé. Chaque paiement débloque un dossier unique. Lancez un nouveau Deep Audit pour en obtenir un autre, ou contactez le support si ceci est une erreur.</div>' +
+      '<div style="display:flex;align-items:center;gap:16px;margin-top:8px;">' +
+        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;">Contacter le support</a>' +
+      '</div>';
+  }
+
+  /* Entry point for a ?paid={CHECKOUT_SESSION_ID}&brand=<enc> return. Verifies
+     first (never trusts the URL alone), then either runs the deep audit, says
+     the session is already consumed, or offers Retry + support on failure. The
+     URL is scrubbed immediately so a refresh never re-spends the same link. */
+  function resumeDeepAudit(sessionId, brandParam) {
+    try { history.replaceState({}, document.title, window.location.pathname); } catch (e) {}
+    if (brandParam) { if (inputEl) inputEl.value = brandParam; }
+    setState({ focus: brandParam || state.focus, inputValue: brandParam || state.inputValue });
+    showPayStep([{ text: 'Confirmation du paiement', state: 'active' }]);
+    fetch('/api/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) })
+      .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, body: d }; }); })
+      .then(function (r) {
+        var d = r.body || {};
+        if (!d.ok) {
+          showPayError('Nous n\'avons pas pu confirmer ce paiement. Si vous avez été débité, réessayez ou contactez le support avec votre reçu Stripe.', function () { resumeDeepAudit(sessionId, brandParam); });
+          return;
+        }
+        if (d.consumed) { showConsumedMessage(); return; }
+        var brand = d.brand || brandParam || state.focus;
+        runDeepMeasure(brand, sessionId);
+      })
+      .catch(function () {
+        showPayError('Impossible de confirmer le paiement pour le moment. Si vous avez été débité, réessayez ou contactez le support avec votre reçu.', function () { resumeDeepAudit(sessionId, brandParam); });
+      });
+  }
+
+  /* Entry point for a ?sub={CHECKOUT_SESSION_ID} monitoring return. Purely a
+     confirmation toast, it never touches the measurement state machine or the
+     hero: the visitor can still type a brand and run a free audit underneath. */
+  function showSubBanner(brand, tier, failed) {
+    if (!subBannerEl) return;
+    var html;
+    if (failed) {
+      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#6E6250;">suivi</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#D8CDBB;margin-top:4px;">Nous n\'avons pas pu confirmer cet abonnement. Si vous venez de payer, patientez un instant et actualisez, ou contactez le support.</div>';
+    } else {
+      var b = esc(brand || 'votre marque');
+      var t = tier ? esc(tier) : '';
+      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#93A06E;">suivi actif</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#D8CDBB;margin-top:4px;">Le suivi est actif pour <b style="color:#E8DFD2;">' + b + '</b>' + (t ? ' (plan ' + t + ')' : '') + '. La première mesure bornée tourne cette semaine, vous serez alerté dès que le score devient volatil.</div>';
+    }
+    html += '<button class="ndl-subbanner-close" aria-label="fermer" style="position:absolute;top:8px;right:8px;cursor:pointer;background:none;border:none;color:#6E6250;font-family:inherit;font-size:13px;line-height:1;padding:4px;">&times;</button>';
+    subBannerEl.innerHTML = html;
+    subBannerEl.style.display = 'block';
+    var closeBtn = subBannerEl.querySelector('.ndl-subbanner-close');
+    if (closeBtn) closeBtn.addEventListener('click', function () { subBannerEl.style.display = 'none'; });
+  }
+  function resumeSubscription(sessionId) {
+    try { history.replaceState({}, document.title, window.location.pathname); } catch (e) {}
+    fetch('/api/verify-subscription', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) })
+      .then(function (res) { return res.json().catch(function () { return {}; }); })
+      .catch(function () { return {}; })
+      .then(function (d) {
+        if (d && d.ok) showSubBanner(d.brand, d.tier, false);
+        else showSubBanner(null, null, true);
+      });
+  }
+
+  /* Reads ?paid / ?sub / ?brand once at boot and routes to the matching
+     resume flow. ?paid takes priority (a returning payer must always land on
+     a working page, per the task's hard requirement), then ?sub, then a plain
+     ?brand= prefill + measure. */
+  function bootstrapParams() {
+    var params;
+    try { params = new URLSearchParams(window.location.search); } catch (e) { params = null; }
+    if (!params) return;
+    var paid = params.get('paid');
+    var sub = params.get('sub');
+    var brandParam = (params.get('brand') || '').trim();
+    if (paid) { resumeDeepAudit(paid, brandParam); return; }
+    if (sub) { resumeSubscription(sub); return; }
+    if (brandParam) { runMeasure(brandParam); }
+  }
+
   /* ============================ measurement control ============================ */
   /* Real two-step flow, same-origin: /api/infer identifies the brand + proposes
      the queries, then /api/analyze runs the bounded audit. The loading animation
@@ -752,9 +1067,11 @@
   function runMeasure(rawName) {
     var name = (rawName || '').trim();
     if (!name) { setState({ unknownMsg: 'Tapez le nom d\'une marque.' }); return; }
+    resetOverlayContent();
     var gen = ++measureGen;
     currentResult = null;
-    setState({ focus: name, inputValue: name, measuring: true, settled: false, unknownMsg: '', passCount: 0 });
+    setState({ focus: name, inputValue: name, measuring: true, settled: false, payError: false, unknownMsg: '', passCount: 0 });
+    renderBelowFold();
     measureStart = performance.now();
     if (scene) buildClusters(loadingRows(), !reduced, '');
     if (reduced) renderResolved();
@@ -796,6 +1113,15 @@
             : 'La mesure n\'a pas pu aboutir. Réessayez dans un instant.');
           return;
         }
+        /* When the live pipeline fails (a SERP or model hiccup), the backend
+           still answers 200 with its DEMO fixture (mode "demo"), which is a
+           different brand entirely. Never present that as this visitor's
+           measurement: a tool whose whole promise is honesty cannot show
+           someone else's numbers under your brand name. */
+        if (d.mode !== 'live') {
+          failMeasure(gen, 'La mesure n\'a pas pu aboutir pour ' + name + '. Réessayez dans un instant.');
+          return;
+        }
         currentResult = buildResult(d);
         /* rebuild the 3D from the REAL rows and re-arm the burst so the cloud
            visibly converges on the reveal, whatever the fetch latency was. */
@@ -816,9 +1142,10 @@
     clearSlowNote();
     clearTimeout(revealT);
     currentResult = null;
-    setState({ measuring: false, settled: false, unknownMsg: msg, passCount: 0 });
+    setState({ measuring: false, settled: false, payError: false, unknownMsg: msg, passCount: 0 });
     if (scene) buildClusters(loadingRows(), false, '');
     if (reduced) renderResolved();
+    renderBelowFold();
   }
 
   /* ============================ adapter: d -> view model ============================ */
@@ -866,6 +1193,40 @@
     return (ai.kind === 'primary' ? 'principal' : 'mentionné') + ' n' + ai.rank + ', cité ' + ai.cited + '/' + ai.runs;
   }
 
+  /* ---------- the free planche: ONE real blind spot, named ----------
+     What the Deep Audit would reveal is not a generic pitch, it is the next
+     honest fact THIS measurement already points to: the first query where the
+     focus brand has no cell at all (neither on Google nor in the AI answer),
+     falling back to an AI-only or a Google-only gap, and who holds that
+     answer today. Never invents a gap that is not in the data; returns
+     {query:null} when the brand already covers everything measured. */
+  function findHolder(query, ranking, useAI) {
+    var best = null;
+    (ranking || []).forEach(function (r) {
+      var c = useAI ? (r.ai_cells ? r.ai_cells[query] : null) : (r.cells ? r.cells[query] : null);
+      if (c && c.rank != null && (!best || c.rank < best.rank)) best = { name: r.brand, rank: c.rank };
+    });
+    return best;
+  }
+  function buildPlanche(focusEntry, queries, ranking) {
+    if (!focusEntry || !queries || !queries.length) return { query: null, holder: null };
+    var gapBoth = null, gapAI = null, gapSerp = null;
+    for (var i = 0; i < queries.length; i++) {
+      var q = queries[i];
+      var hasAI = focusEntry.ai_cells && focusEntry.ai_cells[q] && focusEntry.ai_cells[q].rank != null;
+      var hasSerp = focusEntry.cells && focusEntry.cells[q] && focusEntry.cells[q].rank != null;
+      if (!hasAI && !hasSerp) { if (gapBoth === null) gapBoth = q; }
+      else if (!hasAI) { if (gapAI === null) gapAI = q; }
+      else if (!hasSerp) { if (gapSerp === null) gapSerp = q; }
+    }
+    var q2 = gapBoth || gapAI || gapSerp;
+    if (!q2) return { query: null, holder: null };
+    /* a Google-only gap names the Google holder, any AI-side gap names the AI holder */
+    var useAI2 = q2 !== gapSerp;
+    var holder = findHolder(q2, ranking, useAI2);
+    return { query: q2, holder: holder ? holder.name : null };
+  }
+
   function buildResult(d) {
     var focusName = d.brand || '';
     var geo = d.geo || null;
@@ -873,6 +1234,12 @@
     var queries = d.queries || [];
     var Q = queries.length;
     var n = (geo && geo.n) ? geo.n : 0;
+    /* deep tier: d.tier==='deep' plus the paid-only fields it carries. Every
+       field guarded, none of this is assumed present on a free response. */
+    var tier = (d.tier === 'deep') ? 'deep' : 'free';
+    var evidence = Array.isArray(d.evidence) ? d.evidence : [];
+    var report = (d.report && typeof d.report === 'object') ? d.report : null;
+    var geoScore = (d.geo_score != null) ? Math.max(0, Math.min(100, parseInt(d.geo_score, 10) || 0)) : null;
 
     /* rows: focus + (optional) rival, from their bounded scores only */
     var rows = [];
@@ -884,6 +1251,7 @@
     var ranking = d.ranking || [];
     var lc = String(focusName).toLowerCase();
     var focusEntry = ranking.find(function (r) { return String(r.brand).toLowerCase() === lc; }) || null;
+    var planche = buildPlanche(focusEntry, queries, ranking);
 
     /* named competitive field: every brand the backend measured, with its real
        AI standing (rank + primary/mentioned + cited/runs) and Google standing. */
@@ -961,11 +1329,12 @@
       focusPrimaryN: focusPrimaryN, focusPresentN: focusPresentN,
       focusAbsentN: focusAbsentN, focusPrimaryCited: focusPrimaryCited,
       fieldRows: fieldRows, aiLeader: aiLeader,
-      owners: owners, ownersPhrase: ownersPhrase, hasFocusEntry: !!focusEntry
+      owners: owners, ownersPhrase: ownersPhrase, hasFocusEntry: !!focusEntry,
+      tier: tier, planche: planche
     };
 
     return {
-      sig: focusName + '|' + (geo ? geo.point : '') + '|' + (rival ? rival.point : '') + '|' + n + '|' + Q,
+      sig: focusName + '|' + (geo ? geo.point : '') + '|' + (rival ? rival.point : '') + '|' + n + '|' + Q + '|' + tier,
       focusName: focusName, geo: geo, rival: rival,
       rows: rows, fieldRows: fieldRows, matrix: matrix, owners: owners, serpByQ: serpByQ,
       nQueries: Q, n: n,
@@ -973,6 +1342,7 @@
       providerLabel: d.ai_provider_label || 'l\'IA',
       market: d.market || '',
       notice: d.notice || '',
+      tier: tier, evidence: evidence, report: report, geoScore: geoScore, planche: planche,
       insight: buildInsight(ctx),
       cards: buildCards(ctx)
     };
@@ -1091,15 +1461,36 @@
       gOwners = 'Aucun domaine dominant identifié sur la page.';
     }
 
-    /* card 2 - "aller plus loin" : transparent paid push */
-    var free = 'Gratuit : ' + Y + ' question' + (Y > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + c.runs + ' passage' + (c.runs > 1 ? 's' : '') + ' par question.';
-    var adds = 'Le Deep Audit élargit : plus de questions, plusieurs IA recoupées, vos angles morts, une preuve sourcée et un plan d\'action.';
+    /* card 2 - "aller plus loin" : transparent paid push, tier aware. A deep
+       tier result already delivered the dossier (rendered below the hero), so
+       this card never re-sells the Deep Audit once it is bought, it only
+       carries the recurring offers (monitoring, settlement). A free result
+       keeps the ONE Deep Audit button on the whole screen here, anchored on
+       79 euro, and names a REAL blind question from this measurement instead
+       of a generic pitch (the planche). */
+    var deepBlock;
+    if (c.tier === 'deep') {
+      deepBlock = {
+        delivered: true, free: '',
+        adds: 'Dossier sourcé livré ci-dessous : preuve, angles morts nommés et plan d\'action.'
+      };
+    } else {
+      var free = 'Gratuit : ' + Y + ' question' + (Y > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + c.runs + ' passage' + (c.runs > 1 ? 's' : '') + ' par question.';
+      var adds;
+      if (c.planche && c.planche.query) {
+        var holderTxt = c.planche.holder ? (', où ' + c.planche.holder + ' tient la réponse aujourd\'hui') : '';
+        adds = 'Le Deep Audit élargit à 5 questions en triple mesure et nomme vos angles morts, par exemple « ' + c.planche.query + ' »' + holderTxt + '.';
+      } else {
+        adds = 'Le Deep Audit élargit à 5 questions en triple mesure, plusieurs IA recoupées, et remet un plan d\'action sourcé.';
+      }
+      deepBlock = { delivered: false, free: free, adds: adds };
+    }
 
     return {
       verdictTitle: verdict.title, verdictColor: verdict.color, verdictText: verdict.text,
       ia: { big: iaBig, bigColor: iaColor, line: iaLine, rival: iaRival },
       google: { big: gBig, bigColor: gColor, line: gLine, owners: gOwners },
-      deep: { free: free, adds: adds }
+      deep: deepBlock
     };
   }
 
@@ -1198,6 +1589,7 @@
     /* ---- pass counter: real total once settled, indeterminate while measuring ---- */
     var passCounter;
     if (st.settled && haveResult) passCounter = R.passTotal + ' réponses lues';
+    else if (st.payError) passCounter = 'paiement';
     else if (st.measuring) passCounter = 'mesure en cours';
     else passCounter = 'en attente';
 
@@ -1206,7 +1598,7 @@
 
     return {
       measuring: st.measuring, settled: st.settled, haveResult: haveResult, contentSig: contentSig,
-      measuringOverlayOp: st.measuring ? 1 : 0,
+      measuringOverlayOp: (st.measuring || st.payError) ? 1 : 0,
       verdictOp: revealed ? 1 : 0,
       verdictTy: st.settled ? 0 : 14,
       proofOp: revealed ? 1 : 0,
@@ -1369,20 +1761,26 @@
       '</div>' +
       '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#8A7D68;">' + esc(g.owners) + '</div>';
 
-    /* card 2 - "aller plus loin": transparent paid push (Deep Audit + monitoring) */
+    /* card 2 - "aller plus loin": the ONE Deep Audit button on the whole
+       screen (free tier only, see buildCards) plus the recurring offers
+       (monitoring, settlement). A delivered deep result never repeats the
+       Deep Audit sell, so the page never carries two competing primary
+       buttons for the same product. */
     var dp = card.deep;
-    var hasDeep = !!dp.free;
+    var hasContent = !!dp.free || dp.delivered;
+    var linksHtml = hasContent
+      ? '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:2px;">' +
+          (dp.delivered ? '' : '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Deep Audit, 79 &euro;</button>') +
+          '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">suivre dans le temps</a>' +
+          '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">règlement de performance</a>' +
+        '</div>'
+      : '';
     cardEls[2].innerHTML =
       labelRow('aller plus loin') +
-      (hasDeep ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#8A7D68;">' + esc(dp.free) + '</div>' : '') +
-      (hasDeep ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#C9BEAC;">' + esc(dp.adds) + '</div>' : '') +
-      (hasDeep ?
-        '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:2px;">' +
-          '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Deep Audit, 79 &euro;</button>' +
-          '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">suivre dans le temps</a>' +
-        '</div>' +
-        '<div class="ndl-deep-msg" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#8A7D68;display:none;"></div>'
-        : '');
+      (dp.free ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#8A7D68;">' + esc(dp.free) + '</div>' : '') +
+      (hasContent ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#C9BEAC;">' + esc(dp.adds) + '</div>' : '') +
+      linksHtml +
+      (dp.delivered ? '' : '<div class="ndl-deep-msg" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#8A7D68;display:none;"></div>');
     var cta = cardEls[2].querySelector('.ndl-deep-cta');
     if (cta) cta.addEventListener('click', startCheckout);
   }
@@ -1495,6 +1893,10 @@
     brandsHost = runBtn.parentNode;
     transpBtn = document.getElementById('ndl-transp-btn');
     cardEls = Array.prototype.slice.call(document.querySelectorAll('.ndl-card'));
+    subBannerEl = document.getElementById('ndl-subbanner');
+    belowEl = document.getElementById('ndl-below');
+    deepDocEl = document.getElementById('ndl-deepdoc');
+    if (overlayEl) defaultOverlayHTML = overlayEl.innerHTML;
 
     /* handlers on persistent nodes (was onChange / onKeyDown / onClick) */
     inputEl.addEventListener('input', function (ev) { setState({ inputValue: ev.target.value, unknownMsg: '' }); });
@@ -1510,6 +1912,10 @@
     inputRef(inputEl);
     axisRef(axisEl);
     componentDidMount();
+
+    /* Stripe return (?paid / ?sub) or a plain ?brand= prefill, read once at
+       boot. Runs last so every DOM ref and the 3D poll are already wired. */
+    bootstrapParams();
   }
 
   if (document.readyState === 'loading') {

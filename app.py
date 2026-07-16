@@ -2850,7 +2850,7 @@ def api_analyze():
             with _live_lock:
                 _consumed_sessions.discard(paid_session)
         # Return a safe, generic message — full error is logged server-side
-        return jsonify(dict(SAMPLE, notice="Live analysis failed — showing sample."))
+        return jsonify(dict(SAMPLE, notice="Live analysis failed, showing sample."))
     finally:
         # Daily-quota accounting (FREE runs only — a paid deep run never
         # incremented the counters, so it must never touch them here).

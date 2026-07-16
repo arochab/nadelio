@@ -90,6 +90,20 @@ input{outline:none;}
 .ndl-mon-link:hover{color:#C6A15B !important;border-bottom-color:#C6A15B !important;}
 .ndl-mon-link:focus{outline:2px solid #E8DFD2;outline-offset:3px;color:#C6A15B;}
 
+/* Stripe return path: retry button (pay error) + subscription banner close */
+.ndl-pay-retry:hover{background:#FFF6E4 !important;}
+.ndl-pay-retry:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+.ndl-subbanner-close:hover{color:#E8DFD2 !important;}
+.ndl-subbanner-close:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+
+/* Deep Audit dossier (below the fold, tier=deep only): two columns above
+   860px (score + price side, evidence/report main), one column stacked below,
+   matching the [data-nadelio-body] collapse used by the hero. */
+.ndl-deepgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,240px);gap:clamp(20px,3vw,40px);}
+@media (max-width:860px){
+  .ndl-deepgrid{grid-template-columns:1fr !important;}
+}
+
 /* ---- responsive mobile (desktop >=860px stays identical) ----
    Ported from the v5 source <style>: below ~860px the 2-col body
    collapses to one column and the 3-up dock reflows to one column.
