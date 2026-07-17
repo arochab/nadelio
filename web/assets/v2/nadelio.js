@@ -186,7 +186,7 @@
       verdictEl, verdictTitleEl, verdictTextEl, verdictBrandEl, verdictStaleEl,
       insightEl, insightTextEl, fieldEl, ticksEl, scaleLabelEl,
       passCounterEl, unknownEl, runBtn, brandsHost, transpBtn, cardEls = [],
-      subBannerEl, belowEl, deepDocEl;
+      subBannerEl, belowEl, deepDocEl, shareEl;
   /* the overlay's original "le nuage converge / lecture en cours" markup,
      captured once at init so the Stripe-return paid flow (which borrows this
      same node) can hand it back exactly as it found it. */
@@ -302,6 +302,23 @@
     return (/^https?:\/\//i).test(s) ? s : '';
   }
   function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5); }
+
+  /* Reads a fetch Response as TEXT first, then JSON.parses it, keeping the
+     verbatim text alongside the parsed body. /api/share requires the EXACT
+     raw text of a live /api/analyze response (a JS re-stringify would
+     reformat floats and reorder keys, and the server verifies its signature
+     over a canonical re-serialization of whatever we send it back - any
+     drift there is a false "invalid signature", not a security hole, but it
+     would silently break sharing). Used for both runReal and runDeepMeasure's
+     /api/analyze call so the raw text is always available on a settled
+     result (see buildResult callers attaching it to currentResult.raw). */
+  function readJsonWithRaw(res) {
+    return res.text().then(function (t) {
+      var body;
+      try { body = JSON.parse(t); } catch (e) { body = {}; }
+      return { ok: res.ok, status: res.status, body: body, raw: t };
+    });
+  }
 
   /* ---------- adaptive measurement window ----------
      The projection window [ZLO,ZHI] is recomputed per render from the bracketed
@@ -1426,6 +1443,194 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
+  /* ============================ free-tier export (lighter standalone HTML) ============================
+     downloadDossier() above is tier==='deep' only (it reads evidence/report,
+     fields a free result never carries). Free visitors still measured a real,
+     bounded result and deserve a durable copy of it: the same self-contained,
+     no-CDN, system-font HTML pattern, trimmed to what a free read actually
+     has - verdict, the bounded score, the measured field, the methodology
+     footnote. Never the deep-only evidence/report sections. */
+  function downloadFreeExport() {
+    var R = currentResult;
+    if (!R || R.tier === 'deep') return; // the deep dossier keeps its own richer export
+    var brandName = R.focusName || T('brand', 'marque');
+    var when = new Date().toISOString().slice(0, 10);
+    var geo = R.geo || {};
+    var point = geo.point;
+    var hw = geo.half_width;
+    var verdict = computeVerdict(R.focusName, R.geo, R.rival);
+    var verdictTag = verdictWord(geo.verdict);
+    var measuredDate = R.measuredAt ? String(R.measuredAt).slice(0, 10) : '';
+
+    var fieldHtml = (R.fieldRows || []).map(function (f) {
+      return '<tr' + (f.isFocus ? ' class="you"' : '') + '><td>' + esc(f.name) + (f.isFocus ? T(' (you)', ' (vous)') : '') + '</td><td>' + esc(aiLabel(f.ai)) + '</td><td>' + esc(googleRankLabel(f.serpRank)) + '</td><td>' + Math.round(f.share) + '%</td></tr>';
+    }).join('');
+
+    var footNoteS1 = R.nQueries > 1 ? 's' : '', footNoteS2 = R.n > 1 ? 's' : '';
+    var footNote = T(
+      'Measured: ' + R.nQueries + ' question' + footNoteS1 + ', 1 AI (' + R.providerLabel + (R.aiModel ? ', ' + R.aiModel : '') + '), ' + R.n + (R.n > 1 ? ' passes' : ' pass') + ' per question' + (R.market ? ', market ' + R.market : '') + (measuredDate ? ', measured on ' + measuredDate : '') + '.',
+      'Mesuré : ' + R.nQueries + ' question' + footNoteS1 + ', 1 IA (' + R.providerLabel + (R.aiModel ? ', ' + R.aiModel : '') + '), ' + R.n + ' passage' + footNoteS2 + ' par question' + (R.market ? ', marché ' + R.market : '') + (measuredDate ? ', mesuré le ' + measuredDate : '') + '.'
+    );
+
+    var docLang = PAGE_FR ? 'fr' : 'en';
+    var docTitle = T('Nadelio, AI visibility: ' + brandName, 'Nadelio, visibilité IA ' + brandName);
+    var geoPm = hw != null ? (' <span style="font-size:22px;color:#8A8578;">&plusmn;' + hw + '</span>') : '';
+    var geoVerdictHtml = verdictTag ? (' <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#4C7A5C;">' + esc(verdictTag) + '</span>') : '';
+    var geoNote = hw != null
+      ? T('95 percent confidence interval, across ' + R.n + ' AI reads.', 'Intervalle de confiance à 95 pour cent, sur ' + R.n + ' mesures IA.')
+      : T('Single measurement, not bounded: not enough successful passes to compute a margin.', 'Mesure unique, non bornée : pas assez de passages réussis pour calculer une marge.');
+
+    var doc = '<!doctype html><html lang="' + docLang + '"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>' + esc(docTitle) + '</title><style>' +
+      ':root{--sage:#3D6B5C;--sage-signal:#4C8F72;--surface:#EDEBE4;--card:#FBFAF6;--ink:#191510;--line:#D9D6CC;--muted:#6E6C64;}' +
+      '*{box-sizing:border-box;}body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--surface);line-height:1.55;margin:0;padding:40px 20px;}' +
+      '.wrap{max-width:820px;margin:0 auto;}' +
+      '.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:32px;margin-bottom:20px;}' +
+      '.badge{display:inline-block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:rgba(61,107,92,.12);color:var(--sage);padding:5px 11px;border-radius:8px;margin-bottom:14px;}' +
+      'h1{font-size:28px;letter-spacing:-.01em;margin:0 0 6px;}h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;}' +
+      '.meta{font-size:13px;color:var(--muted);margin-bottom:18px;}' +
+      '.geo{font-family:ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:48px;font-weight:700;letter-spacing:-.02em;color:var(--sage);}' +
+      '.insight{background:rgba(61,107,92,.08);border-left:3px solid var(--sage-signal);padding:14px 16px;border-radius:0 10px 10px 0;margin:14px 0;}' +
+      'table{border-collapse:collapse;width:100%;font-size:13px;}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);}th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.05em;}td{font-variant-numeric:tabular-nums;}' +
+      'tr.you{background:rgba(61,107,92,.1);font-weight:600;}' +
+      'a{color:var(--sage);}' +
+      'footer{text-align:center;font-size:12px;color:var(--muted);margin-top:20px;}' +
+      '@media print{body{background:#fff;padding:0;}.card{border:none;}}' +
+      '</style></head><body><div class="wrap">' +
+      '<div class="card"><span class="badge">' + T('Nadelio, AI visibility read', 'Nadelio, lecture de visibilité IA') + '</span>' +
+      '<h1>' + esc(brandName) + '</h1>' +
+      '<div class="meta">' + T('Generated on ', 'Généré le ') + esc(when) + (R.market ? T(', market ', ', marché ') + esc(R.market) : '') + '.</div>' +
+      (verdict.title ? ('<div class="insight">' + esc(verdict.title) + ' ' + esc(verdict.text) + '</div>') : '') +
+      '</div>' +
+      '<div class="card"><h2>' + T('AI visibility score', 'Score de visibilité IA') + '</h2><div class="geo">' + (point != null ? point : '-') + geoPm + '<span style="font-size:20px;color:var(--muted);">/100</span></div>' + geoVerdictHtml +
+      '<p class="meta" style="margin-top:10px;">' + geoNote + '</p></div>' +
+      '<div class="card"><h2>' + T('The measured field', 'Le champ mesuré') + '</h2><table><thead><tr><th>' + T('Brand', 'Marque') + '</th><th>' + T('In AI', 'En IA') + '</th><th>' + T('On Google', 'Sur Google') + '</th><th>' + T('Share of voice', 'Part de voix') + '</th></tr></thead><tbody>' + fieldHtml + '</tbody></table></div>' +
+      '<div class="card"><p class="meta" style="margin:0;">' + esc(footNote) + '</p></div>' +
+      '<footer>Nadelio, nadelio.com, ' + esc(when) + '</footer>' +
+      '</div></body></html>';
+
+    var blob = new Blob([doc], { type: 'text/html' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'nadelio-' + String(brandName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + when + '.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  /* ============================ share this result ============================
+     The growth loop: a settled result (free OR deep) can be turned into a
+     public, server-rendered page at /r/<token> with real bounded numbers on
+     it - every share is itself an advertisement for the product. The ONLY
+     input this ever sends is the verbatim raw text of the /api/analyze
+     response this page already holds (currentResult.raw, see readJsonWithRaw
+     above): the server re-verifies its own signature over that exact text
+     before minting a token, so nothing invented can ever become a "measured
+     by Nadelio" page (see app.py's _sign_share / /api/share). */
+  function shareAffordanceHTML(tier) {
+    var shareBtn =
+      '<button id="ndl-share-btn" class="ndl-share-btn" data-ev="share_click" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#B2A694;border-bottom:1px solid #564D3C;padding:0 0 2px;">'
+      + T('Share this result', 'Partager ce résultat') + ' &rsaquo;</button>';
+    /* The deep dossier already carries its own richer download button below
+       the hero (see renderDeepDocHTML's downloadBlock) - never a second,
+       competing export affordance for the same tier. */
+    var exportBtn = (tier === 'deep') ? '' :
+      '<button id="ndl-export-btn" class="ndl-share-btn" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#B2A694;border-bottom:1px solid #564D3C;padding:0 0 2px;">'
+      + T('Export (HTML)', 'Exporter (HTML)') + '</button>';
+    return '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">'
+      + '<span id="ndl-share-slot">' + shareBtn + '</span>' + exportBtn + '</div>';
+  }
+
+  /* Replaces ONLY the share button/status area, leaving the export button (a
+     sibling, outside this slot) untouched. */
+  function showShareMessage(msg) {
+    var slot = document.getElementById('ndl-share-slot');
+    if (!slot) return;
+    slot.innerHTML = '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#958772;">' + esc(msg) + '</span>';
+  }
+
+  function showShareLink(url) {
+    var slot = document.getElementById('ndl-share-slot');
+    if (!slot) return;
+    slot.innerHTML =
+      '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+        '<a id="ndl-share-url" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:11px;color:#C9BEAC;border-bottom:1px solid #564D3C;">' + esc(url) + '</a>' +
+        '<button id="ndl-share-copy" style="cursor:pointer;border:1px solid #463B30;background:none;color:#B2A694;font-family:inherit;font-size:10.5px;padding:4px 8px;">' + T('Copy link', 'Copier le lien') + '</button>' +
+      '</span>';
+    var copyBtn = document.getElementById('ndl-share-copy');
+    var linkEl = document.getElementById('ndl-share-url');
+    if (!copyBtn) return;
+    copyBtn.addEventListener('click', function () {
+      var reset = function () { copyBtn.textContent = T('Copy link', 'Copier le lien'); };
+      var done = function () { copyBtn.textContent = T('Copied', 'Copié'); setTimeout(reset, 1600); };
+      /* Select-fallback when the Clipboard API is unavailable (insecure
+         context, older browser, permission denied): select the URL text so
+         the visitor can copy it themselves with Ctrl+C / Cmd+C. Never claims
+         "Copied" for a selection that was not actually written anywhere. */
+      var selectFallback = function () {
+        try {
+          var range = document.createRange();
+          range.selectNodeContents(linkEl);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } catch (e) {}
+        copyBtn.textContent = T('Selected, press Ctrl+C', 'Sélectionné, faites Ctrl+C');
+        setTimeout(reset, 2400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done, selectFallback);
+      } else {
+        selectFallback();
+      }
+    });
+  }
+
+  function onShareClick() {
+    var R = currentResult;
+    if (!R || !R.raw) return;
+    var btn = document.getElementById('ndl-share-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = T('Sharing...', 'Partage...'); }
+    fetch('/api/share', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw: R.raw })
+    })
+      .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, body: d }; }); })
+      .then(function (r) {
+        if (currentResult !== R) return; // a new measurement started meanwhile
+        var d = r.body || {};
+        if (!r.ok || !d.url) {
+          showShareMessage(d.error === 'sharing not configured'
+            ? T('Sharing is not available yet.', 'Le partage n\'est pas encore disponible.')
+            : T('Could not create the share link. Try again in a moment.', 'Impossible de créer le lien de partage. Réessayez dans un instant.'));
+          return;
+        }
+        showShareLink(location.origin + d.url);
+      })
+      .catch(function () {
+        if (currentResult !== R) return;
+        showShareMessage(T('Cannot reach the server. Try again in a moment.', 'Impossible de joindre le serveur. Réessayez dans un instant.'));
+      });
+  }
+
+  /* Rebuilds the share/export widget only when the settled result itself
+     changes (called from the same lastContentSig gate as renderVerdict/
+     renderField in render() below) - never on every keystroke, and always
+     cleared back to nothing at idle/measuring (no stale "copied" state
+     bleeding into a brand-new measurement). */
+  function renderShareAffordance(v) {
+    if (!shareEl) return;
+    if (!v.haveResult) { shareEl.innerHTML = ''; return; }
+    shareEl.innerHTML = shareAffordanceHTML(currentResult ? currentResult.tier : 'free');
+    var sBtn = document.getElementById('ndl-share-btn');
+    if (sBtn) sBtn.addEventListener('click', onShareClick);
+    var eBtn = document.getElementById('ndl-export-btn');
+    if (eBtn) eBtn.addEventListener('click', downloadFreeExport);
+  }
+
   /* ============================ Stripe return (paid / sub) ============================ */
   /* Ported from index.html (resumeDeepAudit / resumeVerifyRetry / payError /
      runDeepAnalysis / resumeSubscription), recast in the v2 language: the
@@ -1518,7 +1723,7 @@
         }
         if (market) body.market = market;
         return fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-          .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, body: d }; }); });
+          .then(readJsonWithRaw);
       })
       .then(function (ana) {
         if (ana == null || gen !== measureGen) return;
@@ -1549,6 +1754,9 @@
         }
         currentResult = buildResult(d);
         currentResult.officialUrl = officialUrl;
+        /* see runReal's identical comment: the verbatim raw text is the ONLY
+           thing /api/share will ever accept. */
+        currentResult.raw = ana.raw || '';
         measureStart = performance.now();
         if (scene) buildClusters(currentResult.rows, !reduced, currentResult.focusName);
         if (reduced) renderResolved();
@@ -1741,7 +1949,7 @@
             market_label: d.market, query_language: d.query_language,
             identified_as: d.identified_as, confidence: d.confidence
           })
-        }).then(function (res) { return res.json().then(function (b) { return { ok: res.ok, status: res.status, body: b }; }); });
+        }).then(readJsonWithRaw);
       })
       .then(function (ana) {
         if (ana == null || gen !== measureGen) return;
@@ -1763,6 +1971,11 @@
         }
         currentResult = buildResult(d);
         currentResult.officialUrl = officialUrl;
+        /* The exact raw response text, verbatim - the ONLY thing /api/share
+           will ever accept (see readJsonWithRaw above and onShareClick
+           below). Never rebuilt from `d`: a JS re-stringify would reformat
+           floats and break the server's signature verification. */
+        currentResult.raw = ana.raw || '';
         /* rebuild the 3D from the REAL rows and re-arm the burst so the cloud
            visibly converges on the reveal, whatever the fetch latency was. */
         measureStart = performance.now();
@@ -2805,6 +3018,11 @@
     var staleDim = v.stale ? 0.38 : 1;
     if (verdictTitleEl) verdictTitleEl.style.opacity = staleDim;
     if (verdictTextEl) verdictTextEl.style.opacity = staleDim;
+    /* share / free-export affordances dim with the rest of the verdict body
+       while stale (per the task's hard requirement) - set every render, same
+       as the axis brackets below, since the widget itself is only rebuilt on
+       an actual content change (see the lastContentSig block further down). */
+    if (shareEl) shareEl.style.opacity = staleDim;
     if (verdictStaleEl) {
       if (v.stale) { verdictStaleEl.style.display = 'block'; verdictStaleEl.textContent = v.staleMsg; }
       else { verdictStaleEl.style.display = 'none'; verdictStaleEl.textContent = ''; }
@@ -2897,6 +3115,7 @@
       renderVerdict(v.card);
       renderField(v);
       if (insightTextEl) insightTextEl.textContent = v.insight;
+      renderShareAffordance(v);
       lastContentSig = v.contentSig;
     }
 
@@ -2955,6 +3174,7 @@
     subBannerEl = document.getElementById('ndl-subbanner');
     belowEl = document.getElementById('ndl-below');
     deepDocEl = document.getElementById('ndl-deepdoc');
+    shareEl = document.getElementById('ndl-share');
     if (overlayEl) defaultOverlayHTML = overlayEl.innerHTML;
 
     /* handlers on persistent nodes (was onChange / onKeyDown / onClick) */

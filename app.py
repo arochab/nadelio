@@ -10,6 +10,7 @@ import os
 import pathlib
 import random
 import re
+import secrets
 import socket
 import tempfile
 import threading
@@ -2712,7 +2713,7 @@ def api_analyze():
             _live_runs -= 1  # cached hit doesn't consume a slot
             if ip in _ip_runs and _ip_runs[ip][0] == today:
                 _ip_runs[ip][1] = max(0, _ip_runs[ip][1] - 1)
-        return jsonify(dict(_cache[cache_key], cached=True))
+        return jsonify(_sign_share(dict(_cache[cache_key], cached=True)))
 
     # BUG-2 FIX: a FREE live run legitimately consumes one daily slot ONLY when it
     # actually produces a real analysis. The +=1 above provisionally claimed the
@@ -2901,7 +2902,13 @@ def api_analyze():
         # fresh live audits are logged (not cache re-serves), so each row is one
         # genuine timestamped measurement. Best-effort: never affects the response.
         _log_audit_history(result)
-        return jsonify(result)
+        # Sign AFTER logging (share_sig is not a measurement field, it must
+        # never end up in audit_history) but on the exact dict about to be
+        # sent. This is the one and only place a live result becomes
+        # shareable. Returns a NEW dict, so the object already stored in
+        # _cache above stays un-signed (re-signed fresh on every future
+        # cache hit, see the cache-hit branch above).
+        return jsonify(_sign_share(result))
     except Exception as e:
         logger.exception("Live analysis failed for brand='%s'", brand)
         # A paid deep audit that failed before producing a result should NOT
@@ -3137,6 +3144,538 @@ def robots():
     return resp
 
 
+# ===========================================================================
+# Public share pages (POST /api/share -> GET /r/<token>).
+#
+# The growth loop: a visitor shares their own settled result, and every shared
+# page is a real, bounded measurement advertising the product. THE rule this
+# whole feature exists to protect: a share page may ONLY ever be built from a
+# result THIS server produced and signed (see _sign_share above). /api/share
+# re-verifies that signature over the EXACT raw text the browser held onto
+# BEFORE it will ever write anything to the store. Never trusts a client-
+# supplied brand/score, never re-derives the signature from request fields.
+# ===========================================================================
+_MAX_SHARE_RAW_BYTES = 200_000
+_share_hits = {}  # {ip: [minute_bucket_int, count]}, same pattern as _event_hits
+_SHARE_RATE_PER_MIN = int(os.environ.get("SHARE_RATE_PER_MIN", "10"))
+# secrets.token_urlsafe(12) yields 16 URL-safe base64 chars with no padding;
+# a little slack on both ends keeps this from breaking if that length ever
+# changes, while still rejecting anything that is not a bare token (no path
+# traversal, no injection, nothing SQL-parameter-shaped can even reach D1).
+_SHARE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{6,40}$")
+
+
+def _store_share(token, brand, raw):
+    """Synchronous D1 write (unlike the fire-and-forget /api/track pattern):
+    the HTTP response IS the token, so it must exist before we can answer.
+    Raises on failure; the caller decides what to tell the client."""
+    _d1_query(
+        "CREATE TABLE IF NOT EXISTS shares ("
+        "token TEXT PRIMARY KEY, ts TEXT NOT NULL, brand TEXT, payload TEXT NOT NULL)")
+    _d1_query(
+        "INSERT INTO shares (token, ts, brand, payload) VALUES (?,?,?,?)",
+        [token, datetime.datetime.now(datetime.timezone.utc).isoformat(),
+         str(brand)[:200], raw])
+
+
+@app.route("/api/share", methods=["POST"])
+def api_share():
+    """Mint a public share URL for a result THIS server measured and signed.
+    Body: {raw: "<verbatim /api/analyze response text>"}. Verify-first: the
+    signature is checked BEFORE the D1-configured gate, so an invalid
+    signature always answers the same 403 regardless of backend
+    configuration. Never a signal an attacker could use to tell "bad
+    signature" apart from "sharing unavailable"."""
+    ip = _client_ip()
+    minute = int(time.time() // 60)
+    with _live_lock:
+        entry = _share_hits.get(ip)
+        if not entry or entry[0] != minute:
+            for stale in [k for k, v in _share_hits.items() if v[0] != minute]:
+                del _share_hits[stale]
+            _share_hits[ip] = [minute, 1]
+        elif entry[1] >= _SHARE_RATE_PER_MIN:
+            return jsonify({"error": "rate limited"}), 429
+        else:
+            entry[1] += 1
+
+    data = _read_json()
+    raw = data.get("raw")
+    if not isinstance(raw, str) or not raw or len(raw.encode("utf-8")) > _MAX_SHARE_RAW_BYTES:
+        return jsonify({"error": "invalid payload"}), 400
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return jsonify({"error": "invalid payload"}), 400
+    if not isinstance(parsed, dict) or parsed.get("mode") != "live":
+        return jsonify({"error": "invalid payload"}), 400
+
+    given_sig = parsed.get("share_sig")
+    if not given_sig or not isinstance(given_sig, str):
+        return jsonify({"error": "invalid signature"}), 403
+    check = {k: v for k, v in parsed.items() if k != "share_sig"}
+    expected_sig = hmac.new(_event_salt().encode("utf-8"),
+                            _canonical_result_json(check).encode("utf-8"),
+                            hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected_sig, given_sig):
+        return jsonify({"error": "invalid signature"}), 403
+
+    # Signature verified first. Only now do we check whether sharing is even
+    # configured, so a forged payload is refused the exact same way whether
+    # or not D1 happens to be wired up.
+    if not _history_enabled():
+        return jsonify({"error": "sharing not configured"}), 503
+
+    token = secrets.token_urlsafe(12)
+    brand = parsed.get("brand", "")
+    try:
+        _store_share(token, brand, raw)
+    except Exception:
+        logger.warning("share store failed (non-fatal to the visitor)", exc_info=True)
+        return jsonify({"error": "sharing not configured"}), 503
+
+    return jsonify({"url": "/r/" + token})
+
+
+def _share_is_fr(result):
+    """FR when the audit itself was run in French (query_language), matching
+    the language the visitor who is about to read this page actually asked
+    their questions in. Never the viewer's own browser locale, there is no
+    client-side toggle on a server-rendered page."""
+    return str(result.get("query_language") or "").strip().lower().startswith("fr")
+
+
+def _share_ai_summary(entry, queries):
+    """Best (lowest) AI rank for one brand across the measured questions, with
+    its cited/runs count. Same reduction as nadelio.js's aiSummary()."""
+    best = None
+    for q in queries:
+        c = (entry.get("ai_cells") or {}).get(q) if entry else None
+        if not c or c.get("rank") is None:
+            continue
+        if best is None or c["rank"] < best["rank"]:
+            best = c
+    if not best:
+        return {"present": False}
+    runs = best.get("runs") or 0
+    cons = best.get("consistency") or 0
+    cited = round(cons / 100.0 * runs) if runs else 0
+    return {"present": True, "rank": round(best["rank"]),
+            "kind": "primary" if best.get("kind") == "primary" else "mentioned",
+            "runs": runs, "cited": cited}
+
+
+def _share_serp_best(entry, queries):
+    """Best (lowest) Google rank for one brand across the measured questions."""
+    best = None
+    for q in queries:
+        c = (entry.get("cells") or {}).get(q) if entry else None
+        if c and c.get("rank") is not None:
+            if best is None or c["rank"] < best:
+                best = c["rank"]
+    return best
+
+
+def _share_ai_label(ai, fr):
+    if not ai.get("present"):
+        return "absent de l'IA" if fr else "absent from AI"
+    kind = ("principal" if fr else "primary") if ai.get("kind") == "primary" else ("mentionné" if fr else "mentioned")
+    return kind + (" n" if fr else " #") + str(ai["rank"]) + (", cité " if fr else ", cited ") + str(ai.get("cited", 0)) + "/" + str(ai.get("runs", 0))
+
+
+def _share_google_label(serp_rank, fr):
+    if serp_rank is None:
+        return "absent de Google" if fr else "absent from Google"
+    return ("Google rang " if fr else "Google rank ") + str(serp_rank)
+
+
+def _share_field_rows(result):
+    """Every measured brand, ordered by real AI visibility (focus brand kept
+    in its natural place, not forced first). Same reduction/sort as
+    nadelio.js's buildResult fieldRows."""
+    queries = result.get("queries") or []
+    ranking = result.get("ranking") or []
+    brand = str(result.get("brand", ""))
+    lc = brand.lower()
+    rows = []
+    for r in ranking:
+        ai = _share_ai_summary(r, queries)
+        rows.append({
+            "name": str(r.get("brand", "")),
+            "is_focus": str(r.get("brand", "")).lower() == lc,
+            "share": max(0.0, float(r.get("share_of_voice") or 0)),
+            "ai": ai,
+            "serp": _share_serp_best(r, queries),
+        })
+
+    def ai_score(x):
+        a = x["ai"]
+        if not a.get("present"):
+            return 999.0
+        return a["rank"] + (0.0 if a.get("kind") == "primary" else 0.5)
+
+    rows.sort(key=lambda x: (ai_score(x), -x["share"]))
+    return rows
+
+
+def _share_window(rows):
+    """Adaptive [lo, hi] projection window for the static axis, ported from
+    nadelio.js's computeWindow (same rounding, same 25-point minimum span)."""
+    if not rows:
+        return (0, 100)
+    lows = [r["s"] - r["m"] for r in rows]
+    highs = [r["s"] + r["m"] for r in rows]
+    data_lo, data_hi = min(lows), max(highs)
+    margin = max(8, data_hi - data_lo)
+    lo = max(0, math.floor((data_lo - margin) / 5) * 5)
+    hi = min(100, math.ceil((data_hi + margin) / 5) * 5)
+    if hi - lo < 25:
+        need = 25 - (hi - lo)
+        lo -= need / 2.0
+        hi += need / 2.0
+        if lo < 0:
+            hi += -lo
+            lo = 0
+        if hi > 100:
+            lo -= (hi - 100)
+            hi = 100
+        lo = max(0, math.floor(lo / 5) * 5)
+        hi = min(100, math.ceil(hi / 5) * 5)
+    return (lo, hi)
+
+
+def _share_verdict(fr, focus_name, geo, rival):
+    """Bounded head-to-head verdict, ported sentence-for-sentence from
+    nadelio.js's computeVerdict (same thresholds, same refusal to compare two
+    unbounded reads or invent a winner on overlapping intervals). Returns
+    {title, color, text}; title/text are '' when there is nothing to say
+    (no geo at all)."""
+    SAGE, SIENNA, INK = "#93A06E", "#B57C5D", "#E8DFD2"
+    if not geo or geo.get("point") is None:
+        return {"title": "", "color": INK, "text": ""}
+    p = geo["point"]
+    if not rival:
+        v = geo.get("verdict")
+        if v == "SINGLE_RUN":
+            title = "Première mesure." if fr else "First measurement."
+            text = (focus_name + " obtient " + str(p) + " sur 100 sur cette première mesure." if fr
+                    else focus_name + " scores " + str(p) + " out of 100 on this first read.")
+        elif v == "STABLE":
+            title = "Position tenue." if fr else "Position holds."
+            text = (focus_name + " obtient " + str(p) + " sur 100, un niveau qui tient à chaque mesure." if fr
+                    else focus_name + " scores " + str(p) + " out of 100, a level that holds across every measurement.")
+        else:
+            title = "Position mesurée." if fr else "Position measured."
+            text = (focus_name + " obtient " + str(p) + " sur 100, une visibilité réelle dans les réponses IA." if fr
+                    else focus_name + " scores " + str(p) + " out of 100, real visibility in AI answers.")
+        return {"title": title, "color": SAGE, "text": text}
+
+    rival_name = rival.get("brand", "")
+    if geo.get("half_width") is None or rival.get("half_width") is None:
+        title = "Trop tôt pour comparer." if fr else "Too early to compare."
+        text = (focus_name + " et " + rival_name + " ne sont mesurés qu'une fois chacun sur cette lecture. "
+                "On ne départage jamais deux marques sur une seule mesure." if fr
+                else focus_name + " and " + rival_name + " are each measured only once on this read. "
+                "Two brands are never separated on a single measurement.")
+        return {"title": title, "color": INK, "text": text}
+
+    g_low, g_high = geo["low"], geo["high"]
+    r_low, r_high = rival["low"], rival["high"]
+    diff = geo["point"] - rival["point"]
+    if g_low > r_high:
+        d1 = max(1, round(diff))
+        s1 = "s" if d1 > 1 else ""
+        title = "Avance réelle." if fr else "Real lead."
+        text = (focus_name + " devance " + rival_name + " de " + str(d1) + " point" + s1
+                + ", une avance nette qui tient à chaque mesure." if fr
+                else focus_name + " is ahead of " + rival_name + " by " + str(d1) + " point" + s1
+                + ", a clear lead that holds across every measurement.")
+        return {"title": title, "color": SAGE, "text": text}
+    if g_high < r_low:
+        d2 = max(1, round(-diff))
+        s2 = "s" if d2 > 1 else ""
+        title = (rival_name + " devant, écart réel." if fr else rival_name + " ahead, real gap.")
+        text = (rival_name + " domine " + focus_name + " de " + str(d2) + " point" + s2
+                + ", un écart large et régulier. Le retard est réel, il faudra le combler." if fr
+                else rival_name + " leads " + focus_name + " by " + str(d2) + " point" + s2
+                + ", a wide and consistent gap. The gap is real, it will need closing.")
+        return {"title": title, "color": SIENNA, "text": text}
+    d3 = abs(round(diff))
+    if fr:
+        gap = "sont à égalité" if d3 == 0 else ("se tiennent à " + str(d3) + " point" + ("s" if d3 > 1 else ""))
+        title = "Trop proche pour trancher."
+        text = (focus_name + " et " + rival_name + " " + gap + ", trop proche pour les départager. "
+                "On préfère le dire que d'inventer un gagnant.")
+    else:
+        gap = "are tied" if d3 == 0 else ("are within " + str(d3) + " point" + ("s" if d3 > 1 else ""))
+        title = "Too close to call."
+        text = (focus_name + " and " + rival_name + " " + gap + ", too close to call. "
+                "We would rather say so than invent a winner.")
+    return {"title": title, "color": INK, "text": text}
+
+
+_SHARE_VERDICT_WORD = {
+    "fr": {"STABLE": "stable", "MODERE": "modéré", "VOLATIL": "volatil", "SINGLE_RUN": "mesure unique"},
+    "en": {"STABLE": "stable", "MODERE": "moderate", "VOLATIL": "volatile", "SINGLE_RUN": "single measure"},
+}
+
+
+def _share_axis_html(rows, fr):
+    """Static (pure HTML/CSS, no JS) bracket axis: one row per bounded brand
+    (focus first, then the rival if any), each bracket positioned on the same
+    adaptive [lo, hi] window the live page projects the 3D cloud onto."""
+    e = _html.escape
+    lo, hi = _share_window(rows)
+    span = (hi - lo) or 1
+    out = ('<div style="display:flex;justify-content:space-between;font-family:\'IBM Plex Mono\',Menlo,monospace;'
+           'font-size:9px;color:#958772;font-variant-numeric:tabular-nums;">'
+           '<span>' + str(lo) + '</span><span>' + ("échelle" if fr else "scale") + '</span><span>' + str(hi) + '</span></div>')
+    out += '<div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">'
+    for r in rows:
+        color = "#C6A15B" if r["focus"] else "#958772"
+        bounded = r["m"] is not None
+        m = r["m"] or 0
+        pct_lo = max(0.0, min(100.0, (r["s"] - m - lo) / span * 100))
+        pct_hi = max(0.0, min(100.0, (r["s"] + m - lo) / span * 100))
+        pct_mid = max(0.0, min(100.0, (r["s"] - lo) / span * 100))
+        range_txt = (("entre " + str(max(0, r["s"] - m)) + " et " + str(min(100, r["s"] + m))) if (fr and bounded)
+                     else ("between " + str(max(0, r["s"] - m)) + " and " + str(min(100, r["s"] + m))) if bounded
+                     else ("mesure unique, non bornée" if fr else "single measurement, not bounded"))
+        out += ('<div style="display:flex;align-items:center;gap:10px;">'
+                '<span style="width:120px;flex:none;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;'
+                'color:' + ("#E8DFD2" if r["focus"] else "#B2A694") + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+                + e(r["name"]) + '</span>'
+                '<div style="position:relative;flex:1;height:12px;background:#2F261D;">'
+                '<div style="position:absolute;left:' + ("%.2f" % pct_lo) + '%;width:' + ("%.2f" % max(0.0, pct_hi - pct_lo))
+                + '%;top:0;bottom:0;border-left:2px solid ' + color + ';border-right:2px solid ' + color
+                + ';box-sizing:border-box;background:' + color + '22;"></div>'
+                '<div style="position:absolute;left:' + ("%.2f" % pct_mid) + '%;top:-3px;bottom:-3px;width:2px;background:' + color + ';"></div>'
+                '</div>'
+                '<span style="width:150px;flex:none;text-align:right;font-family:\'IBM Plex Mono\',Menlo,monospace;'
+                'font-size:10px;color:#958772;font-variant-numeric:tabular-nums;">' + e(range_txt) + '</span>'
+                '</div>')
+    out += '</div>'
+    return out
+
+
+def _render_share_not_found(fr):
+    body = ('Ce lien de partage est introuvable ou a expiré.' if fr
+            else 'This share link could not be found or has expired.')
+    cta = 'Mesurer une marque' if fr else 'Measure a brand'
+    return ('<!doctype html><html lang="' + ("fr" if fr else "en") + '"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>Nadelio</title>'
+            '<meta name="robots" content="noindex">'
+            '<style>body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;'
+            'background:#211A14;color:#E8DFD2;font-family:Helvetica,Arial,sans-serif;text-align:center;padding:24px;}'
+            'a{color:#C6A15B;}</style></head><body><div>'
+            '<p style="font-size:15px;line-height:1.5;max-width:44ch;">' + _html.escape(body) + '</p>'
+            '<p><a href="/">' + _html.escape(cta) + ' &rsaquo;</a></p>'
+            '</div></body></html>')
+
+
+def _render_share_page(result, token):
+    """Server-rendered, dependency-free HTML for one shared result, in the v2
+    visual language (same palette/fonts as the live instrument). No three.js,
+    no client JS needed: the bracket axis is pure HTML/CSS. Every interpolated
+    value (brand names, queries, hosts) is escaped. All of it is user/API
+    derived, never trusted as markup."""
+    e = _html.escape
+    fr = _share_is_fr(result)
+    brand = str(result.get("brand", ""))
+    market = str(result.get("market", ""))
+    geo = result.get("geo") or {}
+    geo_rival = result.get("geo_rival")
+    point = geo.get("point")
+    hw = geo.get("half_width")
+    verdict_word = (_SHARE_VERDICT_WORD["fr" if fr else "en"].get(geo.get("verdict"), "")) if geo else ""
+    v = _share_verdict(fr, brand, geo if geo.get("point") is not None else None, geo_rival)
+
+    rows = []
+    if point is not None:
+        rows.append({"name": brand, "s": point, "m": hw, "focus": True})
+        if geo_rival and geo_rival.get("point") is not None:
+            rows.append({"name": geo_rival.get("brand", ""), "s": geo_rival["point"],
+                         "m": geo_rival.get("half_width"), "focus": False})
+    axis_html = _share_axis_html(rows, fr) if rows else ""
+
+    field_rows = _share_field_rows(result)
+    field_html = ""
+    for f in field_rows:
+        field_html += (
+            '<tr' + (' style="background:rgba(198,161,91,0.08);"' if f["is_focus"] else '') + '>'
+            + '<td style="padding:9px 12px;font-weight:' + ("600" if f["is_focus"] else "400") + ';color:'
+            + ("#C6A15B" if f["is_focus"] else "#E8DFD2") + ';">' + e(f["name"])
+            + ((" (" + ("vous" if fr else "you") + ")") if f["is_focus"] else "") + '</td>'
+            + '<td style="padding:9px 12px;color:' + ("#93A06E" if f["ai"].get("present") else "#AE7A64")
+            + ';font-variant-numeric:tabular-nums;">' + e(_share_ai_label(f["ai"], fr)) + '</td>'
+            + '<td style="padding:9px 12px;color:' + ("#958772" if f["serp"] is not None else "#AE7A64")
+            + ';font-variant-numeric:tabular-nums;">' + e(_share_google_label(f["serp"], fr)) + '</td>'
+            + '<td style="padding:9px 12px;text-align:right;font-family:\'IBM Plex Mono\',Menlo,monospace;'
+            + 'font-variant-numeric:tabular-nums;color:' + ("#C6A15B" if f["is_focus"] else "#958772") + ';">'
+            + str(round(f["share"])) + '%</td></tr>'
+        )
+
+    measured_date = str(result.get("measured_at") or "")[:10]
+    provider = str(result.get("ai_provider_label") or ("l'IA" if fr else "the AI"))
+    model = str(result.get("ai_model") or "")
+    n_runs = geo.get("n") or 0
+    n_queries = len(result.get("queries") or [])
+    s1 = "s" if n_queries > 1 else ""
+    if fr:
+        footnote = (
+            ("Mesuré le " + measured_date + ". " if measured_date else "")
+            + str(n_queries) + " question" + s1 + " sur Google" + (" (" + market + ")" if market else "")
+            + " et 1 IA (" + provider + (", " + model if model else "") + "), "
+            + str(n_runs) + (" passage" if n_runs <= 1 else " passages") + " par question."
+        )
+    else:
+        footnote = (
+            ("Measured on " + measured_date + ". " if measured_date else "")
+            + str(n_queries) + " question" + s1 + " on Google" + (" (" + market + ")" if market else "")
+            + " and 1 AI (" + provider + (", " + model if model else "") + "), "
+            + str(n_runs) + (" pass " if n_runs <= 1 else " passes ") + "per question."
+        )
+
+    title = (e(brand) + ", " + str(point) + " sur 100 en visibilité IA") if (fr and point is not None) else \
+            (e(brand) + " en visibilité IA") if fr else \
+            (e(brand) + ", " + str(point) + " out of 100 in AI visibility") if point is not None else \
+            (e(brand) + " in AI visibility")
+    desc = e(v["text"] or (("Mesure de visibilité IA pour " + brand) if fr else ("AI visibility measurement for " + brand)))
+    canonical = SITE_URL + "/r/" + token
+    og_image = SITE_URL + "/demo-nadelio.gif"
+
+    score_block = ""
+    if point is not None:
+        pm = (' <span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:16px;color:#A39784;'
+              'font-variant-numeric:tabular-nums;">&plusmn;' + str(hw) + '</span>') if hw is not None else ""
+        tag = ('<div style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:10.5px;letter-spacing:0.1em;'
+               'text-transform:uppercase;color:#958772;margin-top:6px;">' + e(verdict_word) + '</div>') if verdict_word else ""
+        score_block = (
+            '<div style="display:flex;flex-direction:column;gap:2px;">'
+            '<div style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:9.5px;letter-spacing:0.18em;'
+            'text-transform:uppercase;color:#A39784;">' + ("score de visibilité IA" if fr else "AI visibility score") + '</div>'
+            '<div style="display:flex;align-items:baseline;gap:4px;">'
+            '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(40px,7vw,64px);'
+            'line-height:1;color:#C6A15B;font-variant-numeric:tabular-nums;">' + str(point) + '</span>' + pm
+            + '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:13px;color:#958772;">/100</span>'
+            '</div>' + tag + '</div>'
+        )
+
+    return (
+        '<!doctype html><html lang="' + ("fr" if fr else "en") + '"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<title>' + title + '</title>'
+        '<meta name="description" content="' + desc + '">'
+        '<link rel="canonical" href="' + e(canonical) + '">'
+        '<meta name="theme-color" content="#211A14">'
+        '<meta property="og:type" content="article">'
+        '<meta property="og:url" content="' + e(canonical) + '">'
+        '<meta property="og:title" content="' + title + '">'
+        '<meta property="og:description" content="' + desc + '">'
+        '<meta property="og:image" content="' + e(og_image) + '">'
+        '<meta name="twitter:card" content="summary_large_image">'
+        '<meta name="twitter:title" content="' + title + '">'
+        '<meta name="twitter:description" content="' + desc + '">'
+        '<meta name="twitter:image" content="' + e(og_image) + '">'
+        '<style>'
+        "@font-face{font-family:'Archivo Black';font-style:normal;font-weight:400;font-display:swap;"
+        "src:url('/assets/v2/fonts/archivo-black-400.woff2') format('woff2');}"
+        "@font-face{font-family:'Archivo';font-style:normal;font-weight:400;font-display:swap;"
+        "src:url('/assets/v2/fonts/archivo-400.woff2') format('woff2');}"
+        "@font-face{font-family:'Archivo';font-style:normal;font-weight:600;font-display:swap;"
+        "src:url('/assets/v2/fonts/archivo-600.woff2') format('woff2');}"
+        "@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;"
+        "src:url('/assets/v2/fonts/ibm-plex-mono-400.woff2') format('woff2');}"
+        "@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;"
+        "src:url('/assets/v2/fonts/ibm-plex-mono-500.woff2') format('woff2');}"
+        '*{box-sizing:border-box;}'
+        'html,body{margin:0;padding:0;background:#211A14;color:#E8DFD2;}'
+        'body{font-family:Archivo,Helvetica,Arial,sans-serif;line-height:1.55;padding:clamp(24px,5vw,56px) clamp(16px,4vw,32px) 64px;}'
+        'a{color:#B2A694;border-bottom:1px solid #564D3C;text-decoration:none;}a:hover{color:#C6A15B;border-bottom-color:#C6A15B;}'
+        '.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:26px;}'
+        '.card{background:#231D18;border:1px solid #362E24;padding:clamp(18px,3vw,28px);}'
+        'table{width:100%;border-collapse:collapse;font-size:12.5px;}'
+        'th{text-align:left;padding:0 12px 8px;font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:9px;'
+        'letter-spacing:0.12em;text-transform:uppercase;color:#958772;}'
+        '.twrap{overflow-x:auto;}'
+        '</style></head><body><div class="wrap">'
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">'
+        '<a href="/" style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:15px;'
+        'letter-spacing:0.08em;color:#E8DFD2;border:none;">NADELIO</a>'
+        '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:9.5px;letter-spacing:0.14em;'
+        'text-transform:uppercase;color:#A39784;">' + ("mesuré par nadelio" if fr else "measured by nadelio") + '</span>'
+        '</div>'
+        '<div style="display:flex;flex-direction:column;gap:10px;">'
+        '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;">'
+        '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:9.5px;letter-spacing:0.2em;'
+        'text-transform:uppercase;color:#A39784;">verdict</span>'
+        '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-weight:600;font-size:10px;'
+        'color:#211A14;background:#C6A15B;padding:2px 8px;line-height:1.5;">' + e(brand) + '</span>'
+        '</div>'
+        '<h1 style="margin:0;font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-weight:400;'
+        'font-size:clamp(26px,4.4vw,44px);line-height:1.02;letter-spacing:-0.01em;color:' + v["color"] + ';">'
+        + e(v["title"] or (brand + (" mesuré" if fr else " measured"))) + '</h1>'
+        '<div style="font-size:14px;line-height:1.5;color:#C9BEAC;max-width:60ch;">' + e(v["text"]) + '</div>'
+        '</div>'
+        + ('<div class="card">' + score_block + ('<div style="margin-top:20px;">' + axis_html + '</div>' if axis_html else '') + '</div>' if (score_block or axis_html) else '')
+        + (
+            '<div class="card">'
+            '<div style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:9.5px;letter-spacing:0.18em;'
+            'text-transform:uppercase;color:#A39784;margin-bottom:12px;">' + ("le champ mesuré" if fr else "the measured field") + '</div>'
+            '<div class="twrap"><table><thead><tr>'
+            '<th>' + ("marque" if fr else "brand") + '</th>'
+            '<th>' + ("en ia" if fr else "in ai") + '</th>'
+            '<th>' + ("sur google" if fr else "on google") + '</th>'
+            '<th style="text-align:right;">' + ("part de voix" if fr else "share of voice") + '</th>'
+            '</tr></thead><tbody>' + field_html + '</tbody></table></div>'
+            '</div>'
+            if field_html else ''
+        )
+        + '<div style="font-size:11.5px;line-height:1.5;color:#958772;border-top:1px solid #362E24;padding-top:14px;">' + e(footnote) + '</div>'
+        + '<div>'
+        '<a href="/" style="display:inline-block;border:none;background:#E8DFD2;color:#211A14;'
+        'font-family:Archivo,Helvetica,Arial,sans-serif;font-weight:600;font-size:11px;letter-spacing:0.08em;'
+        'text-transform:uppercase;padding:12px 20px;">' + ("mesurer votre marque" if fr else "measure your brand") + '</a>'
+        '</div>'
+        '</div></body></html>'
+    )
+
+
+@app.route("/r/<token>", strict_slashes=False)
+def share_page(token):
+    """Public, server-rendered share page for one signed result. 404 (not a
+    softer empty state) for anything that is not a real, known token: an
+    unknown token, a malformed one, or history storage being unavailable all
+    look identical from the outside. Never confirm or deny which."""
+    fr_default = False
+    if not _SHARE_TOKEN_RE.match(token or "") or not _history_enabled():
+        resp = app.make_response(_render_share_not_found(fr_default))
+        resp.status_code = 404
+        return resp
+    try:
+        rows = _d1_query("SELECT payload FROM shares WHERE token = ?", [token])
+    except Exception:
+        logger.warning("share fetch failed (non-fatal)", exc_info=True)
+        rows = []
+    if not rows:
+        resp = app.make_response(_render_share_not_found(fr_default))
+        resp.status_code = 404
+        return resp
+    try:
+        result = json.loads(rows[0].get("payload") or "")
+        if not isinstance(result, dict):
+            raise ValueError("bad payload shape")
+    except Exception:
+        resp = app.make_response(_render_share_not_found(fr_default))
+        resp.status_code = 404
+        return resp
+    resp = app.make_response(_render_share_page(result, token))
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 # ---------------------------------------------------------------------------
 # Funnel tracking (best-effort, fail-open, no third-party analytics)
 # ---------------------------------------------------------------------------
@@ -3154,6 +3693,43 @@ def _event_salt():
 def _hash_ip(ip):
     digest = hashlib.sha256((str(ip) + _event_salt()).encode("utf-8")).hexdigest()
     return digest[:16]
+
+
+# ---------------------------------------------------------------------------
+# Share signature (THE trust anchor for /api/share and /r/<token>).
+#
+# If anyone could fabricate a "Nadelio measured" page with invented numbers,
+# the whole product's trust asset would be dead. So a share page may ONLY
+# ever be minted from a result THIS server produced: every /api/analyze
+# response with mode=="live" carries a share_sig, an HMAC-SHA256 over the
+# canonical JSON of every OTHER field, keyed with the same salt already used
+# for _hash_ip / _visitor_day_hash. /api/share re-derives this signature from
+# the verbatim raw response text the browser held onto and refuses anything
+# that does not match byte-for-byte (hmac.compare_digest, constant time).
+# Never signs the demo SAMPLE (mode=="demo") or any non-live shape.
+# ---------------------------------------------------------------------------
+def _canonical_result_json(d):
+    """Deterministic JSON bytes for a result dict: sorted keys (recursively),
+    no incidental whitespace. Two equal dicts ALWAYS canonicalize identically
+    regardless of Python dict insertion order or how they were parsed, which
+    is what lets the client round-trip a raw response back to us and still
+    verify byte-for-byte against what we signed."""
+    return json.dumps(d, sort_keys=True, separators=(",", ":"))
+
+
+def _sign_share(result):
+    """Return a NEW dict equal to `result` plus a fresh "share_sig", for a
+    mode=="live" result only (the demo SAMPLE and any other shape pass through
+    unchanged, un-signed). Never mutates the dict passed in, so callers can
+    keep caching/logging the original object safely."""
+    if not isinstance(result, dict) or result.get("mode") != "live":
+        return result
+    base = {k: v for k, v in result.items() if k != "share_sig"}
+    sig = hmac.new(_event_salt().encode("utf-8"),
+                    _canonical_result_json(base).encode("utf-8"),
+                    hashlib.sha256).hexdigest()
+    base["share_sig"] = sig
+    return base
 
 
 @app.route("/api/event", methods=["POST"])

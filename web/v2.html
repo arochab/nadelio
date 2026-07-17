@@ -101,6 +101,14 @@
             <div id="ndl-verdict-stale" role="note" style="display:none;font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#A39784;max-width:52ch;"></div>
             <h2 id="ndl-verdict-title" style="margin:0;font-family:'Archivo Black','Arial Black',sans-serif;font-weight:400;font-size:min(6.4vh,clamp(28px,4.6vw,62px));line-height:0.98;letter-spacing:-0.02em;color:#93A06E;text-wrap:balance;"></h2>
             <div id="ndl-verdict-text" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:min(2.3vh,clamp(12.5px,1.1vw,15px));line-height:1.5;color:#C9BEAC;font-variant-numeric:tabular-nums;max-width:52ch;"></div>
+            <!-- Share / free-export affordances: populated by nadelio.js only
+                 once a real result has settled (renderShareAffordance), empty
+                 and invisible otherwise. Dims with the rest of the verdict
+                 block while stale (see the staleDim wiring in render()), and
+                 deliberately sits here rather than in the dock so it never
+                 competes with the Deep Audit CTA in the "aller plus loin"
+                 card. -->
+            <div id="ndl-share" style="margin-top:2px;"></div>
           </div>
         </div>
         <!-- display:none -> flex and opacity 0 -> 1 are deliberately never set

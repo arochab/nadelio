@@ -94,6 +94,10 @@ input{outline:none;}
 .ndl-dl-btn:hover{border-color:#E8DFD2 !important;color:#FFF6E4 !important;}
 .ndl-dl-btn:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
 
+/* share result / free-tier export affordances (verdict zone) */
+.ndl-share-btn:hover{color:#C6A15B !important;border-bottom-color:#C6A15B !important;}
+.ndl-share-btn:focus{outline:2px solid #E8DFD2;outline-offset:3px;color:#C6A15B;}
+
 /* Stripe return path: retry button (pay error) + subscription banner close */
 .ndl-pay-retry:hover{background:#FFF6E4 !important;}
 .ndl-pay-retry:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
