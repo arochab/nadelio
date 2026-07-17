@@ -495,9 +495,10 @@ def _urlopen_json_with_retry(req, timeout, max_attempts=3, what="upstream API"):
     last_detail = ""
     last_code = None
     for attempt in range(1, max_attempts + 1):
+        body = None
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode())
+                body = resp.read().decode()
         except urllib.error.HTTPError as he:
             code = he.code
             detail = he.read().decode(errors="replace")[:300]
@@ -508,6 +509,20 @@ def _urlopen_json_with_retry(req, timeout, max_attempts=3, what="upstream API"):
         except (urllib.error.URLError, socket.timeout) as ue:
             reason = getattr(ue, "reason", ue)
             last_code, last_detail = None, str(reason)
+
+        if body is not None:
+            try:
+                return json.loads(body)
+            except (json.JSONDecodeError, ValueError):
+                # An HTTP 200 whose body is not JSON (Bright Data sometimes
+                # answers a block page or an empty body with a 200) is exactly
+                # as transient as a 502, and used to kill a whole multi-query
+                # audit on the FIRST occurrence with zero retries: json.loads
+                # raised outside the retry clauses. It caused a prod outage on
+                # 17 July 2026 (every audit fell back to the demo sample while
+                # a direct call of the very same query succeeded seconds
+                # later). Retry it like any other transient failure.
+                last_code, last_detail = 200, "non-JSON 200 body: " + body[:200]
 
         if attempt < max_attempts:
             logger.warning(
