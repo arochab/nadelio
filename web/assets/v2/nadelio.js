@@ -106,7 +106,20 @@
     readingInProgress: 'reading in progress',
     verdictLabel: 'verdict',
     gapThatMatters: 'the gap that matters',
-    scaleAria: 'measurement scale, learn more'
+    scaleAria: 'measurement scale, learn more',
+    idToggle: 'identity & market ›',
+    idUrlPh: 'Official website (locks the exact company)',
+    idUrlAria: 'brand official website',
+    idMarketLabel: 'market',
+    idMarketAria: 'market measured',
+    idMarketAuto: 'Auto',
+    idUpdateBtn: 'Update',
+    footSupport: 'Contact support',
+    footWhy: 'Why Nadelio?',
+    footHow: 'How we measure',
+    footPay: 'Pay on results',
+    footRoadmap: 'Roadmap',
+    footLegal: 'Legal and terms'
   };
   /* Localizes the static chrome (markup already in the DOM, never re-created
      by this script). Called once, first thing in init(), before the first
@@ -186,7 +199,9 @@
       verdictEl, verdictTitleEl, verdictTextEl, verdictBrandEl, verdictStaleEl,
       insightEl, insightTextEl, fieldEl, ticksEl, scaleLabelEl,
       passCounterEl, unknownEl, runBtn, brandsHost, transpBtn, cardEls = [],
-      subBannerEl, belowEl, deepDocEl, shareEl;
+      subBannerEl, belowEl, deepDocEl, shareEl,
+      /* identity + market control (resolver moat, see runReal/renderIdentity) */
+      identityEl, idToggleBtn, idPanelEl, officialUrlEl, marketSelectEl, idUpdateBtn;
   /* the overlay's original "le nuage converge / lecture en cours" markup,
      captured once at init so the Stripe-return paid flow (which borrows this
      same node) can hand it back exactly as it found it. */
@@ -1338,6 +1353,68 @@
     var els = document.querySelectorAll('.ndl-deep-cta');
     for (var i = 0; i < els.length; i++) els[i].style.pointerEvents = locked ? 'none' : '';
   }
+  /* ============================ identity + market control (console) ============================
+     Ported from index.html's resolver ("Official website, locks the exact
+     company" + Market select, index.html:732-743): the free flow forwarded
+     only {brand:name} to /api/infer with no market and no official-URL lock,
+     so a homonym (Payflows -> Stripe, Toucan -> Duolingo) or a non-US brand
+     could be measured as the wrong entity/market with no visible control
+     (panel finding, v2.html:59). Collapsed by default (see the toggle in
+     v2.html) so the single-input console stays uncluttered; force-opened by
+     renderIdentity below the instant a settled result comes back low
+     confidence. */
+  function toggleIdPanel(force) {
+    if (!idPanelEl || !idToggleBtn) return;
+    var open = (typeof force === 'boolean') ? force : (idPanelEl.style.display !== 'flex');
+    idPanelEl.style.display = open ? 'flex' : 'none';
+    idToggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function getOfficialUrlInput() { return officialUrlEl ? officialUrlEl.value.trim() : ''; }
+  function getMarketInput() { return marketSelectEl ? marketSelectEl.value.trim() : ''; }
+  /* "Mettre a jour" in the panel, and the "changer" link inside the identity
+     line (renderIdentity): re-runs the WHOLE free flow (/api/infer then
+     /api/analyze) for the already-measured brand, now carrying whatever
+     official_url/market the visitor just set - runReal reads both fields
+     fresh on every call, so this needs no extra plumbing beyond re-running. */
+  function onIdentityUpdate() {
+    var brand = (currentResult && currentResult.focusName) || state.focus || (state.inputValue || '').trim();
+    if (!brand) { if (inputEl) inputEl.focus(); return; }
+    runMeasure(brand);
+  }
+  /* Plainly shows WHO and WHICH MARKET was measured, next to the verdict (see
+     ndl-identity in v2.html) - a screenshot of the verdict alone must never
+     leave that ambiguous. Never nags on high confidence (one quiet line);
+     on low confidence, adds a visible warning AND force-opens the identity +
+     market panel above, so the correction is reachable before the free
+     result is trusted - extending the same guard startCheckout already
+     enforces for the paid Deep Audit to the free result too. */
+  function renderIdentity(R) {
+    if (!identityEl) return;
+    if (!R) { identityEl.innerHTML = ''; return; }
+    var name = esc(R.identifiedAs || R.focusName || '');
+    var url = safeHttpUrl(R.officialUrl);
+    var urlHtml = url ? (' (<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="color:#B2A694;border-bottom:1px solid #564D3C;">' + esc(shortHost(url)) + '</a>)') : '';
+    var marketTxt = R.market ? esc(R.market) : T('not set', 'non défini');
+    var low = R.confidence === 'low';
+    var html = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.5;color:#958772;">' +
+      T('Measured for ', 'Mesure pour ') + '<b style="color:#B2A694;">' + name + '</b>' + urlHtml +
+      T(', market ', ', marché ') + '<b style="color:#B2A694;">' + marketTxt + '</b> ' +
+      '<button type="button" class="ndl-id-change" style="cursor:pointer;background:none;border:none;padding:0;font-family:inherit;font-size:11px;color:#958772;border-bottom:1px solid #564D3C;">' + T('change', 'changer') + '</button>' +
+      '</div>';
+    if (low) {
+      html += '<div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid #463B30;border-left:2px solid #B57C5D;background:#231D18;">' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#D8CDBB;">' +
+        T('Low confidence: this may be the wrong company or market. Check the official website and the market above, then update.', 'Confiance faible : il peut s\'agir de la mauvaise entreprise ou du mauvais marché. Vérifiez le site officiel et le marché ci-dessus, puis mettez à jour.') +
+        '</div></div>';
+    }
+    identityEl.innerHTML = html;
+    var changeBtn = identityEl.querySelector('.ndl-id-change');
+    if (changeBtn) changeBtn.addEventListener('click', function () {
+      toggleIdPanel(true);
+      if (officialUrlEl) { if (!officialUrlEl.value && url) officialUrlEl.value = url; officialUrlEl.focus(); }
+    });
+    if (low) toggleIdPanel(true);
+  }
   /* Guard-rail ported from index.html's resolver: a bare name with no web
      evidence can resolve to a famous homonym (Payflows -> Stripe, Toucan ->
      Duolingo). The backend marks that "low" confidence (app.py _sanitize_
@@ -2156,7 +2233,11 @@
   function runReal(name, gen) {
     var loadStart = performance.now();
     var officialUrl = '';
-    fetch('/api/infer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: name }) })
+    /* Forward the identity + market control (see toggleIdPanel above): empty
+       strings when the panel was never touched, so the default flow is byte-
+       for-byte the same request as before this fix. */
+    var reqOfficialUrl = getOfficialUrlInput(), reqMarket = getMarketInput();
+    fetch('/api/infer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: name, official_url: reqOfficialUrl, market: reqMarket }) })
       .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, status: res.status, body: d }; }); })
       .then(function (inf) {
         if (gen !== measureGen) return null;
@@ -3273,6 +3354,13 @@
       if (v.stale) { verdictStaleEl.style.display = 'block'; verdictStaleEl.textContent = v.staleMsg; }
       else { verdictStaleEl.style.display = 'none'; verdictStaleEl.textContent = ''; }
     }
+    /* who + which market was measured (see renderIdentity): visible whenever
+       a result is on screen, dims with the rest of the verdict body while
+       stale, gone entirely at idle/measuring (nothing settled to name yet). */
+    if (identityEl) {
+      if (v.haveResult) { identityEl.style.display = 'flex'; identityEl.style.opacity = staleDim; }
+      else { identityEl.style.display = 'none'; identityEl.innerHTML = ''; }
+    }
 
     /* named competitive field fades to full on settle, further dimmed while stale */
     if (fieldEl) fieldEl.style.opacity = v.proofOp * staleDim;
@@ -3362,6 +3450,7 @@
       renderField(v);
       if (insightTextEl) insightTextEl.textContent = v.insight;
       renderShareAffordance(v);
+      renderIdentity(v.haveResult ? currentResult : null);
       lastContentSig = v.contentSig;
     }
 
@@ -3421,6 +3510,12 @@
     belowEl = document.getElementById('ndl-below');
     deepDocEl = document.getElementById('ndl-deepdoc');
     shareEl = document.getElementById('ndl-share');
+    identityEl = document.getElementById('ndl-identity');
+    idToggleBtn = document.getElementById('ndl-idtoggle');
+    idPanelEl = document.getElementById('ndl-idpanel');
+    officialUrlEl = document.getElementById('ndl-officialurl');
+    marketSelectEl = document.getElementById('ndl-market');
+    idUpdateBtn = document.getElementById('ndl-idupdate');
     if (overlayEl) defaultOverlayHTML = overlayEl.innerHTML;
 
     /* handlers on persistent nodes (was onChange / onKeyDown / onClick) */
@@ -3454,6 +3549,8 @@
       } catch (e) {}
     }, true);
     if (transpBtn) transpBtn.addEventListener('click', openDrawer);
+    if (idToggleBtn) idToggleBtn.addEventListener('click', function () { toggleIdPanel(); });
+    if (idUpdateBtn) idUpdateBtn.addEventListener('click', onIdentityUpdate);
 
     /* first render populates every dynamic region before first paint */
     render();

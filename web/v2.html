@@ -63,6 +63,31 @@
             <span data-i18n="or" style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#958772;">ou</span>
           </div>
           <div id="ndl-unknown" role="alert" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#958772;display:none;"></div>
+          <!-- Identity + market control (homonym moat: Payflows->Stripe,
+               Toucan->Duolingo; a French SMB measured on a US market is
+               meaningless). Collapsed by default so the single-input console
+               stays uncluttered; reachable at any time, and force-opened by
+               JS (renderIdentity) the moment a settled result comes back
+               low-confidence - see nadelio.js. Forwards to /api/infer, whose
+               resolved market/official_url then flow into /api/analyze
+               exactly like the rest of the free flow (see runReal). -->
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button id="ndl-idtoggle" type="button" class="ndl-transp" data-i18n="idToggle" aria-expanded="false" aria-controls="ndl-idpanel" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#958772;border-bottom:1px solid #463B30;padding:0 0 2px;width:fit-content;">identité &amp; marché &rsaquo;</button>
+            <div id="ndl-idpanel" style="display:none;flex-direction:column;gap:8px;">
+              <input id="ndl-officialurl" class="ndl-idfield" type="text" spellcheck="false" autocomplete="off" placeholder="Site officiel (verrouille la bonne entreprise)" data-i18n-ph="idUrlPh" aria-label="site officiel de la marque" data-i18n-aria="idUrlAria">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <label for="ndl-market" data-i18n="idMarketLabel" style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#A39784;">marché</label>
+                <select id="ndl-market" class="ndl-idfield" aria-label="marché mesuré" data-i18n-aria="idMarketAria">
+                  <option value="" data-i18n="idMarketAuto">Auto</option>
+                  <option value="fr">France</option>
+                  <option value="us">US / Global</option>
+                  <option value="dach">DACH</option>
+                  <option value="uk">UK</option>
+                </select>
+                <button id="ndl-idupdate" type="button" data-i18n="idUpdateBtn" style="cursor:pointer;border:1px solid #564D3C;background:none;color:#B2A694;font-family:inherit;font-size:10.5px;padding:7px 11px;">Mettre à jour</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:9px;border-top:1px solid #362E24;padding-top:clamp(12px,1.8vh,18px);">
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
@@ -93,6 +118,12 @@
               <span data-i18n="verdictLabel" style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#A39784;">verdict</span>
               <span id="ndl-verdict-brand" style="font-family:'IBM Plex Mono',Menlo,monospace;font-weight:600;font-size:10px;letter-spacing:0.03em;color:#211A14;background:#C6A15B;padding:2px 8px;line-height:1.5;font-variant-numeric:tabular-nums;"></span>
             </div>
+            <!-- Who and which market was actually measured, plain, next to the
+                 verdict (see renderIdentity in nadelio.js). Never dimmed while
+                 empty (display:none) - hard requirement: a visitor must always
+                 be able to tell WHO and WHICH MARKET the numbers are for, and
+                 correct it via the identité & marché panel above. -->
+            <div id="ndl-identity" style="display:none;flex-direction:column;gap:6px;"></div>
             <!-- Live staleness hint: shown only when the typed brand no longer
                  matches the measured one (see renderVals() `stale` + render()
                  in nadelio.js). Deliberately NOT inside a dimmed wrapper, so it
@@ -154,6 +185,30 @@
   <div id="ndl-below" style="position:relative;z-index:1;display:none;">
     <div id="ndl-deepdoc"></div>
   </div>
+  <!-- Persistent footer: legal/contact/methodology, on a page selling a 79€
+       product and 99€/mo subscriptions (was entirely missing - see the panel
+       product regression report). Always in flow (never toggled by JS, unlike
+       #ndl-below above), reached by the same internal scroll of
+       [data-nadelio-root] the deep dossier already uses, so it never breaks
+       the single-screen hero feel: nothing above the fold moves. -->
+  <footer id="ndl-footer" class="ndl-footer">
+    <div class="ndl-footer-inner">
+      <div class="ndl-footer-brand">NADELIO</div>
+      <nav class="ndl-footer-links" aria-label="Nadelio">
+        <a href="mailto:adam.chabbi94@gmail.com" data-i18n="footSupport">Contacter le support</a>
+        <span class="ndl-footer-sep" aria-hidden="true"></span>
+        <a href="/compare" data-i18n="footWhy">Pourquoi Nadelio ?</a>
+        <span class="ndl-footer-sep" aria-hidden="true"></span>
+        <a href="/methodology" data-i18n="footHow">Comment nous mesurons</a>
+        <span class="ndl-footer-sep" aria-hidden="true"></span>
+        <a href="/settlement" data-i18n="footPay">Payez sur résultats</a>
+        <span class="ndl-footer-sep" aria-hidden="true"></span>
+        <a href="/roadmap" data-i18n="footRoadmap">Feuille de route</a>
+        <span class="ndl-footer-sep" aria-hidden="true"></span>
+        <a href="mailto:adam.chabbi94@gmail.com" data-i18n="footLegal">Mentions et conditions</a>
+      </nav>
+    </div>
+  </footer>
 </div>
 <!-- nadelio.js first and deferred: it is the whole interaction (brand input,
      run button) and must never wait behind the 670KB three.js vendor bundle.

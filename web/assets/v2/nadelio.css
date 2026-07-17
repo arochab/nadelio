@@ -92,6 +92,17 @@ input{outline:none;}
 .ndl-drawer-close:hover{border-color:#E8DFD2 !important;color:#E8DFD2 !important;}
 .ndl-drawer-close:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
 
+/* identité & marché panel (resolver/market control, console) */
+.ndl-idfield{font-family:'IBM Plex Mono',Menlo,monospace;font-size:12px;color:#E8DFD2;background:#231D18;border:1px solid #463B30;padding:8px 10px;}
+.ndl-idfield:focus{border-color:#C6A15B !important;outline:2px solid #E8DFD2;outline-offset:1px;}
+#ndl-officialurl{width:100%;max-width:320px;box-sizing:border-box;}
+#ndl-idtoggle:hover{color:#C6A15B !important;border-bottom-color:#C6A15B !important;}
+#ndl-idtoggle:focus{outline:2px solid #E8DFD2;outline-offset:3px;color:#C6A15B;}
+#ndl-idupdate:hover{border-color:#E8DFD2 !important;color:#FFF6E4 !important;}
+#ndl-idupdate:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+.ndl-id-change:hover{color:#C6A15B !important;border-bottom-color:#C6A15B !important;}
+.ndl-id-change:focus{outline:2px solid #E8DFD2;outline-offset:3px;color:#C6A15B;}
+
 /* Deep Audit CTA + monitoring link in the "aller plus loin" dock card */
 .ndl-deep-cta:hover{background:#D9B87A !important;}
 .ndl-deep-cta:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
@@ -119,6 +130,17 @@ input{outline:none;}
 @media (max-width:860px){
   .ndl-deepgrid{grid-template-columns:1fr !important;}
 }
+
+/* persistent footer (legal/contact/methodology) - below the fold, reached by
+   the same internal scroll as the deep dossier, never part of the hero grid. */
+.ndl-footer{border-top:1px solid #362E24;padding:22px clamp(12px,1.8vw,26px) 30px;}
+.ndl-footer-inner{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:10px;}
+.ndl-footer-brand{font-family:'Archivo Black','Arial Black',sans-serif;font-size:12px;letter-spacing:0.1em;color:#958772;}
+.ndl-footer-links{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-family:'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace;font-size:11px;}
+.ndl-footer-links a{color:#B2A694;border-bottom:1px solid #564D3C;}
+.ndl-footer-links a:hover{color:#C6A15B;border-bottom-color:#C6A15B;}
+.ndl-footer-links a:focus{outline:2px solid #E8DFD2;outline-offset:2px;}
+.ndl-footer-sep{width:3px;height:3px;border-radius:50%;background:#463B30;flex-shrink:0;}
 
 /* ---- responsive mobile (desktop >=860px stays identical) ----
    Ported from the v5 source <style>: below ~860px the 2-col body
@@ -190,4 +212,7 @@ input{outline:none;}
   .ndl-deep-cta{min-height:44px;}
   .ndl-mon-link{min-height:44px;display:inline-flex;align-items:center;}
   .ndl-dl-btn{min-height:44px;}
+  #ndl-idtoggle{min-height:44px;}
+  #ndl-idupdate{min-height:44px;}
+  .ndl-footer-links a{min-height:44px;display:inline-flex;align-items:center;}
 }
