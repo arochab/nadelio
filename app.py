@@ -85,6 +85,13 @@ def _today_utc():
     return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
 
 
+def _now_utc_iso():
+    """Full UTC ISO-8601 instant (unlike _today_utc's bare date), used to
+    stamp exactly when a measurement completed for real transparency
+    (see /api/analyze's "measured_at" field)."""
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
 def _client_ip():
     fwd = request.headers.get("X-Forwarded-For")
     if fwd:
@@ -1269,10 +1276,14 @@ def _call_gemini(prompt, api_key):
 
 
 # Provider registry. Order = display order. The first available one is default.
+# "model" is the EXACT model id this provider's "call" function sends to its
+# API (read here, never re-hardcoded at the call site) so the frontend can
+# state plainly which model actually ran the AI-visibility reads, not just
+# which company (see /api/analyze's "ai_model" field).
 _AI_PROVIDERS = {
-    "claude":  {"label": "Claude",  "env": "ANTHROPIC_API_KEY", "call": _call_claude},
-    "chatgpt": {"label": "ChatGPT", "env": "OPENAI_API_KEY",    "call": _call_openai},
-    "gemini":  {"label": "Gemini",  "env": "GEMINI_API_KEY",    "call": _call_gemini},
+    "claude":  {"label": "Claude",  "env": "ANTHROPIC_API_KEY", "call": _call_claude,  "model": ANTHROPIC_MODEL},
+    "chatgpt": {"label": "ChatGPT", "env": "OPENAI_API_KEY",    "call": _call_openai,  "model": OPENAI_MODEL},
+    "gemini":  {"label": "Gemini",  "env": "GEMINI_API_KEY",    "call": _call_gemini,  "model": GEMINI_MODEL},
 }
 DEFAULT_AI_PROVIDER = "claude"
 
@@ -2846,6 +2857,14 @@ def api_analyze():
             # is never mistaken for a cross-assistant average.
             "ai_provider": ai_provider,
             "ai_provider_label": (_AI_PROVIDERS.get(ai_provider) or {}).get("label", ""),
+            # Real model transparency (additive, owner-requested): the EXACT
+            # model id actually used for the AI-visibility runs above (read
+            # from the provider registry, never hardcoded here) and the UTC
+            # instant this measurement completed. Covers both tiers, since
+            # free and paid share this one result-building path (tier is set
+            # from paid_ok just above).
+            "ai_model": (_AI_PROVIDERS.get(ai_provider) or {}).get("model", ""),
+            "measured_at": _now_utc_iso(),
             # Who ACTUALLY owns these answers beyond the tracked brands: per-query
             # top untracked results + hosts aggregated across queries. Turns an
             # empty grid (niche/local brand) into an actionable SEO read.

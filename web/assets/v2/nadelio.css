@@ -46,11 +46,11 @@
 }
 
 /* ---- global reset (verbatim from source <style>) ---- */
-html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#14100C;}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#211A14;}
 a{color:#E8DFD2;text-decoration:none;}
 a:hover{color:#C6A15B;}
 input{outline:none;}
-::selection{background:#C6A15B;color:#14100C;}
+::selection{background:#C6A15B;color:#211A14;}
 @keyframes dotpulse{0%,100%{opacity:0.2;}50%{opacity:1;}}
 @keyframes tipIn{from{opacity:0;}to{opacity:1;}}
 @keyframes drawerIn{from{opacity:0;transform:translateX(18px);}to{opacity:1;transform:translateX(0);}}
@@ -120,7 +120,7 @@ input{outline:none;}
   /* stack the two body columns */
   [data-nadelio-body]{grid-template-columns:1fr !important;gap:20px !important;}
   /* console drops its right divider, gains a bottom one, sits second */
-  [data-nadelio-console]{border-right:none !important;border-bottom:1px solid #2A241C;padding-right:0 !important;padding-bottom:18px !important;justify-content:flex-start;min-height:0;order:1;}
+  [data-nadelio-console]{border-right:none !important;border-bottom:1px solid #362E24;padding-right:0 !important;padding-bottom:18px !important;justify-content:flex-start;min-height:0;order:1;}
   /* the 3-up dock reflows to a single column */
   [data-nadelio-dock]{grid-template-columns:1fr !important;}
   /* the idle offers strip (Deep Audit / Monitoring / Settlement) reflows too */
@@ -131,12 +131,19 @@ input{outline:none;}
   .ndl-right{order:2;}
 }
 
-/* ---- small phones (<=560px): drop the middle tagline and the header
-   badge so the wordmark and the transparency link own an uncramped top
-   row, and give the stacked WebGL instrument a bit more height ---- */
-@media (max-width:560px){
-  .ndl-tagline{display:none !important;}
+/* ---- small phones (<=560px): the tagline is gone entirely (was the middle
+   header node), so at 560px itself the header is just wordmark + badge +
+   transparency and fits on its own (verified). Below ~540px though the badge
+   text ("Google + AI, bounded measurement" / FR equivalent) plus the
+   transparency trigger no longer fit next to the wordmark on real phones
+   (390px, 375px) and the transparency link - the only functional control in
+   the header - got clipped off-screen entirely, which is worse than before.
+   Drop the badge only below that narrower width so the trigger always stays
+   reachable; keep it visible at the full 560px this page is asked to support. ---- */
+@media (max-width:540px){
   .ndl-hbadge{display:none !important;}
+}
+@media (max-width:560px){
   [data-nadelio-proof]{min-height:220px !important;}
 }
 
