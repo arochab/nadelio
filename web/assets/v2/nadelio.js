@@ -195,11 +195,22 @@
   /* ---------- three.js state ---------- */
   var renderer, scene, camera, group, sprite, material, points,
       targets, dirs, meta, ro, rafId, pollIv, measureStart, reduced, resizeDebounceT;
+  /* targetsBase / baseColors: pristine copies of targets/colA taken right
+     after buildClusters allocates them - the restore point setClusterHighlight
+     / clearClusterHighlight mutate back to, and (for targetsBase) the anchor
+     a hovered cluster's particles are dilated outward from. clusterRanges maps
+     a brand name -> {start,count,cx,cy} in the flat particle buffers, built in
+     buildClusters's 'result' branch. sceneMode ('dormant' | 'measuring' |
+     'result') is what frame() reads every tick to pick the right animation -
+     it is derived fresh on every buildClusters call, never set elsewhere. */
+  var targetsBase, baseColors, clusterRanges = null, sceneMode = 'dormant';
 
   /* ---------- lifecycle / focus / reveal / log state ---------- */
   var revealT, logIv, focusArmed, focusOutHandler, userInteracted,
       visHandler, interactHandler, keyHandler,
       tipOverH, tipOutH, tipFocusInH, tipFocusOutH, tipClickH, hoverTipEl = null;
+  /* ---------- cloud <-> field hover (settled only, one-directional) ---------- */
+  var fieldOverH, fieldOutH, fieldHoverEl = null, hoverBrand = null;
 
   /* ---------- tracked dynamic node lists (for surgical re-render) ---------- */
   var axisBrandNodes = [], brandBtnNodes = [], lastChipFocus = null, lastContentSig = null;
@@ -459,6 +470,25 @@
     document.addEventListener('focusin', tipFocusInH);
     document.addEventListener('focusout', tipFocusOutH);
     document.addEventListener('click', tipClickH);
+
+    /* cloud <-> field hover - one directional (field row -> cluster), same
+       delegation pattern as the tooltip triggers above (the rows are rebuilt
+       on every new settled result, see renderField). Only ever matches while
+       #ndl-field actually has rows (settled), so this is a no-op at idle,
+       while measuring, and on error. */
+    fieldOverH = function (e) {
+      var el = e.target.closest ? e.target.closest('.ndl-field-row') : null;
+      if (el && el !== fieldHoverEl) { fieldHoverEl = el; setClusterHighlight(el.getAttribute('data-brand') || ''); }
+    };
+    fieldOutH = function (e) {
+      if (!fieldHoverEl) return;
+      var to = e.relatedTarget;
+      if (to && fieldHoverEl.contains && fieldHoverEl.contains(to)) return;
+      fieldHoverEl = null;
+      clearClusterHighlight();
+    };
+    document.addEventListener('mouseover', fieldOverH);
+    document.addEventListener('mouseout', fieldOutH);
   }
 
   function componentDidUpdate(prevProps, prevState) {
@@ -484,6 +514,8 @@
     document.removeEventListener('focusin', tipFocusInH);
     document.removeEventListener('focusout', tipFocusOutH);
     document.removeEventListener('click', tipClickH);
+    document.removeEventListener('mouseover', fieldOverH);
+    document.removeEventListener('mouseout', fieldOutH);
     if (ro) ro.disconnect();
     if (renderer) renderer.dispose();
   }
@@ -960,60 +992,160 @@
        only on currentResult (null while loading -> 0..100). */
     applyWindow();
     var zspan = ZHI - ZLO;
-    var rows = rowsIn.slice().sort(function (a, b) { return b.s - a.s; });
-    var l = rows[0], s2 = rows[1];
-    var hasOverlap = false, oLo = 0, oHi = 0;
-    if (rows.length >= 2) { oLo = Math.max(l.s - l.m, s2.s - s2.m); oHi = Math.min(l.s + l.m, s2.s + s2.m); hasOverlap = oLo < oHi; }
-    var brass = [0.86, 0.68, 0.37], hot = [0.78, 0.44, 0.29];
+    clusterRanges = {};
     var pts = [];
-    rows.forEach(function (r, i) {
-      var st = clusterState(rows, i);
-      /* clamp the cluster centre to the visible window so an out-of-range real
-         score never throws the cloud off-canvas; the axis spans 0..100. */
-      var sClamped = Math.max(ZLO, Math.min(ZHI, r.s));
-      var cxPx = axL + (sClamped - ZLO) / zspan * axW;
-      var w0 = pxToWorld(cxPx, axY);
-      var x = w0[0], y = w0[1], wpp = w0[2];
-      var R = Math.max(r.m / zspan * axW * wpp, 0.12);
-      var isFocus = !!focusName && r.n === focusName;
-      var dimK = st === 'behind' ? 0.45 : 1;
-      var base;
-      if (isFocus) base = [brass[0] * dimK, brass[1] * dimK, brass[2] * dimK];
-      else { var k = (i === 0 ? 0.75 : i === 1 ? 0.5 : 0.3) * dimK; base = [0.91 * k, 0.87 * k, 0.82 * k]; }
-      var calm = st === 'proven' ? 0.3 : st === 'contested' ? 1.7 : 0.75;
-      var ringRes = st === 'proven' ? 0.014 : st === 'contested' ? 0.035 : 0.045;
-      var nMul = st === 'behind' ? 0.5 : 1;
-      var nRing = Math.round((isFocus ? 1600 : 1000) * density * nMul);
-      var nCore = Math.round((isFocus ? 800 : 500) * density * nMul);
-      for (var j = 0; j < nRing + nCore; j++) {
-        var ring = j < nRing;
-        var tx, ty, tz;
-        if (ring) {
-          var a = Math.random() * Math.PI * 2;
-          var rr = R + gauss() * 0.03;
-          tx = x + Math.cos(a) * rr; ty = y + Math.sin(a) * rr; tz = gauss() * 0.05;
-        } else {
-          tx = x + gauss() * R * 0.34; ty = y + gauss() * R * 0.34; tz = gauss() * 0.06;
+
+    /* Three distinct readings, never one generic "loading" look (owner: "la
+       partie animatique 3D ne sert a rien" - the cloud must always encode
+       what is actually true right now, never decorate):
+         - 'result'    a real settled or settling measurement - the existing
+                       cluster-per-brand projection below (UNCHANGED): position
+                       IS the score, spread IS the interval, agitation IS
+                       instability. rowsIn carries real, named rows.
+         - 'measuring' a run is actually in flight (state.measuring) but no
+                       rows exist yet (rowsIn is the loadingRows() sentinel,
+                       n:'') - readings streaming in: a directional flow that
+                       gathers toward the axis line as the run goes on (see
+                       frame()'s flowK, driven by state.elapsedS), brightening
+                       with it. It never gathers onto any ONE position - there
+                       is nothing to position yet.
+         - 'dormant'   nothing running, nothing measured (idle boot, or a
+                       failed measurement) - a calm, thin, low-intensity field
+                       along the whole axis. No cluster, no position, no claim.
+       Derived here, fresh, on every call - never cached - so a live resize or
+       a Stripe-return resume mid-boot always reads the true current state. */
+    var isRealResult = !!(rowsIn[0] && rowsIn[0].n !== '');
+    var mode = isRealResult ? 'result' : (state.measuring ? 'measuring' : 'dormant');
+    sceneMode = mode;
+
+    if (mode === 'result') {
+      var rows = rowsIn.slice().sort(function (a, b) { return b.s - a.s; });
+      var l = rows[0], s2 = rows[1];
+      var hasOverlap = false, oLo = 0, oHi = 0;
+      if (rows.length >= 2) { oLo = Math.max(l.s - l.m, s2.s - s2.m); oHi = Math.min(l.s + l.m, s2.s + s2.m); hasOverlap = oLo < oHi; }
+      var brass = [0.86, 0.68, 0.37], hot = [0.78, 0.44, 0.29];
+      rows.forEach(function (r, i) {
+        var st = clusterState(rows, i);
+        /* clamp the cluster centre to the visible window so an out-of-range real
+           score never throws the cloud off-canvas; the axis spans 0..100. */
+        var sClamped = Math.max(ZLO, Math.min(ZHI, r.s));
+        var cxPx = axL + (sClamped - ZLO) / zspan * axW;
+        var w0 = pxToWorld(cxPx, axY);
+        var x = w0[0], y = w0[1], wpp = w0[2];
+        var R = Math.max(r.m / zspan * axW * wpp, 0.12);
+        var isFocus = !!focusName && r.n === focusName;
+        var dimK = st === 'behind' ? 0.45 : 1;
+        var base;
+        if (isFocus) base = [brass[0] * dimK, brass[1] * dimK, brass[2] * dimK];
+        else { var k = (i === 0 ? 0.75 : i === 1 ? 0.5 : 0.3) * dimK; base = [0.91 * k, 0.87 * k, 0.82 * k]; }
+        var calm = st === 'proven' ? 0.3 : st === 'contested' ? 1.7 : 0.75;
+        var ringRes = st === 'proven' ? 0.014 : st === 'contested' ? 0.035 : 0.045;
+        var nMul = st === 'behind' ? 0.5 : 1;
+        var nRing = Math.round((isFocus ? 1600 : 1000) * density * nMul);
+        var nCore = Math.round((isFocus ? 800 : 500) * density * nMul);
+        var rangeStart = pts.length;
+        for (var j = 0; j < nRing + nCore; j++) {
+          var ring = j < nRing;
+          var tx, ty, tz;
+          if (ring) {
+            var a = Math.random() * Math.PI * 2;
+            var rr = R + gauss() * 0.03;
+            tx = x + Math.cos(a) * rr; ty = y + Math.sin(a) * rr; tz = gauss() * 0.05;
+          } else {
+            tx = x + gauss() * R * 0.34; ty = y + gauss() * R * 0.34; tz = gauss() * 0.06;
+          }
+          var col = base;
+          if (ring && i < 2 && hasOverlap) {
+            var score = ZLO + ((tx / wpp) + (mountEl.clientWidth / 2) - axL) / axW * zspan;
+            if (score > oLo && score < oHi) col = hot;
+          }
+          var dir = [gauss(), gauss(), gauss()];
+          var len = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+          pts.push({
+            t: [tx, ty, tz], c: col,
+            d: [dir[0] / len, dir[1] / len, dir[2] / len],
+            res: ring ? ringRes : 0.06,
+            burst: 1.2 + Math.random() * 2.0,
+            ph: Math.random() * Math.PI * 2,
+            fq: 0.5 + Math.random() * 1.2,
+            stag: Math.random() * 0.35,
+            calm: calm
+          });
         }
-        var col = base;
-        if (ring && i < 2 && hasOverlap) {
-          var score = ZLO + ((tx / wpp) + (mountEl.clientWidth / 2) - axL) / axW * zspan;
-          if (score > oLo && score < oHi) col = hot;
-        }
-        var dir = [gauss(), gauss(), gauss()];
-        var len = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+        /* brand -> particle range + cluster centre, for the settled hover
+           highlight (setClusterHighlight/clearClusterHighlight below) - one
+           directional, field row -> cloud, never the reverse (the canvas
+           keeps pointer-events:none, no raycasting). */
+        clusterRanges[r.n] = { start: rangeStart, count: pts.length - rangeStart, cx: x, cy: y };
+      });
+    } else if (mode === 'measuring') {
+      /* Same total budget as the dormant field (1500 * density) - a run in
+         flight never costs more particles than idle. Spread across the FULL
+         axis width (nothing has arrived, so nothing is positioned), each
+         particle's own drift direction biased horizontal for a "current"
+         feel; the actual gather-toward-the-axis and the brightening-with-
+         elapsed-time both live in frame() (sceneMode==='measuring' branch),
+         driven by state.elapsedS - never a fabricated percentage. */
+      var N = Math.round(1500 * density);
+      var flowCol = [0.6, 0.5, 0.36];
+      for (var fj = 0; fj < N; fj++) {
+        var fx = Math.random();
+        var fcxPx = axL + fx * axW;
+        var fw0 = pxToWorld(fcxPx, axY);
+        var fdir = [gauss() * 1.6, gauss() * 0.8, gauss() * 0.6];
+        var flen = Math.hypot(fdir[0], fdir[1], fdir[2]) || 1;
+        /* the vertical spread is baked into the TARGET itself (not only into
+           the per-frame breathing jitter below) - otherwise the static
+           prefers-reduced-motion frame (which renders raw targets, no dir*amp
+           applied - see renderResolved) would collapse the whole field onto
+           the exact axis line, invisible against the DOM axis hairline
+           already drawn there. This is the loose, pre-gather spread; frame()
+           still shrinks the ADDITIONAL per-frame jitter toward it over
+           elapsed time for the animated case. */
         pts.push({
-          t: [tx, ty, tz], c: col,
-          d: [dir[0] / len, dir[1] / len, dir[2] / len],
-          res: ring ? ringRes : 0.06,
-          burst: 1.2 + Math.random() * 2.0,
+          t: [fw0[0], fw0[1] + gauss() * 0.55, gauss() * 0.05], c: flowCol,
+          d: [fdir[0] / flen, fdir[1] / flen, fdir[2] / flen],
+          res: 0.32 + Math.random() * 0.9,
+          burst: scattered ? (0.9 + Math.random() * 1.3) : 0,
           ph: Math.random() * Math.PI * 2,
-          fq: 0.5 + Math.random() * 1.2,
-          stag: Math.random() * 0.35,
-          calm: calm
+          fq: 0.6 + Math.random() * 1.3,
+          stag: Math.random() * 0.3,
+          calm: 1
         });
       }
-    });
+    } else {
+      /* Dormant: idle boot AND a failed measurement read identically - not
+         measured, full stop. A thin, low-intensity field loosely gathered
+         along the axis's full width, slow drift, never converging to a
+         point - the opposite of the old sparse ring (which spread a single
+         fake "score:50" cluster wide enough to fill the axis, and once
+         still read as a real, if very uncertain, measurement). This is not
+         a cluster at all: no rival, no bounded/unbounded state, no score. */
+      var Nd = Math.round(1500 * density);
+      var dormCol = [0.32, 0.29, 0.24];
+      for (var dj = 0; dj < Nd; dj++) {
+        var dx = Math.random();
+        var dcxPx = axL + dx * axW;
+        var dw0 = pxToWorld(dcxPx, axY);
+        var ddir = [gauss(), gauss(), gauss()];
+        var dlen = Math.hypot(ddir[0], ddir[1], ddir[2]) || 1;
+        /* baked into the target itself, same reasoning as the measuring
+           branch above - the reduced-motion static frame renders raw
+           targets, no per-frame jitter, so the spread has to already be
+           there or the field collapses onto the invisible axis line. */
+        pts.push({
+          t: [dw0[0], dw0[1] + gauss() * 0.3, gauss() * 0.05], c: dormCol,
+          d: [ddir[0] / dlen, ddir[1] / dlen, ddir[2] / dlen],
+          res: 0.05 + Math.random() * 0.04,
+          burst: scattered ? (0.7 + Math.random() * 1.0) : 0,
+          ph: Math.random() * Math.PI * 2,
+          fq: 0.16 + Math.random() * 0.26,
+          stag: Math.random() * 0.4,
+          calm: 0.55
+        });
+      }
+    }
+
     var n = pts.length;
     var pos = new Float32Array(n * 3), colA = new Float32Array(n * 3);
     targets = new Float32Array(n * 3);
@@ -1025,12 +1157,85 @@
       var amp = scattered ? p.burst : p.res;
       pos[i * 3] = p.t[0] + p.d[0] * amp; pos[i * 3 + 1] = p.t[1] + p.d[1] * amp; pos[i * 3 + 2] = p.t[2] + p.d[2] * amp;
     });
+    /* pristine snapshots the hover highlight mutates FROM and restores TO
+       (see setClusterHighlight/clearClusterHighlight) - taken once per build,
+       never touched by frame()'s per-tick animation (which only ever writes
+       `pos`, and - while measuring - the geometry's own live color buffer). */
+    targetsBase = new Float32Array(targets);
+    baseColors = new Float32Array(colA);
     if (points) { group.remove(points); points.geometry.dispose(); }
     var geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(colA, 3));
     points = new THREE.Points(geo, material);
     group.add(points);
+    /* A hover in progress survives a rebuild (e.g. a live window resize while
+       the pointer sits over a field row) by reapplying against the fresh
+       ranges; anything else just clears it rather than risk indices that no
+       longer match the new buffers. */
+    if (hoverBrand && clusterRanges[hoverBrand]) setClusterHighlight(hoverBrand);
+    else hoverBrand = null;
+    if (reduced) renderResolved();
+  }
+
+  /* ============================ cloud <-> field hover ============================
+     Settled only, one directional: hovering a #ndl-field row (see renderField's
+     .ndl-field-row/data-brand, and the delegated fieldOverH/fieldOutH wired in
+     componentDidMount) highlights that brand's cluster - brighter, and a touch
+     larger via a radial dilation of its own particles away from their own
+     cluster centre - and dims every other cluster; leaving restores both. The
+     canvas itself never gets a listener and keeps pointer-events:none - this
+     never raycasts, it only reads clusterRanges (built fresh in buildClusters,
+     above) and mutates the EXISTING position/color buffers in place. No
+     allocation here and no per-frame cost: this runs once per mouseenter/leave,
+     never inside frame(). */
+  function setClusterHighlight(brand) {
+    if (!points || !targetsBase || !baseColors || !clusterRanges) return;
+    /* The cloud only ever visualizes the two BRACKETED rows (focus + the one
+       geo_rival - see buildResult's `rows`, and the axis brackets built from
+       the very same list) - never the full #ndl-field table, which can list
+       every measured competitor. Hovering a field row for a brand that has
+       no cluster (not focus, not the bracketed rival) must be an honest
+       no-op on the cloud - NOT a blanket dim of every real cluster, which
+       would read as broken. */
+    if (!brand || !clusterRanges.hasOwnProperty(brand)) { clearClusterHighlight(); return; }
+    hoverBrand = brand;
+    var colArr = points.geometry.attributes.color.array;
+    colArr.set(baseColors);
+    targets.set(targetsBase);
+    for (var name in clusterRanges) {
+      if (!clusterRanges.hasOwnProperty(name)) continue;
+      var rg = clusterRanges[name];
+      var isHover = name === brand;
+      /* Additive blending stacks thousands of particles, so the dense cluster
+         core saturates: a 0.32 per-particle dim leaves it looking almost
+         untouched (verified on screenshots). 0.08 is what it actually takes
+         for the de-emphasis to read; 1.5 keeps the hovered cluster clearly
+         lifted without blowing out its core. */
+      var mul = isHover ? 1.5 : 0.08;
+      var i;
+      for (i = rg.start; i < rg.start + rg.count; i++) {
+        colArr[i * 3] = Math.min(1, baseColors[i * 3] * mul);
+        colArr[i * 3 + 1] = Math.min(1, baseColors[i * 3 + 1] * mul);
+        colArr[i * 3 + 2] = Math.min(1, baseColors[i * 3 + 2] * mul);
+      }
+      if (isHover) {
+        var cx = rg.cx, cy = rg.cy, dil = 1.15;
+        for (i = rg.start; i < rg.start + rg.count; i++) {
+          targets[i * 3] = cx + (targetsBase[i * 3] - cx) * dil;
+          targets[i * 3 + 1] = cy + (targetsBase[i * 3 + 1] - cy) * dil;
+        }
+      }
+    }
+    points.geometry.attributes.color.needsUpdate = true;
+    if (reduced) renderResolved();
+  }
+  function clearClusterHighlight() {
+    hoverBrand = null;
+    if (!points || !targetsBase || !baseColors) return;
+    points.geometry.attributes.color.array.set(baseColors);
+    targets.set(targetsBase);
+    points.geometry.attributes.color.needsUpdate = true;
     if (reduced) renderResolved();
   }
 
@@ -1070,6 +1275,12 @@
     var e = (now - measureStart) / 1000;
     var breath = props.breath != null ? props.breath : 1;
     var measuring = state.measuring;
+    /* 'measuring' mode only: how far into the run we are, 0..1 over ~40s (a
+       real run is 30-60s, see state.elapsedS/startMeasureTick) - drives both
+       the gather-toward-the-axis (below) and the brightening-with-elapsed-
+       time (the recolor pass after the position loop). Real wall-clock
+       seconds, never a fabricated percentage. */
+    var flowK = sceneMode === 'measuring' ? Math.max(0, Math.min(1, state.elapsedS / 40)) : 0;
     var pos = points.geometry.attributes.position.array;
     var n = pos.length / 3;
     for (var i = 0; i < n; i++) {
@@ -1077,13 +1288,30 @@
       var p = (e - 0.15 - stag) / 1.35;
       p = p < 0 ? 0 : p > 1 ? 1 : p;
       var k = Math.pow(1 - p, 3);
-      var breathe = (0.7 + 0.3 * Math.sin(t * fq + ph)) * (measuring ? 1 : calm) * breath;
+      /* 'result' keeps the ORIGINAL formula exactly (measuring ? 1 : calm) -
+         no behaviour change there. 'dormant' just breathes at its own slow,
+         calm rate. 'measuring' shrinks the breathing amplitude as the run
+         goes on, so the flow visibly gathers toward the axis line without
+         ever picking one position on it (the targets stay spread across the
+         full width - see buildClusters). */
+      var calmFactor = sceneMode === 'measuring' ? (1 - 0.72 * flowK) : (sceneMode === 'dormant' ? calm : (measuring ? 1 : calm));
+      var breathe = (0.7 + 0.3 * Math.sin(t * fq + ph)) * calmFactor * breath;
       var amp = res * breathe + burst * k;
       pos[i * 3] = targets[i * 3] + dirs[i * 3] * amp;
       pos[i * 3 + 1] = targets[i * 3 + 1] + dirs[i * 3 + 1] * amp;
       pos[i * 3 + 2] = targets[i * 3 + 2] + dirs[i * 3 + 2] * amp;
     }
     points.geometry.attributes.position.needsUpdate = true;
+    /* Intensity building with elapsed time (measuring only) - mutates the
+       geometry's existing color buffer from the pristine baseColors snapshot,
+       no allocation. Skipped entirely outside 'measuring' (dormant/result
+       colors are set once in buildClusters and never touched per frame). */
+    if (sceneMode === 'measuring' && baseColors) {
+      var carr = points.geometry.attributes.color.array;
+      var cScale = 0.42 + 0.58 * flowK;
+      for (var ci = 0; ci < carr.length; ci++) carr[ci] = baseColors[ci] * cScale;
+      points.geometry.attributes.color.needsUpdate = true;
+    }
     renderer.render(scene, camera);
   }
 
@@ -2786,7 +3014,7 @@
     for (var i = 0; i < v.fieldRows.length; i++) {
       var f = v.fieldRows[i];
       rows +=
-        '<div style="display:grid;grid-template-columns:' + rowCols + ';gap:10px;align-items:center;">' +
+        '<div class="ndl-field-row" data-brand="' + esc(f.name) + '" style="display:grid;grid-template-columns:' + rowCols + ';gap:10px;align-items:center;">' +
           '<span style="font-size:11.5px;font-weight:' + (f.isFocus ? '600' : '400') + ';color:' + f.nameColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(f.name) + '</span>' +
           '<span style="font-size:10px;color:' + f.aiColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(f.ai) + '</span>' +
           '<span style="font-size:10px;color:' + f.googleColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(f.google) + '</span>' +
@@ -3016,6 +3244,10 @@
        measuring): those elements are already at opacity 0 then via
        verdictOp/proofOp, and there is no result yet to mark stale. */
     var staleDim = v.stale ? 0.38 : 1;
+    /* the cloud mirrors the same staleness dimming as the rest of the result -
+       one property set on the shared PointsMaterial (opacity was 0.9 at
+       creation, see initScene), never a per-particle or per-frame cost. */
+    if (material) material.opacity = 0.9 * staleDim;
     if (verdictTitleEl) verdictTitleEl.style.opacity = staleDim;
     if (verdictTextEl) verdictTextEl.style.opacity = staleDim;
     /* share / free-export affordances dim with the rest of the verdict body
