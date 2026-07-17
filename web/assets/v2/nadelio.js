@@ -1387,15 +1387,29 @@
        the click did nothing instead of swallowing it (see the no-silent-
        interaction audit, same message as runMeasure's own measuring guard). */
     if (state.measuring) { deepMsg(T('Measurement in progress, one moment.', 'Mesure en cours, un instant.'), false); return; }
-    var brand = (currentResult && currentResult.focusName) || state.focus || (state.inputValue || '').trim();
+    /* The 79-euro dossier must NEVER be buyable for a brand that has not been
+       measured and identity-checked. At idle (currentResult still null - a
+       fresh load, or after a failed run) there is nothing settled to sell:
+       route to the free measurement first instead of ever resolving a brand
+       to charge. This is the ONLY gate that matters here - once it holds,
+       brand below can safely come from currentResult, and the low-confidence
+       confirm right after always has a real result to confirm. */
+    if (!currentResult) {
+      var typed = (state.inputValue || '').trim();
+      if (!typed) { if (inputEl) inputEl.focus(); deepMsg(T('Type your brand, then run the free measurement first.', 'Tapez votre marque, puis lancez d\'abord la mesure gratuite.'), true); return; }
+      deepMsg(T('Running the free measurement first, the Deep Audit needs a settled result.', 'Lancement de la mesure gratuite d\'abord, le Deep Audit a besoin d\'un résultat.'), false);
+      runMeasure(typed);
+      return;
+    }
+    var brand = currentResult.focusName || state.focus || (state.inputValue || '').trim();
     if (!brand) { if (inputEl) inputEl.focus(); deepMsg(T('Run a measurement first, the Deep Audit needs a brand.', 'Lancez d\'abord un audit, le Deep Audit a besoin d\'une marque.'), true); return; }
     /* Never let a low-confidence identification reach checkout unconfirmed:
        the 79-euro dossier must never be sold on possibly the wrong company. */
-    if (currentResult && currentResult.confidence === 'low' && !identityConfirmed) {
+    if (currentResult.confidence === 'low' && !identityConfirmed) {
       showIdentityConfirm();
       return;
     }
-    var market = (currentResult && currentResult.market) || '';
+    var market = currentResult.market || '';
     /* Funnel: the visitor asked for the paid product. Fired here rather than on
        the raw click so an unconfirmed identity or a missing brand (both return
        above) never counts as intent to buy. */

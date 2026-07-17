@@ -94,9 +94,24 @@ def _now_utc_iso():
 
 
 def _client_ip():
+    # X-Forwarded-For is a comma-separated hop chain the PROXY appends to as
+    # the request passes through, Render's edge proxy appends the real
+    # client IP as the LAST entry. The FIRST (leftmost) entry is whatever the
+    # client itself sent in the header, so it is fully attacker-controlled: a
+    # naive split(",")[0] (the previous behaviour here) let anyone spoof a
+    # fresh identity on every request and walk straight through every
+    # per-IP guard (free daily quota, /api/infer, /api/event, /api/share
+    # rate limits). Render does not let client-supplied XFF hops survive
+    # past its own edge, it appends, it never trusts what arrives, so the
+    # rightmost hop is the one hop here we did not write ourselves.
+    # https://render.com (platform forwards true client IP as the last
+    # X-Forwarded-For entry; behind any OTHER proxy chain this assumption
+    # would need revisiting).
     fwd = request.headers.get("X-Forwarded-For")
     if fwd:
-        return fwd.split(",")[0].strip()
+        hops = [h.strip() for h in fwd.split(",") if h.strip()]
+        if hops:
+            return hops[-1]
     return request.remote_addr or "unknown"
 
 # ---------------------------------------------------------------------------
@@ -791,6 +806,18 @@ _recon_cache = {}
 _RECON_CACHE_MAX = 500
 _infer_hits = {}  # {ip: [minute_bucket_int, count]}
 _INFER_RATE_PER_MIN = int(os.environ.get("INFER_RATE_PER_MIN", "20"))
+# Process-wide circuit breaker on /api/infer, INDEPENDENT of client IP.
+# _infer_hits above is per-IP and therefore fully bypassable by rotating
+# X-Forwarded-For (see _client_ip), even with that fixed, a botnet or a
+# compromised proxy could still present many distinct real IPs. Every
+# /api/infer call runs at least one INFER_MODEL (claude-sonnet-5, pricier
+# than the Haiku used elsewhere) call with no payment or quota gate, so this
+# is a real-money cost circuit-breaker of last resort: a global rolling
+# per-minute cap, counted no matter which identity the caller claims.
+# In-memory + per-worker, exactly like _live_runs (see the note at its
+# definition), good enough for the current single-worker deploy.
+_infer_global_hits = []  # list of call timestamps (seconds) within the window
+_INFER_GLOBAL_RATE_PER_MIN = int(os.environ.get("INFER_GLOBAL_RATE_PER_MIN", "60"))
 
 # Light per-IP rate-limit for the funnel-tracking endpoint (spam guard, not a
 # billing gate). A single session can legitimately fire several events, so the
@@ -1201,13 +1228,70 @@ FREE_AI_RUNS = int(os.environ.get("FREE_AI_RUNS", "3"))
 DEEP_AI_RUNS = int(os.environ.get("DEEP_AI_RUNS", "8"))
 MAX_AI_RUNS = int(os.environ.get("MAX_AI_RUNS", "15"))
 
-# Bounded-score verdict thresholds (kept as constants so they can be recalibrated
-# without touching the logic). half_width is the +/- of the 95% interval on the
-# 0-100 score; ratio is half_width relative to the point estimate.
-STABLE_MAX_HALFWIDTH = 4
-VOLATIL_MIN_HALFWIDTH = 10
-STABLE_MAX_RATIO = 0.15
-VOLATIL_MIN_RATIO = 0.30
+# Two-sided 95% Student-t critical values keyed by degrees of freedom (n-1),
+# df 1..30. The bounded score's "95% confidence interval" must widen at small
+# n: the free tier runs FREE_AI_RUNS=3 samples (df=2, occasionally fewer on a
+# partial failure), where the normal quantile z=1.96 understates the true
+# interval by 2.2x (t=4.303 at df=2) and by 6.5x at df=1 (n=2). Beyond df=30
+# the t and normal quantiles already agree to within ~0.1%, so 1.96 is used
+# unmodified past that point. Values are the standard two-tailed alpha=0.05
+# critical values found in any statistics reference table; stdlib-only
+# (no scipy dependency).
+_T975 = {
+    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
+    6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
+    11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
+    16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
+    21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060,
+    26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042,
+}
+
+
+def _t975(df):
+    """Two-sided 95% Student-t critical value for `df` degrees of freedom.
+    Falls back to the normal z=1.96 once df > 30 (t and z already agree to
+    within ~0.1% there), and clamps df < 1 to df=1 (the widest, most
+    conservative value) rather than raising or silently using z."""
+    if df in _T975:
+        return _T975[df]
+    if df < 1:
+        return _T975[1]
+    return 1.96
+
+
+# Bounded-score verdict thresholds (kept as constants so they can be
+# recalibrated without touching the logic). half_width is the +/- of the
+# HONEST (Student-t corrected) 95% interval on the 0-100 score; ratio is
+# half_width relative to the point estimate.
+#
+# These were originally calibrated (4 / 10 / 0.15 / 0.30) against a half_width
+# computed with the WRONG large-sample z=1.96, i.e. implicitly against
+# 1.96*se. Now that half_width honestly uses t975(n-1)*se, the same real
+# per-run noise (the same se) produces a bigger half_width, mechanically
+# recalibrating the cutoffs is required, or every free-tier read (n=3, the
+# overwhelming majority of measurements: FREE_AI_RUNS=3) would drift toward
+# MODERE/VOLATIL even when the underlying data is exactly as noisy as before.
+#
+# Chosen recalibration: rescale each cutoff by the correction factor at the
+# free tier's fixed sample size, t975(FREE_AI_RUNS - 1) / 1.96 = 4.303 / 1.96
+# ~= 2.195, the free tier is where these thresholds are hit on nearly every
+# measurement, so anchoring there means a given level of RAW run-to-run noise
+# (the same standard error, same sd) is judged exactly as before at n=3. This
+# is a deliberate, disclosed simplification versus scaling per-n: at the paid
+# Deep Audit's n=8 (df=7), the honest widening factor is only t975(7)/1.96 =
+# 2.365/1.96 ~= 1.207, meaningfully smaller than the 2.195 anchor used here -
+# so on paid runs these rescaled cutoffs are, if anything, MORE lenient than
+# a perfectly n-specific recalibration would be (STABLE is slightly easier to
+# reach). That is acceptable and never hides risk: a paid run with n=8
+# genuinely IS more precise than a free run with the same sd, so treating it
+# generously on the STABLE/VOLATIL cut never overstates certainty beyond what
+# the wider free-tier band would already have granted the same data at n=3;
+# it simply does not extract 100% of the extra precision n=8 buys. See the
+# worked n=3 / n=8 examples in the fix report for concrete numbers.
+STABLE_MAX_HALFWIDTH = 9      # was 4;  4  * (4.303/1.96) = 8.78 -> 9
+VOLATIL_MIN_HALFWIDTH = 22    # was 10; 10 * (4.303/1.96) = 21.95 -> 22
+STABLE_MAX_RATIO = 0.33       # was 0.15; 0.15 * (4.303/1.96) = 0.329 -> 0.33
+VOLATIL_MIN_RATIO = 0.66      # was 0.30; 0.30 * (4.303/1.96) = 0.659 -> 0.66
 
 
 # ---------------------------------------------------------------------------
@@ -1507,11 +1591,16 @@ def _geo_bounded(ranking, queries, brand, per_run_maps):
         return {"point": point, "half_width": None, "low": point, "high": point,
                 "n": n, "verdict": "SINGLE_RUN", "scores": scores}
 
-    # Sample standard deviation -> standard error -> 95% Wald half-width.
+    # Sample standard deviation -> standard error -> 95% interval half-width.
+    # Student-t (df=n-1), NOT the normal z=1.96: at the free tier's small n
+    # (3, sometimes 2) the normal quantile is badly optimistic (t/z = 2.2x at
+    # n=3, 6.5x at n=2), see _t975's docstring and the STABLE/... threshold
+    # comment above for why this matters and how the verdict cutoffs were
+    # re-derived to match.
     var = sum((s - mean) ** 2 for s in scores) / (n - 1)
     sd = math.sqrt(var)
     se = sd / math.sqrt(n)
-    half_width = max(1, int(round(1.96 * se)))  # never show +/- 0 on a stochastic measure
+    half_width = max(1, int(round(_t975(n - 1) * se)))  # never show +/- 0 on a stochastic measure
     low = max(0, point - half_width)
     high = min(100, point + half_width)
 
@@ -2527,6 +2616,9 @@ def api_infer():
 
     # Light per-IP rate-limit: /api/infer is intentionally NOT quota-gated (it
     # must stay cheap for hint refinement), but it must not be spammable.
+    # NOTE: this alone is bypassable by spoofing X-Forwarded-For (fixed
+    # separately in _client_ip, which now reads the proxy-appended hop), the
+    # global ceiling right after is the real circuit-breaker on cost.
     ip = _client_ip()
     minute = int(time.time() // 60)
     with _live_lock:
@@ -2540,6 +2632,22 @@ def api_infer():
             return jsonify({"error": "Too many requests — slow down a moment."}), 429
         else:
             entry[1] += 1
+
+    # Global (process-wide) ceiling, independent of any client-claimed
+    # identity: a rolling 60s window on the TOTAL number of /api/infer calls,
+    # each of which spends real Anthropic budget on INFER_MODEL regardless of
+    # who is asking. This is what actually stops an X-Forwarded-For-rotating
+    # attacker (or any other way of presenting many distinct IPs) from
+    # draining the owner's paid-inference budget: no identity, spoofed or
+    # real, can push total call volume past this cap.
+    with _live_lock:
+        now_s = time.time()
+        cutoff = now_s - 60
+        while _infer_global_hits and _infer_global_hits[0] < cutoff:
+            _infer_global_hits.pop(0)
+        if len(_infer_global_hits) >= _INFER_GLOBAL_RATE_PER_MIN:
+            return jsonify({"error": "infer_quota_global", "message": "Too many requests right now, try again shortly."}), 429
+        _infer_global_hits.append(now_s)
 
     llm_key = os.environ.get("ANTHROPIC_API_KEY")
     if not llm_key:
@@ -2671,6 +2779,24 @@ def api_analyze():
     # atomically claimed (single-use); we roll that claim back on hard failure
     # in the except-block so a paying customer is never charged for nothing.
     max_queries, paid_session, paid_pi_id, paid_ok = _resolve_paid_depth(data)
+    if paid_ok and paid_pi_id:
+        # This is the ONLY trace written before the long synchronous pipeline
+        # below runs. If gunicorn's worker is SIGKILLed on a timeout (the 17
+        # July 2026 outage class, see the retry comment further down), NO
+        # except/finally in this function ever runs, a SIGKILL cannot be
+        # caught, so the durable bp_consumed stamp we just wrote would
+        # otherwise be lost with zero server-side record. This log line is
+        # not a fix (it cannot itself roll anything back), but it is what
+        # lets support reconcile a burned unlock by hand: search the logs for
+        # this pi_id, confirm no matching "PAID AUDIT" success/rollback line
+        # follows it, and manually clear bp_consumed on Stripe / refund.
+        logger.warning(
+            "PAID AUDIT STARTING: pi=%s session=%s brand=%s, bp_consumed is "
+            "now durably stamped; if this worker is killed before a success "
+            "or rollback log line is written for this pi_id, the unlock must "
+            "be reconciled manually.",
+            paid_pi_id, paid_session, brand,
+        )
 
     ip = _client_ip()
     today = _today_utc()
@@ -2740,6 +2866,44 @@ def api_analyze():
     # +=1 and made the free daily quota never accumulate (effectively unlimited
     # free analyses). `slot_consumed` distinguishes the one path that must keep it.
     slot_consumed = False
+
+    def _rollback_paid_unlock(reason):
+        """Release a claimed paid unlock on any post-gate exit that will NOT
+        return a real deep dossier. The except-block below already does this
+        for EXCEPTIONS; this is the same rollback for a NORMAL (non-exception)
+        early return after the paid gate, e.g. the "could not infer
+        competitors/queries" SAMPLE fallback, which, before this fix, skipped
+        the except-block entirely and durably burned a customer's single-use
+        79-euro unlock with no dossier delivered and no server-side log at
+        all. Mirrors the except-block's two-layer release (durable Stripe
+        stamp, then the in-process cache) so a retry is actually possible.
+        A no-op when paid_ok is False (nothing was ever claimed)."""
+        if not (paid_ok and paid_pi_id):
+            return
+        try:
+            if not _unmark_session_consumed_on_stripe(paid_pi_id):
+                logger.error(
+                    "PAID AUDIT ROLLBACK FAILED: could not clear bp_consumed on "
+                    "PaymentIntent %s after a non-exception early exit (%s, "
+                    "session=%s, brand=%s). Customer may be blocked from "
+                    "retrying, manual review needed.",
+                    paid_pi_id, reason, paid_session, brand,
+                )
+        except Exception:
+            logger.exception(
+                "PAID AUDIT ROLLBACK ERROR: unexpected error unmarking bp_consumed "
+                "on PaymentIntent %s (%s, session=%s, brand=%s), manual review needed.",
+                paid_pi_id, reason, paid_session, brand,
+            )
+        if paid_session:
+            with _live_lock:
+                _consumed_sessions.discard(paid_session)
+        logger.error(
+            "PAID AUDIT UNLOCK ROLLED BACK: %s (session=%s, brand=%s, pi=%s), "
+            "no dossier was produced; single-use unlock released for retry.",
+            reason, paid_session, brand, paid_pi_id,
+        )
+
     try:
         # CORRECTION D — web recon on EVERY live analysis (paid AND free), not just
         # the paid path. We run recon FIRST so the identity is anchored on the web
@@ -2786,6 +2950,7 @@ def api_analyze():
                 brand, strat, max_queries, has_evidence=bool(recon.get("evidence")))
             sector = strat.get("sector", "")
         if not competitors or not queries:
+            _rollback_paid_unlock("could not infer competitors/queries")
             return jsonify(dict(SAMPLE, notice="Could not infer competitors - showing sample analysis."))
         # Geolocate the SERP to the resolved market: a forced "fr" or an inferred
         # French market both map to google.fr in French. Falls back to US/English
@@ -2902,6 +3067,15 @@ def api_analyze():
             result["official_url"] = recon.get("official_url", "")
             if report is not None:
                 result["report"] = report
+            # Closes the reconciliation trail opened by the "PAID AUDIT
+            # STARTING" log above: a support engineer grepping for this
+            # pi_id who finds this line knows the dossier was actually
+            # delivered, so bp_consumed staying stamped is correct, not a
+            # burned unlock to investigate.
+            logger.warning(
+                "PAID AUDIT SUCCEEDED: pi=%s session=%s brand=%s, dossier delivered.",
+                paid_pi_id, paid_session, brand,
+            )
         # A paid deep run is never written to the shared brand cache (see the
         # cache-read note above): a later free run of the same brand must not be
         # served a 5-query deep result, and vice versa.
