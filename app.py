@@ -1884,7 +1884,26 @@ def api_cron_monitor():
 # ---------------------------------------------------------------------------
 @app.route("/")
 def index():
-    return send_from_directory("web", "index.html")
+    """The homepage is the bounded-measurement instrument (web/v2.html).
+
+    Served from the same stamped copy as /v2, so a returning visitor can never
+    pair a fresh HTML with a stale script (see _ASSET_VERSION), and no-cache so
+    the pairing is always the current deploy's.
+
+    Stripe returns land here (/?paid=<session>&brand=..., /?sub=<session>) and
+    the page's bootstrap resumes them; that path is the reason this route must
+    never serve anything that cannot handle those params.
+
+    The previous homepage stays reachable at /index.html (Flask serves web/ at
+    the root), so reverting this switch is this one function.
+    """
+    if _V2_HTML is None:
+        # Only on a broken deploy where the file could not be read at import.
+        return send_from_directory("web", "v2.html")
+    resp = app.make_response(_V2_HTML)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resp
 
 
 @app.route("/compare", strict_slashes=False)
