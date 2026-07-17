@@ -3,20 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nadelio, mesure de votre marque dans les IA</title>
-<meta name="description" content="Compte combien de fois les IA citent votre marque. Sans gonfler les chiffres.">
+<!-- Meta is English and static, exactly like index.html: it is NOT toggled at
+     runtime by PAGE_FR (crawlers and link-preview bots get one snapshot, and
+     the rest of the site never localizes its meta either). See the i18n wave
+     report for the note on what a future server-side render should revisit. -->
+<title>Nadelio, count how many times AI cites your brand</title>
+<meta name="description" content="See where you stand on Google and in AI answers, in one bounded measurement. No inflated numbers, no invented gaps.">
 <!-- Canonical points at the homepage this page is about to become. While it is
      still served at /v2.html it also keeps the staging URL out of the index. -->
 <link rel="canonical" href="https://www.nadelio.com/">
 <meta name="theme-color" content="#14100C">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.nadelio.com/">
-<meta property="og:title" content="Nadelio, mesure de votre marque dans les IA">
-<meta property="og:description" content="Compte combien de fois les IA citent votre marque. Sans gonfler les chiffres.">
+<meta property="og:title" content="Nadelio, count how many times AI cites your brand">
+<meta property="og:description" content="See where you stand on Google and in AI answers, in one bounded measurement. No inflated numbers, no invented gaps.">
 <meta property="og:image" content="https://www.nadelio.com/demo-nadelio.gif">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Nadelio, mesure de votre marque dans les IA">
-<meta name="twitter:description" content="Compte combien de fois les IA citent votre marque. Sans gonfler les chiffres.">
+<meta name="twitter:title" content="Nadelio, count how many times AI cites your brand">
+<meta name="twitter:description" content="See where you stand on Google and in AI answers, in one bounded measurement.">
 <meta name="twitter:image" content="https://www.nadelio.com/demo-nadelio.gif">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230E1512'/><circle cx='16' cy='16' r='9' fill='none' stroke='%234FD1A5' stroke-width='2.4'/><circle cx='16' cy='16' r='3.2' fill='%238B6FE8'/></svg>">
 <link rel="stylesheet" href="/assets/v2/nadelio.css">
@@ -27,48 +31,48 @@
     <div id="ndl-mount" style="position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0.62;"></div>
     <header style="position:relative;z-index:2;display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-bottom:1px solid #2A241C;padding-bottom:11px;">
       <div style="font-family:'Archivo Black','Arial Black',sans-serif;font-size:16px;letter-spacing:0.1em;">NADELIO</div>
-      <div class="ndl-tagline" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">Compte combien de fois les IA citent votre marque. Sans gonfler les chiffres.</div>
+      <div class="ndl-tagline" data-i18n="tagline" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">Compte combien de fois les IA citent votre marque. Sans gonfler les chiffres.</div>
       <div style="display:flex;align-items:baseline;gap:14px;white-space:nowrap;flex:none;">
-        <span class="ndl-hbadge" style="font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#9A8D78;">Google + IA, mesure bornée</span>
-        <button id="ndl-transp-btn" class="ndl-transp" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding:0 0 2px;">transparence &rsaquo;</button>
+        <span class="ndl-hbadge" data-i18n="badge" style="font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#9A8D78;">Google + IA, mesure bornée</span>
+        <button id="ndl-transp-btn" class="ndl-transp" data-i18n="transp" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding:0 0 2px;">transparence &rsaquo;</button>
       </div>
     </header>
     <div data-nadelio-body class="ndl-grid" style="position:relative;z-index:1;display:grid;grid-template-columns:minmax(288px,0.82fr) minmax(0,1.55fr);gap:clamp(18px,2.6vw,40px);min-height:0;">
       <div data-nadelio-console class="ndl-left" style="display:flex;flex-direction:column;justify-content:center;gap:clamp(16px,3vh,34px);min-width:0;min-height:0;border-right:1px solid #2A241C;padding-right:clamp(16px,2vw,34px);">
         <div style="display:flex;flex-direction:column;gap:clamp(8px,1.4vh,13px);">
-          <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">audit de visibilité IA</div>
-          <h1 style="margin:0;font-family:'Archivo Black','Arial Black',sans-serif;font-weight:400;font-size:min(3.6vh,clamp(19px,1.9vw,28px));line-height:1.12;letter-spacing:-0.01em;color:#E8DFD2;text-wrap:balance;">Les IA répondent à vos clients, êtes-vous dans la réponse ?</h1>
+          <div data-i18n="eyebrow" style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">audit de visibilité IA</div>
+          <h1 data-i18n="h1" style="margin:0;font-family:'Archivo Black','Arial Black',sans-serif;font-weight:400;font-size:min(3.6vh,clamp(19px,1.9vw,28px));line-height:1.12;letter-spacing:-0.01em;color:#E8DFD2;text-wrap:balance;">Les IA répondent à vos clients, êtes-vous dans la réponse ?</h1>
         </div>
         <div style="display:flex;flex-direction:column;gap:12px;">
           <div style="display:flex;align-items:baseline;gap:clamp(8px,1vw,13px);">
-            <span aria-hidden="true" style="font-size:min(3.4vh,clamp(15px,1.6vw,22px));color:#9A8D78;white-space:nowrap;">mesurer &gt;</span>
+            <span aria-hidden="true" data-i18n="measureCue" style="font-size:min(3.4vh,clamp(15px,1.6vw,22px));color:#9A8D78;white-space:nowrap;">mesurer &gt;</span>
             <!-- No autofocus attribute: nadelio.js focuses this itself (inputRef/
                  componentDidMount), and only after its own listeners are wired
                  does that first focus fire, so the "select on first focus" fix
                  (init(), select-on-pristine-focus) always gets to run before
                  any keystroke - typing over the "Qonto" prefill replaces it
                  instead of appending ("QontoNotion"). -->
-            <input class="ndl-input" id="ndl-input" value="Qonto" spellcheck="false" autocomplete="off" aria-label="nom de la marque à mesurer" style="flex:1;min-width:80px;background:transparent;border:none;border-bottom:2px solid #3A3128;font-family:'IBM Plex Mono',Menlo,monospace;font-weight:500;font-size:min(4.6vh,clamp(24px,2.6vw,38px));color:#E8DFD2;caret-color:#C6A15B;padding:0 0 6px 0;transition:border-color 0.25s cubic-bezier(0.2,0.8,0.2,1);">
+            <input class="ndl-input" id="ndl-input" value="Qonto" spellcheck="false" autocomplete="off" aria-label="nom de la marque à mesurer" data-i18n-aria="inputAria" style="flex:1;min-width:80px;background:transparent;border:none;border-bottom:2px solid #3A3128;font-family:'IBM Plex Mono',Menlo,monospace;font-weight:500;font-size:min(4.6vh,clamp(24px,2.6vw,38px));color:#E8DFD2;caret-color:#C6A15B;padding:0 0 6px 0;transition:border-color 0.25s cubic-bezier(0.2,0.8,0.2,1);">
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <button class="ndl-run" style="cursor:pointer;border:none;background:#E8DFD2;color:#14100C;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.11em;text-transform:uppercase;padding:10px 16px;">Lancer un audit</button>
-            <span style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#8A7D68;">ou</span>
+            <button class="ndl-run" data-i18n="runBtn" style="cursor:pointer;border:none;background:#E8DFD2;color:#14100C;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.11em;text-transform:uppercase;padding:10px 16px;">Lancer un audit</button>
+            <span data-i18n="or" style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#8A7D68;">ou</span>
           </div>
           <div id="ndl-unknown" role="alert" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#8A7D68;display:none;"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:9px;border-top:1px solid #2A241C;padding-top:clamp(12px,1.8vh,18px);">
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
-            <span style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">comment on mesure</span>
+            <span data-i18n="howWeMeasure" style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">comment on mesure</span>
             <span id="ndl-passcounter" style="font-family:'IBM Plex Mono',Menlo,monospace;font-size:10px;letter-spacing:0.06em;color:#C6A15B;font-variant-numeric:tabular-nums;">en attente</span>
           </div>
-          <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#A99C88;max-width:44ch;">On pose vos questions à Google et à une IA, plusieurs fois chacune. Les réponses varient un peu, alors on donne une fourchette plutôt qu'un chiffre exact.</div>
+          <div data-i18n="howWeMeasureBody" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#A99C88;max-width:44ch;">On pose vos questions à Google et à une IA, plusieurs fois chacune. Les réponses varient un peu, alors on donne une fourchette plutôt qu'un chiffre exact.</div>
         </div>
       </div>
       <div class="ndl-right" style="position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;gap:clamp(8px,1.4vh,16px);">
         <div style="position:relative;flex:none;min-height:clamp(72px,13vh,120px);display:flex;flex-direction:column;justify-content:center;">
           <div id="ndl-overlay" style="opacity:1;transition:opacity 0.3s;position:absolute;left:0;right:0;display:flex;flex-direction:column;gap:6px;pointer-events:none;">
-            <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">le nuage converge</div>
-            <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:15px;color:#A99C88;">lecture en cours<span style="animation:dotpulse 1s infinite;">.</span><span style="animation:dotpulse 1s 0.25s infinite;">.</span><span style="animation:dotpulse 1s 0.5s infinite;">.</span></div>
+            <div data-i18n="cloudConverges" style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">le nuage converge</div>
+            <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:15px;color:#A99C88;"><span data-i18n="readingInProgress">lecture en cours</span><span style="animation:dotpulse 1s infinite;">.</span><span style="animation:dotpulse 1s 0.25s infinite;">.</span><span style="animation:dotpulse 1s 0.5s infinite;">.</span></div>
           </div>
           <!-- Verdict is the CLIMAX: it is retimed (0.28s delay, 0.56s duration
                -> finishes ~840ms after reveal) to unmistakably land AFTER the
@@ -78,7 +82,7 @@
                every unrelated render) and aria-hidden toggled by JS while the
                h2 is empty (idle/measuring), so AT never reads a blank heading. -->
           <div id="ndl-verdict" role="status" aria-live="polite" aria-hidden="true" style="opacity:0;transform:translateY(14px);transition:opacity 0.56s cubic-bezier(0.2,0.8,0.2,1) 0.28s,transform 0.56s cubic-bezier(0.2,0.8,0.2,1) 0.28s;display:flex;flex-direction:column;gap:clamp(5px,1vh,10px);">
-            <div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#9A8D78;">verdict</div>
+            <div data-i18n="verdictLabel" style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#9A8D78;">verdict</div>
             <h2 id="ndl-verdict-title" style="margin:0;font-family:'Archivo Black','Arial Black',sans-serif;font-weight:400;font-size:min(6.4vh,clamp(28px,4.6vw,62px));line-height:0.98;letter-spacing:-0.02em;color:#93A06E;text-wrap:balance;"></h2>
             <div id="ndl-verdict-text" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:min(2.3vh,clamp(12.5px,1.1vw,15px));line-height:1.5;color:#C9BEAC;font-variant-numeric:tabular-nums;max-width:52ch;"></div>
           </div>
@@ -89,7 +93,7 @@
              display:flex + opacity:0 frame to commit (reflow) before raising
              opacity next frame - otherwise this used to pop in with no fade. -->
         <div id="ndl-insight" aria-live="polite" style="flex:none;display:none;flex-direction:column;gap:4px;opacity:0;transition:opacity 0.5s ease 0.1s;border-left:2px solid #C6A15B;padding:2px 0 2px 12px;">
-          <div style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">l'écart qui compte</div>
+          <div data-i18n="gapThatMatters" style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">l'écart qui compte</div>
           <div id="ndl-insight-text" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:min(2.05vh,clamp(12px,1.05vw,14.5px));line-height:1.5;color:#D8CDBB;font-variant-numeric:tabular-nums;max-width:58ch;"></div>
         </div>
         <div data-nadelio-proof class="ndl-proof" style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column;gap:clamp(8px,1.4vh,14px);">
@@ -102,7 +106,7 @@
             </div>
           </div>
           <div style="flex:none;position:relative;height:20px;">
-            <button data-tip="scale" class="ndl-tip-text" aria-label="échelle de mesure, en savoir plus" style="position:absolute;right:0;top:0;display:inline-flex;align-items:center;gap:5px;cursor:help;background:none;border:none;padding:0;font-family:'IBM Plex Mono',Menlo,monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#9A8D78;"><span id="ndl-scale-label">échelle 0 à 100</span><span style="display:inline-flex;width:12px;height:12px;border:1px solid #3A3128;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>
+            <button data-tip="scale" class="ndl-tip-text" aria-label="échelle de mesure, en savoir plus" data-i18n-aria="scaleAria" style="position:absolute;right:0;top:0;display:inline-flex;align-items:center;gap:5px;cursor:help;background:none;border:none;padding:0;font-family:'IBM Plex Mono',Menlo,monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#9A8D78;"><span id="ndl-scale-label">échelle 0 à 100</span><span style="display:inline-flex;width:12px;height:12px;border:1px solid #3A3128;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>
           </div>
         </div>
       </div>

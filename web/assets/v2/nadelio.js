@@ -35,10 +35,98 @@
      they run a real audit through the backend, exactly like a typed brand. */
   var EXAMPLES = ['Qonto', 'Pennylane', 'Alan'];
 
+  /* ============================================================================
+     i18n (whole page, chrome + every JS-built string)
+     ============================================================================
+     v2 was FR authored end to end (markup AND every dynamic string built in
+     this file). The rest of the site (index.html) is EN authored with a FR
+     dictionary applied at runtime, detected the same way: ?lang=fr forces
+     French, ?lang=en forces English, otherwise navigator.language decides,
+     English is the default. This page must behave identically for a visitor:
+     an English visitor gets English, a French visitor gets French, ?lang=
+     forces either - regardless of which language the brand being audited
+     happens to trade in. (index.html's result screen additionally mixes in
+     the audited brand's own language via isFR(d)/_curFR, because that page
+     interleaves one persistent English chrome with many independent per-brand
+     audits over time. v2 has no such split: the chrome and the result screen
+     are the same continuous instrument built by this one script, so mixing
+     languages mid-page would read as broken, not intentional. One flag -
+     PAGE_FR - drives the whole page here.)
+     Implementation: v2.html markup stays FR authored (unchanged visually,
+     data-i18n/-html/-aria/-ph attributes added for applyChromeLang() to swap
+     in the EN dictionary below when the visitor is NOT French). Every dynamic
+     string this file builds (verdict, cards, insight, drawer, dossier, errors,
+     the downloadable HTML file) is wrapped in T(en, fr), same helper and
+     argument order as index.html's, EN first because English is the site's
+     default language. */
+  function pageLang() {
+    try {
+      var p = new URLSearchParams(window.location.search).get('lang');
+      if (p === 'fr') return 'fr';
+      if (p === 'en') return 'en';
+    } catch (e) {}
+    return /^fr/i.test(navigator.language || navigator.userLanguage || '') ? 'fr' : 'en';
+  }
+  var PAGE_FR = (pageLang() === 'fr');
+  /* Tiny chrome translator for JS-built strings, identical contract to
+     index.html's T(en,fr): English unless the visitor is French. */
+  function T(en, fr) { return PAGE_FR ? fr : en; }
+
+  /* EN dictionary for the static chrome (v2.html markup is FR authored, so
+     unlike index.html's SITE_FR this dictionary is only applied when the
+     visitor is NOT French). Keys map 1:1 to the data-i18n* attributes added
+     to v2.html. */
+  var SITE_EN = {
+    tagline: 'Counts how many times AI cites your brand. Never inflated.',
+    badge: 'Google + AI, bounded measurement',
+    transp: 'transparency ›',
+    eyebrow: 'AI visibility audit',
+    h1: 'AI answers your customers. Are you in the answer?',
+    measureCue: 'measure >',
+    inputAria: 'brand name to measure',
+    runBtn: 'Run an audit',
+    or: 'or',
+    howWeMeasure: 'how we measure',
+    howWeMeasureBody: 'We ask your questions to Google and to one AI, several times each. The answers vary a little, so we give an interval rather than one exact number.',
+    cloudConverges: 'the cloud converges',
+    readingInProgress: 'reading in progress',
+    verdictLabel: 'verdict',
+    gapThatMatters: 'the gap that matters',
+    scaleAria: 'measurement scale, learn more'
+  };
+  /* Localizes the static chrome (markup already in the DOM, never re-created
+     by this script). Called once, first thing in init(), before the first
+     render() - so there is no visible flash for an English visitor. */
+  function applyChromeLang() {
+    document.documentElement.setAttribute('lang', PAGE_FR ? 'fr' : 'en');
+    if (PAGE_FR) return; // French is the authored default markup, nothing to swap
+    var nodes = document.querySelectorAll('[data-i18n],[data-i18n-html],[data-i18n-aria],[data-i18n-ph]');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var kt = el.getAttribute('data-i18n');
+      if (kt && SITE_EN[kt] != null) el.textContent = SITE_EN[kt];
+      var kh = el.getAttribute('data-i18n-html');
+      if (kh && SITE_EN[kh] != null) el.innerHTML = SITE_EN[kh];
+      var ka = el.getAttribute('data-i18n-aria');
+      if (ka && SITE_EN[ka] != null) el.setAttribute('aria-label', SITE_EN[ka]);
+      var kp = el.getAttribute('data-i18n-ph');
+      if (kp && SITE_EN[kp] != null) el.setAttribute('placeholder', SITE_EN[kp]);
+    }
+  }
+
   var TIP_TEXT = {
-    scale: 'L\'échelle réelle va de 0 à 100. On zoome sur la zone utile pour rendre l\'écart lisible : l\'écart parait donc plus grand qu\'il ne l\'est sur 100. Les chiffres et les proportions restent exacts, l\'axe indique toujours sa fenêtre de zoom.',
-    range: 'Le vrai score se trouve dans cette fourchette 95 fois sur 100. Plus elle est étroite, plus la mesure est sûre.',
-    presence: 'Dans combien de vos questions la marque ressort. Absente d\'une question, elle est invisible pour tous ceux qui la posent.'
+    scale: T(
+      'The real scale runs 0 to 100. We zoom into the useful band to make the gap readable, so the gap looks bigger than it is on the full 100. The numbers and the proportions stay exact, the axis always shows its zoom window.',
+      'L\'échelle réelle va de 0 à 100. On zoome sur la zone utile pour rendre l\'écart lisible : l\'écart parait donc plus grand qu\'il ne l\'est sur 100. Les chiffres et les proportions restent exacts, l\'axe indique toujours sa fenêtre de zoom.'
+    ),
+    range: T(
+      'The real score sits in this interval 95 times out of 100. The narrower it is, the surer the measurement.',
+      'Le vrai score se trouve dans cette fourchette 95 fois sur 100. Plus elle est étroite, plus la mesure est sûre.'
+    ),
+    presence: T(
+      'How many of your questions the brand shows up in. Absent from one question, it is invisible to everyone who asks it.',
+      'Dans combien de vos questions la marque ressort. Absente d\'une question, elle est invisible pour tous ceux qui la posent.'
+    )
   };
 
   /* The single REAL result the whole view renders from. null = idle / measuring
@@ -474,11 +562,11 @@
     drawerDialog = document.createElement('div');
     drawerDialog.setAttribute('role', 'dialog');
     drawerDialog.setAttribute('aria-modal', 'true');
-    drawerDialog.setAttribute('aria-label', 'Le détail de la mesure');
+    drawerDialog.setAttribute('aria-label', T('The measurement in detail', 'Le détail de la mesure'));
     drawerDialog.setAttribute('style', 'position:fixed;top:0;right:0;bottom:0;z-index:71;width:min(620px,95vw);background:#14100C;border-left:1px solid #2A241C;display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);animation:drawerIn 0.28s cubic-bezier(0.2,0.8,0.2,1);');
 
-    var fn = esc(v.focusName || 'la marque');
-    var provider = esc(v.providerLabel || 'l\'IA');
+    var fn = esc(v.focusName || T('the brand', 'la marque'));
+    var provider = esc(v.providerLabel || T('the AI', 'l\'IA'));
     var matrix = v.matrix || [];
     var owners = v.owners || [];
     var serpByQ = v.serpByQ || [];
@@ -510,19 +598,19 @@
     function matrixCell(cell) {
       var aiTxt, aiBg, aiFg, aiBorder = 'transparent';
       if (cell.aiRank == null) {
-        aiTxt = 'absent'; aiBg = 'transparent'; aiFg = '#A66F57'; aiBorder = 'rgba(176,116,82,0.55)';
+        aiTxt = T('absent', 'absent'); aiBg = 'transparent'; aiFg = '#A66F57'; aiBorder = 'rgba(176,116,82,0.55)';
       } else if (cell.aiKind === 'primary') {
-        aiTxt = 'principal n' + cell.aiRank; aiBg = 'rgba(147,160,110,0.7)'; aiFg = '#141009';
+        aiTxt = T('primary #', 'principal n') + cell.aiRank; aiBg = 'rgba(147,160,110,0.7)'; aiFg = '#141009';
       } else {
-        aiTxt = 'cité n' + cell.aiRank; aiBg = 'rgba(147,160,110,0.28)'; aiFg = '#D8CDBB';
+        aiTxt = T('cited #', 'cité n') + cell.aiRank; aiBg = 'rgba(147,160,110,0.28)'; aiFg = '#D8CDBB';
       }
       var citeTxt = (cell.aiRank != null && cell.runs) ? (cell.cited + '/' + cell.runs) : '';
-      var gTxt = cell.serpRank != null ? ('Google n' + cell.serpRank) : 'Google absent';
+      var gTxt = cell.serpRank != null ? (T('Google #', 'Google n') + cell.serpRank) : T('Google absent', 'Google absent');
       var focusEdge = cell.isFocus ? 'border-top:2px solid ' + BRASS + ';' : 'border-top:2px solid transparent;';
       return '<div style="display:flex;flex-direction:column;gap:3px;padding:5px;background:#171310;' + focusEdge + 'box-sizing:border-box;">' +
         '<div style="font-size:9.5px;line-height:1.2;text-align:center;padding:3px 4px;background:' + aiBg + ';border:1px solid ' + aiBorder + ';box-sizing:border-box;color:' + aiFg + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(aiTxt) + '</div>' +
         '<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;color:#8A7D68;font-variant-numeric:tabular-nums;">' +
-          '<span>' + (citeTxt ? ('cité ' + citeTxt) : '&nbsp;') + '</span><span>' + esc(gTxt) + '</span>' +
+          '<span>' + (citeTxt ? (T('cited ', 'cité ') + citeTxt) : '&nbsp;') + '</span><span>' + esc(gTxt) + '</span>' +
         '</div>' +
       '</div>';
     }
@@ -537,7 +625,7 @@
         cellsHtml + '</div>';
     }
     if (!matrix.length) {
-      rowsHtml = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#8A7D68;">Lancez d\'abord une mesure pour voir le détail, question par question.</div>';
+      rowsHtml = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#8A7D68;">' + T('Run a measurement first to see the detail, question by question.', 'Lancez d\'abord une mesure pour voir le détail, question par question.') + '</div>';
     }
 
     /* "Qui tient Google" : the hosts that own the page, per question, making the
@@ -551,54 +639,59 @@
           hostsHtml += '<span style="font-size:10.5px;color:#C9BEAC;border:1px solid #2A241C;padding:3px 7px;font-variant-numeric:tabular-nums;">' + esc(shortHost(sq.hosts[hi].host)) + ' <span style="color:#8A7D68;">n' + sq.hosts[hi].rank + '</span></span>';
         }
       } else {
-        hostsHtml = '<span style="font-size:10.5px;color:#8A7D68;">page non relevée</span>';
+        hostsHtml = '<span style="font-size:10.5px;color:#8A7D68;">' + T('page not captured', 'page non relevée') + '</span>';
       }
       ownerHtml += '<div style="display:flex;flex-direction:column;gap:5px;">' +
         '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#A99C88;">« ' + esc(sq.q) + ' »</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:5px;">' + hostsHtml + '</div>' +
       '</div>';
     }
-    if (!serpByQ.length) ownerHtml = '<div style="font-size:11.5px;color:#8A7D68;">Aucune donnée de page Google.</div>';
+    if (!serpByQ.length) ownerHtml = '<div style="font-size:11.5px;color:#8A7D68;">' + T('No Google page data.', 'Aucune donnée de page Google.') + '</div>';
 
+    var s1 = matrix.length > 1 ? 's' : '', rs1 = runN > 1 ? 's' : '';
+    var footnoteTxt = T(
+      'Measured: ' + matrix.length + ' question' + s1 + ', 1 AI (' + provider + '), ' + runN + (runN > 1 ? ' passes' : ' pass') + ' per question, ' + matrix.length + ' Google read' + s1 + '. Each cell shows the brand real rank, with no hidden aggregation. The Deep Audit widens this same read to 5 questions and 8 passes per question, still on ' + provider + '.',
+      'Mesuré : ' + matrix.length + ' question' + s1 + ', 1 IA (' + provider + '), ' + runN + ' passage' + rs1 + ' par question, ' + matrix.length + ' lecture' + s1 + ' de Google. Chaque case montre le rang réel de la marque, sans agrégation cachée. Le Deep Audit élargit cette même lecture à 5 questions et 8 passages par question, toujours sur ' + provider + '.'
+    );
     drawerDialog.innerHTML =
       '<div style="flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:clamp(16px,2.4vh,26px) clamp(18px,2.4vw,30px);border-bottom:1px solid #2A241C;">' +
         '<div style="display:flex;flex-direction:column;gap:5px;">' +
-          '<div style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(17px,1.7vw,23px);letter-spacing:-0.01em;">Le détail, sans filtre</div>' +
-          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#A99C88;max-width:46ch;">Vos questions posées à Google et à ' + provider + ', et où chaque marque ressort. Rien n\'est agrégé avant que vous le voyiez.</div>' +
+          '<div style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(17px,1.7vw,23px);letter-spacing:-0.01em;">' + T('The detail, unfiltered', 'Le détail, sans filtre') + '</div>' +
+          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#A99C88;max-width:46ch;">' + T('Your questions asked to Google and to ' + provider + ', and where each brand shows up. Nothing is aggregated before you see it.', 'Vos questions posées à Google et à ' + provider + ', et où chaque marque ressort. Rien n\'est agrégé avant que vous le voyiez.') + '</div>' +
         '</div>' +
-        '<button class="ndl-drawer-close" aria-label="fermer le détail" style="flex:none;cursor:pointer;background:none;border:1px solid #3A3128;color:#A99C88;font-family:inherit;font-size:15px;line-height:1;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">✕</button>' +
+        '<button class="ndl-drawer-close" aria-label="' + T('close the detail', 'fermer le détail') + '" style="flex:none;cursor:pointer;background:none;border:1px solid #3A3128;color:#A99C88;font-family:inherit;font-size:15px;line-height:1;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">✕</button>' +
       '</div>' +
       '<div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:clamp(16px,2.4vh,26px) clamp(18px,2.4vw,30px);display:flex;flex-direction:column;gap:22px;">' +
         '<div style="display:flex;flex-direction:column;gap:9px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">les sources interrogées</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + T('the sources queried', 'les sources interrogées') + '</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + srcChips + '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:10px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">chaque marque, question par question</div>' +
-            '<div style="font-size:10px;color:#8A7D68;font-variant-numeric:tabular-nums;">' + runN + ' mesures IA par question</div>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + T('each brand, question by question', 'chaque marque, question par question') + '</div>' +
+            '<div style="font-size:10px;color:#8A7D68;font-variant-numeric:tabular-nums;">' + runN + T(' AI reads per question', ' mesures IA par question') + '</div>' +
           '</div>' +
           '<div style="overflow-x:auto;overflow-y:hidden;">' +
             '<div style="min-width:' + minW + 'px;display:flex;flex-direction:column;gap:4px;">' +
               '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:3px;align-items:end;">' +
-                '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8A7D68;">question</div>' +
+                '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8A7D68;">' + T('question', 'question') + '</div>' +
                 hCols +
               '</div>' +
               rowsHtml +
             '</div>' +
           '</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:16px;padding-top:2px;">' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.7);"></span>réponse principale</div>' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.28);"></span>cité plus bas</div>' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:transparent;border:1px solid rgba(176,116,82,0.6);box-sizing:border-box;"></span>absent</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.7);"></span>' + T('primary answer', 'réponse principale') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.28);"></span>' + T('cited lower', 'cité plus bas') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#A99C88;"><span style="width:14px;height:10px;background:transparent;border:1px solid rgba(176,116,82,0.6);box-sizing:border-box;"></span>' + T('absent', 'absent') + '</div>' +
           '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:12px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">qui tient la page Google</div>' +
-          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;">Souvent, la page Google n\'est pas tenue par les marques mais par des comparateurs et des agrégateurs. Voici les domaines en tête, question par question.</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + T('who holds the Google page', 'qui tient la page Google') + '</div>' +
+          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;">' + T('Often the Google page is held not by the brands but by comparison sites and aggregators. Here are the leading domains, question by question.', 'Souvent, la page Google n\'est pas tenue par les marques mais par des comparateurs et des agrégateurs. Voici les domaines en tête, question par question.') + '</div>' +
           ownerHtml +
         '</div>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;border-top:1px solid #2A241C;padding-top:14px;">Mesuré : ' + matrix.length + ' question' + (matrix.length > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + runN + ' passage' + (runN > 1 ? 's' : '') + ' par question, ' + matrix.length + ' lecture' + (matrix.length > 1 ? 's' : '') + ' de Google. Chaque case montre le rang réel de la marque, sans agrégation cachée. Le Deep Audit élargit cette même lecture à 5 questions et 8 passages par question, toujours sur ' + provider + '.</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#8A7D68;border-top:1px solid #2A241C;padding-top:14px;">' + footnoteTxt + '</div>' +
       '</div>';
 
     screenEl.appendChild(drawerScrim);
@@ -677,7 +770,10 @@
     if (!overlayEl || slowNoteEl) return;
     slowNoteEl = document.createElement('div');
     slowNoteEl.setAttribute('style', 'font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#9A8D78;margin-top:2px;');
-    slowNoteEl.textContent = 'L\'instrument se réveille. La première mesure après une période calme peut prendre jusqu\'à une minute.';
+    slowNoteEl.textContent = T(
+      'The instrument is waking up. The first measurement after a quiet period can take up to a minute.',
+      'L\'instrument se réveille. La première mesure après une période calme peut prendre jusqu\'à une minute.'
+    );
     overlayEl.appendChild(slowNoteEl);
   }
   function clearSlowNote() {
@@ -979,10 +1075,10 @@
     var url = safeHttpUrl(R && R.officialUrl);
     var urlHtml = url ? (' (<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="color:#A99C88;border-bottom:1px solid #4A4234;">' + esc(shortHost(url)) + '</a>)') : '';
     return '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:11px 13px;border:1px solid #3A3128;background:#171310;">' +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#D8CDBB;">Avant de payer, confirmez : nous avons identifié <b style="color:#E8DFD2;">' + name + '</b>' + urlHtml + '.</div>' +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#D8CDBB;">' + T('Before you pay, confirm: we identified ', 'Avant de payer, confirmez : nous avons identifié ') + '<b style="color:#E8DFD2;">' + name + '</b>' + urlHtml + '.</div>' +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
-        '<button class="ndl-identity-yes" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:8px 12px;">Oui, lancer le paiement</button>' +
-        '<button class="ndl-identity-no" style="cursor:pointer;border:1px solid #4A4234;background:none;color:#A99C88;font-family:inherit;font-size:10.5px;padding:8px 12px;">Ce n\'est pas ma marque</button>' +
+        '<button class="ndl-identity-yes" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:8px 12px;">' + T('Yes, start the payment', 'Oui, lancer le paiement') + '</button>' +
+        '<button class="ndl-identity-no" style="cursor:pointer;border:1px solid #4A4234;background:none;color:#A99C88;font-family:inherit;font-size:10.5px;padding:8px 12px;">' + T('This is not my brand', 'Ce n\'est pas ma marque') + '</button>' +
       '</div>' +
     '</div>';
   }
@@ -1004,7 +1100,7 @@
     if (no) no.addEventListener('click', function () {
       if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
       deepCtaLock(false);
-      deepMsg('Corrigez le nom ou l\'URL de la marque puis relancez une mesure.', true);
+      deepMsg(T('Fix the brand name or URL, then run a new measurement.', 'Corrigez le nom ou l\'URL de la marque puis relancez une mesure.'), true);
       if (inputEl) inputEl.focus();
     });
   }
@@ -1016,7 +1112,7 @@
        read a brand that is about to change under it. */
     if (state.measuring) return;
     var brand = (currentResult && currentResult.focusName) || state.focus || (state.inputValue || '').trim();
-    if (!brand) { if (inputEl) inputEl.focus(); deepMsg('Lancez d\'abord un audit, le Deep Audit a besoin d\'une marque.', true); return; }
+    if (!brand) { if (inputEl) inputEl.focus(); deepMsg(T('Run a measurement first, the Deep Audit needs a brand.', 'Lancez d\'abord un audit, le Deep Audit a besoin d\'une marque.'), true); return; }
     /* Never let a low-confidence identification reach checkout unconfirmed:
        the 79-euro dossier must never be sold on possibly the wrong company. */
     if (currentResult && currentResult.confidence === 'low' && !identityConfirmed) {
@@ -1029,15 +1125,15 @@
        above) never counts as intent to buy. */
     track('deep_click', { brand: brand, tier: 'deep' });
     deepCtaLock(true);
-    deepMsg('Ouverture du paiement sécurisé...', false);
+    deepMsg(T('Opening secure payment...', 'Ouverture du paiement sécurisé...'), false);
     fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: brand, hint: '', market: market }) })
       .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, body: d }; }); })
       .then(function (r) {
         var d = r.body || {};
         if (!r.ok || !d.url) {
           deepMsg(d.error === 'payments not configured'
-            ? 'Le Deep Audit par paiement n\'est pas encore disponible. Revenez bientôt.'
-            : 'Impossible d\'ouvrir le paiement pour le moment. Réessayez dans un instant.', true);
+            ? T('Paid Deep Audit is not available yet. Check back soon.', 'Le Deep Audit par paiement n\'est pas encore disponible. Revenez bientôt.')
+            : T('Cannot open payment right now. Try again in a moment.', 'Impossible d\'ouvrir le paiement pour le moment. Réessayez dans un instant.'), true);
           deepCtaLock(false);
           return;
         }
@@ -1047,7 +1143,7 @@
         window.location = d.url;
       })
       .catch(function () {
-        deepMsg('Impossible de joindre le serveur. Réessayez dans un instant.', true);
+        deepMsg(T('Cannot reach the server. Try again in a moment.', 'Impossible de joindre le serveur. Réessayez dans un instant.'), true);
         deepCtaLock(false);
       });
   }
@@ -1061,17 +1157,24 @@
      if the backend could not produce them for this brand. */
   function scoreColorFor(s) { return s >= 71 ? SAGE : (s >= 41 ? BRASS : SIENNA); }
   var VERDICT_WORD_FR = { STABLE: 'stable', MODERE: 'modéré', VOLATIL: 'volatil', SINGLE_RUN: 'mesure unique' };
+  /* Same words index.html uses for this exact verdict enum (verdictLabel),
+     lowercased to match this page's own label casing. */
+  var VERDICT_WORD_EN = { STABLE: 'stable', MODERE: 'moderate', VOLATIL: 'volatile', SINGLE_RUN: 'single measure' };
+  function verdictWord(v) { return v ? ((PAGE_FR ? VERDICT_WORD_FR : VERDICT_WORD_EN)[v] || '') : ''; }
+  /* Shared bilingual label for a brand's Google standing, used in the field
+     table, the deep dossier and the downloadable HTML file alike. */
+  function googleRankLabel(serpRank) { return serpRank != null ? T('Google rank ', 'Google rang ') + serpRank : T('absent from Google', 'absent de Google'); }
 
   function renderDeepDocHTML(R) {
     var geo = R.geo || {};
     var score = R.geoScore != null ? R.geoScore : (geo.point != null ? Math.round(geo.point) : null);
     var scoreColor = score != null ? scoreColorFor(score) : '#9A8D78';
     var hw = geo.half_width;
-    var verdictTag = geo.verdict ? (VERDICT_WORD_FR[geo.verdict] || '') : '';
+    var verdictTag = verdictWord(geo.verdict);
 
     var scoreBlock = score != null
       ? '<div style="display:flex;flex-direction:column;gap:8px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">score de visibilité IA</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + T('AI visibility score', 'score de visibilité IA') + '</div>' +
           '<div style="display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;">' +
             '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(38px,4.6vw,58px);line-height:1;color:' + scoreColor + ';font-variant-numeric:tabular-nums;">' + score + '</span>' +
             (hw != null ? '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:14px;color:#9A8D78;font-variant-numeric:tabular-nums;">&plusmn;' + hw + '</span>' : '') +
@@ -1089,16 +1192,16 @@
        upsells, not buried after them. */
     var downloadBlock =
       '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #2A241C;">' +
-        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">garder ce dossier</div>' +
-        '<button class="ndl-dl-btn" id="ndl-download-btn" style="cursor:pointer;border:1px solid #3A3128;background:#171310;color:#E8DFD2;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:9px 14px;align-self:flex-start;">T&eacute;l&eacute;charger le dossier (HTML)</button>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;line-height:1.4;color:#9A8D78;max-width:32ch;">Ce paiement est unique&nbsp;: sans ce fichier, un rechargement de la page ne pourra plus le r&eacute;afficher.</div>' +
+        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + T('keep this dossier', 'garder ce dossier') + '</div>' +
+        '<button class="ndl-dl-btn" id="ndl-download-btn" style="cursor:pointer;border:1px solid #3A3128;background:#171310;color:#E8DFD2;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:9px 14px;align-self:flex-start;">' + T('Download the dossier (HTML)', 'T&eacute;l&eacute;charger le dossier (HTML)') + '</button>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;line-height:1.4;color:#9A8D78;max-width:32ch;">' + T('This payment is one time: without this file, reloading the page cannot show it again.', 'Ce paiement est unique&nbsp;: sans ce fichier, un rechargement de la page ne pourra plus le r&eacute;afficher.') + '</div>' +
       '</div>';
 
     var priceBlock =
       '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #2A241C;">' +
-        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">continuer la mesure</div>' +
-        '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#C9BEAC;border-bottom:1px solid #4A4234;align-self:flex-start;">Suivre cette marque, dès 99&euro;/mois</a>' +
-        '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;align-self:flex-start;">Réglement de performance</a>' +
+        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + T('keep measuring', 'continuer la mesure') + '</div>' +
+        '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#C9BEAC;border-bottom:1px solid #4A4234;align-self:flex-start;">' + T('Track this brand, from 99&euro;/month', 'Suivre cette marque, dès 99&euro;/mois') + '</a>' +
+        '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;align-self:flex-start;">' + T('Performance settlement', 'Réglement de performance') + '</a>' +
       '</div>';
 
     var identityHtml = '';
@@ -1109,13 +1212,13 @@
         if (e.title) bits.push(esc(e.title));
         if (e.description) bits.push('<span style="color:#8A7D68;">' + esc(e.description) + '</span>');
         var src = safeHttpUrl(e.source || e.link || '');
-        var srcHtml = src ? ' <a href="' + esc(src) + '" target="_blank" rel="noopener noreferrer" style="color:#A99C88;border-bottom:1px solid #4A4234;">source</a>' : '';
+        var srcHtml = src ? ' <a href="' + esc(src) + '" target="_blank" rel="noopener noreferrer" style="color:#A99C88;border-bottom:1px solid #4A4234;">' + T('source', 'source') + '</a>' : '';
         return bits.length ? '<li style="margin-bottom:8px;line-height:1.55;">' + bits.join(', ') + srcHtml + '</li>' : '';
       }).join('');
       if (items) {
         identityHtml =
           '<div style="display:flex;flex-direction:column;gap:10px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">preuve sourcée</div>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + T('sourced evidence', 'preuve sourcée') + '</div>' +
             '<ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + items + '</ul>' +
           '</div>';
       }
@@ -1126,7 +1229,7 @@
       var rep = R.report;
       var bsItems = (rep.blind_spots || []).map(function (b) {
         var by = (b.dominated_by || []).map(function (x) { return esc(x); }).join(', ');
-        return '<li style="margin-bottom:8px;line-height:1.5;"><b style="color:#E8DFD2;font-weight:600;">' + esc(b.query) + '</b>' + (by ? ', dominé par ' + by : '') + '</li>';
+        return '<li style="margin-bottom:8px;line-height:1.5;"><b style="color:#E8DFD2;font-weight:600;">' + esc(b.query) + '</b>' + (by ? T(', dominated by ', ', dominé par ') + by : '') + '</li>';
       }).join('');
       var actItems = (rep.actions || []).map(function (a) {
         return '<li style="margin-bottom:9px;line-height:1.55;">' + esc(a) + '</li>';
@@ -1134,24 +1237,28 @@
       reportHtml =
         '<div style="display:flex;flex-direction:column;gap:18px;">' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">rapport de remédiation</div>' +
-            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:8.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8A7D68;border:1px solid #2A241C;padding:2px 6px;">généré par IA</span>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + T('remediation report', 'rapport de remédiation') + '</div>' +
+            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:8.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8A7D68;border:1px solid #2A241C;padding:2px 6px;">' + T('AI generated', 'généré par IA') + '</span>' +
           '</div>' +
           (rep.verdict ? '<div style="border-left:2px solid #C6A15B;padding:2px 0 2px 14px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#D8CDBB;">' + esc(rep.verdict) + '</div>' : '') +
-          (bsItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#9A8D78;margin-bottom:8px;">angles morts nommés</div><ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + bsItems + '</ul></div>' : '') +
-          (actItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#9A8D78;margin-bottom:8px;">plan d\'action</div><ol style="margin:0;padding-left:20px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + actItems + '</ol></div>' : '') +
+          (bsItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#9A8D78;margin-bottom:8px;">' + T('named blind spots', 'angles morts nommés') + '</div><ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + bsItems + '</ul></div>' : '') +
+          (actItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#9A8D78;margin-bottom:8px;">' + T('action plan', 'plan d\'action') + '</div><ol style="margin:0;padding-left:20px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#C9BEAC;">' + actItems + '</ol></div>' : '') +
         '</div>';
     }
 
     /* Escaped exactly ONCE, at output (line below): esc()'ing these fragments
        here too double-escaped any "&" in a provider/market label ("&amp;" ->
        "&amp;amp;") in the paid dossier. */
-    var footNote = 'Mesuré : ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + ', 1 IA (' + R.providerLabel + '), ' + R.n + ' passage' + (R.n > 1 ? 's' : '') + ' par question' + (R.market ? ', marché ' + R.market : '') + '.';
+    var footNoteS1 = R.nQueries > 1 ? 's' : '', footNoteS2 = R.n > 1 ? 's' : '';
+    var footNote = T(
+      'Measured: ' + R.nQueries + ' question' + footNoteS1 + ', 1 AI (' + R.providerLabel + '), ' + R.n + (R.n > 1 ? ' passes' : ' pass') + ' per question' + (R.market ? ', market ' + R.market : '') + '.',
+      'Mesuré : ' + R.nQueries + ' question' + footNoteS1 + ', 1 IA (' + R.providerLabel + '), ' + R.n + ' passage' + footNoteS2 + ' par question' + (R.market ? ', marché ' + R.market : '') + '.'
+    );
 
     return (
       '<div style="max-width:960px;margin:0 auto;padding:clamp(32px,6vh,64px) clamp(16px,3vw,40px) clamp(48px,8vh,88px);display:flex;flex-direction:column;gap:28px;border-top:1px solid #2A241C;">' +
         '<div style="display:flex;flex-direction:column;gap:6px;">' +
-          '<div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#C6A15B;">deep audit, le dossier</div>' +
+          '<div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#C6A15B;">' + T('deep audit, the dossier', 'deep audit, le dossier') + '</div>' +
           '<h2 style="margin:0;font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-weight:400;font-size:clamp(22px,2.6vw,34px);line-height:1.05;letter-spacing:-0.01em;color:#E8DFD2;">' + esc(R.focusName) + '</h2>' +
         '</div>' +
         '<div class="ndl-deepgrid">' +
@@ -1198,17 +1305,16 @@
   function downloadDossier() {
     var R = currentResult;
     if (!R || R.tier !== 'deep') return;
-    var brandName = R.focusName || 'marque';
+    var brandName = R.focusName || T('brand', 'marque');
     var when = new Date().toISOString().slice(0, 10);
     var geo = R.geo || {};
     var score = R.geoScore != null ? R.geoScore : (geo.point != null ? Math.round(geo.point) : null);
     var hw = geo.half_width;
-    var verdictTag = geo.verdict ? (VERDICT_WORD_FR[geo.verdict] || '') : '';
+    var verdictTag = verdictWord(geo.verdict);
     var offUrl = safeHttpUrl(R.officialUrl);
 
     var fieldHtml = (R.fieldRows || []).map(function (f) {
-      var g = f.serpRank != null ? ('Google rang ' + f.serpRank) : 'absent de Google';
-      return '<tr' + (f.isFocus ? ' class="you"' : '') + '><td>' + esc(f.name) + (f.isFocus ? ' (vous)' : '') + '</td><td>' + esc(aiLabel(f.ai)) + '</td><td>' + esc(g) + '</td><td>' + Math.round(f.share) + '%</td></tr>';
+      return '<tr' + (f.isFocus ? ' class="you"' : '') + '><td>' + esc(f.name) + (f.isFocus ? T(' (you)', ' (vous)') : '') + '</td><td>' + esc(aiLabel(f.ai)) + '</td><td>' + esc(googleRankLabel(f.serpRank)) + '</td><td>' + Math.round(f.share) + '%</td></tr>';
     }).join('');
 
     var evHtml = (R.evidence || []).slice(0, 6).map(function (e) {
@@ -1223,7 +1329,7 @@
     var rep = R.report || {};
     var bsHtml = (rep.blind_spots || []).map(function (b) {
       var by = (b.dominated_by || []).map(function (x) { return esc(x); }).join(', ');
-      return '<li><b>' + esc(b.query) + '</b>' + (by ? ', dominé par ' + by : '') + '</li>';
+      return '<li><b>' + esc(b.query) + '</b>' + (by ? T(', dominated by ', ', dominé par ') + by : '') + '</li>';
     }).join('');
     var actHtml = (rep.actions || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('');
     var qHtml = (R.matrix || []).map(function (m) { return '<li>« ' + esc(m.q) + ' »</li>'; }).join('');
@@ -1231,13 +1337,20 @@
     var geoPm = hw != null ? (' <span style="font-size:22px;color:#8A8578;">&plusmn;' + hw + '</span>') : '';
     var geoVerdict = verdictTag ? (' <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#4C7A5C;">' + esc(verdictTag) + '</span>') : '';
     var geoNote = hw != null
-      ? ('Intervalle de confiance à 95 pour cent, sur ' + R.n + ' mesures IA.')
-      : 'Mesure unique, non bornée : pas assez de passages réussis pour calculer une marge.';
-    var footNote = 'Mesuré : ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + ', 1 IA (' + R.providerLabel + '), ' + R.n + ' passage' + (R.n > 1 ? 's' : '') + ' par question' + (R.market ? ', marché ' + R.market : '') + '.';
+      ? T('95 percent confidence interval, across ' + R.n + ' AI reads.', 'Intervalle de confiance à 95 pour cent, sur ' + R.n + ' mesures IA.')
+      : T('Single measurement, not bounded: not enough successful passes to compute a margin.', 'Mesure unique, non bornée : pas assez de passages réussis pour calculer une marge.');
+    var footNoteS1 = R.nQueries > 1 ? 's' : '', footNoteS2 = R.n > 1 ? 's' : '';
+    var footNote = T(
+      'Measured: ' + R.nQueries + ' question' + footNoteS1 + ', 1 AI (' + R.providerLabel + '), ' + R.n + (R.n > 1 ? ' passes' : ' pass') + ' per question' + (R.market ? ', market ' + R.market : '') + '.',
+      'Mesuré : ' + R.nQueries + ' question' + footNoteS1 + ', 1 IA (' + R.providerLabel + '), ' + R.n + ' passage' + footNoteS2 + ' par question' + (R.market ? ', marché ' + R.market : '') + '.'
+    );
 
-    var doc = '<!doctype html><html lang="fr"><head><meta charset="utf-8">' +
+    var docLang = PAGE_FR ? 'fr' : 'en';
+    var docTitle = T('Nadelio, Deep Audit: ' + brandName, 'Nadelio, Deep Audit ' + brandName);
+
+    var doc = '<!doctype html><html lang="' + docLang + '"><head><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-      '<title>Nadelio, Deep Audit ' + esc(brandName) + '</title><style>' +
+      '<title>' + esc(docTitle) + '</title><style>' +
       ':root{--sage:#3D6B5C;--sage-signal:#4C8F72;--surface:#EDEBE4;--card:#FBFAF6;--ink:#191510;--line:#D9D6CC;--muted:#6E6C64;}' +
       '*{box-sizing:border-box;}body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--surface);line-height:1.55;margin:0;padding:40px 20px;}' +
       '.wrap{max-width:820px;margin:0 auto;}' +
@@ -1253,20 +1366,20 @@
       'footer{text-align:center;font-size:12px;color:var(--muted);margin-top:20px;}' +
       '@media print{body{background:#fff;padding:0;}.card{border:none;}}' +
       '</style></head><body><div class="wrap">' +
-      '<div class="card"><span class="badge">Nadelio, Deep Audit, sourcé</span>' +
+      '<div class="card"><span class="badge">' + T('Nadelio, Deep Audit, sourced', 'Nadelio, Deep Audit, sourcé') + '</span>' +
       '<h1>' + esc(brandName) + '</h1>' +
-      '<div class="meta">Généré le ' + esc(when) + (R.market ? ', marché ' + esc(R.market) : '') + '.</div>' +
-      (R.identifiedAs ? ('<h2>Identité vérifiée</h2><p>' + esc(R.identifiedAs) + '</p>' + (offUrl ? ('<p class="meta">Source officielle : <a href="' + esc(offUrl) + '">' + esc(shortHost(offUrl)) + '</a></p>') : '')) : '') +
-      (evHtml ? ('<h2>Preuve sourcée</h2><ul>' + evHtml + '</ul>') : '') +
+      '<div class="meta">' + T('Generated on ', 'Généré le ') + esc(when) + (R.market ? T(', market ', ', marché ') + esc(R.market) : '') + '.</div>' +
+      (R.identifiedAs ? ('<h2>' + T('Verified identity', 'Identité vérifiée') + '</h2><p>' + esc(R.identifiedAs) + '</p>' + (offUrl ? ('<p class="meta">' + T('Official source: ', 'Source officielle : ') + '<a href="' + esc(offUrl) + '">' + esc(shortHost(offUrl)) + '</a></p>') : '')) : '') +
+      (evHtml ? ('<h2>' + T('Sourced evidence', 'Preuve sourcée') + '</h2><ul>' + evHtml + '</ul>') : '') +
       '</div>' +
-      '<div class="card"><h2>Score de visibilité IA</h2><div class="geo">' + (score != null ? score : '-') + geoPm + '<span style="font-size:20px;color:var(--muted);">/100</span></div>' + geoVerdict +
+      '<div class="card"><h2>' + T('AI visibility score', 'Score de visibilité IA') + '</h2><div class="geo">' + (score != null ? score : '-') + geoPm + '<span style="font-size:20px;color:var(--muted);">/100</span></div>' + geoVerdict +
       '<p class="meta" style="margin-top:10px;">' + geoNote + '</p></div>' +
-      '<div class="card"><h2>Le champ mesuré</h2><table><thead><tr><th>Marque</th><th>En IA</th><th>Sur Google</th><th>Part de voix</th></tr></thead><tbody>' + fieldHtml + '</tbody></table></div>' +
-      (qHtml ? ('<div class="card"><h2>Questions posées</h2><ul>' + qHtml + '</ul></div>') : '') +
-      ((rep.verdict || bsHtml || actHtml) ? ('<div class="card"><h2>Rapport de remédiation</h2><p style="color:#4C7A5C;font-size:12px;">Recommandations générées par IA, fondées sur la mesure ci-dessus.</p>' +
+      '<div class="card"><h2>' + T('The measured field', 'Le champ mesuré') + '</h2><table><thead><tr><th>' + T('Brand', 'Marque') + '</th><th>' + T('In AI', 'En IA') + '</th><th>' + T('On Google', 'Sur Google') + '</th><th>' + T('Share of voice', 'Part de voix') + '</th></tr></thead><tbody>' + fieldHtml + '</tbody></table></div>' +
+      (qHtml ? ('<div class="card"><h2>' + T('Questions asked', 'Questions posées') + '</h2><ul>' + qHtml + '</ul></div>') : '') +
+      ((rep.verdict || bsHtml || actHtml) ? ('<div class="card"><h2>' + T('Remediation report', 'Rapport de remédiation') + '</h2><p style="color:#4C7A5C;font-size:12px;">' + T('AI generated recommendations, based on the measurement above.', 'Recommandations générées par IA, fondées sur la mesure ci-dessus.') + '</p>' +
         (rep.verdict ? ('<div class="insight">' + esc(rep.verdict) + '</div>') : '') +
-        (bsHtml ? ('<h2 style="margin-top:16px;">Angles morts nommés</h2><ul>' + bsHtml + '</ul>') : '') +
-        (actHtml ? ('<h2 style="margin-top:16px;">Plan d\'action</h2><ol>' + actHtml + '</ol>') : '') + '</div>') : '') +
+        (bsHtml ? ('<h2 style="margin-top:16px;">' + T('Named blind spots', 'Angles morts nommés') + '</h2><ul>' + bsHtml + '</ul>') : '') +
+        (actHtml ? ('<h2 style="margin-top:16px;">' + T('Action plan', 'Plan d\'action') + '</h2><ol>' + actHtml + '</ol>') : '') + '</div>') : '') +
       '<div class="card"><p class="meta" style="margin:0;">' + esc(footNote) + '</p></div>' +
       '<footer>Nadelio, nadelio.com, ' + esc(when) + '</footer>' +
       '</div></body></html>';
@@ -1290,7 +1403,7 @@
      opacity via renderVals()), so a paying customer always lands on the exact
      same instrument, mid read, never a blank or a dead page. */
   function payStepsHTML(lines) {
-    var html = '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">paiement</div>';
+    var html = '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">' + T('payment', 'paiement') + '</div>';
     html += '<div style="display:flex;flex-direction:column;gap:5px;margin-top:2px;">';
     lines.forEach(function (l) {
       var color = l.state === 'done' ? SAGE : (l.state === 'active' ? '#E8DFD2' : '#9A8D78');
@@ -1312,11 +1425,11 @@
     setState({ measuring: false, settled: false, payError: true });
     if (!overlayEl) return;
     overlayEl.innerHTML =
-      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">paiement</div>' +
+      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">' + T('payment', 'paiement') + '</div>' +
       '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#D8CDBB;max-width:52ch;">' + esc(msg) + '</div>' +
       '<div style="display:flex;align-items:center;gap:16px;margin-top:8px;flex-wrap:wrap;">' +
-        (retryFn ? '<button class="ndl-pay-retry" style="cursor:pointer;border:none;background:#E8DFD2;color:#14100C;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Réessayer</button>' : '') +
-        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;">Contacter le support</a>' +
+        (retryFn ? '<button class="ndl-pay-retry" style="cursor:pointer;border:none;background:#E8DFD2;color:#14100C;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">' + T('Try again', 'Réessayer') + '</button>' : '') +
+        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;">' + T('Contact support', 'Contacter le support') + '</a>' +
       '</div>';
     if (retryFn) {
       var btn = overlayEl.querySelector('.ndl-pay-retry');
@@ -1348,9 +1461,9 @@
     if (scene) buildClusters(loadingRows(), !reduced, '');
     if (reduced) renderResolved();
     showPayStep([
-      { text: 'Paiement confirmé', state: 'done' },
-      { text: 'Audit en cours (30 à 60s)', state: 'active' },
-      { text: 'Dossier prêt', state: 'pending' }
+      { text: T('Payment confirmed', 'Paiement confirmé'), state: 'done' },
+      { text: T('Audit running (30 to 60s)', 'Audit en cours (30 à 60s)'), state: 'active' },
+      { text: T('Dossier ready', 'Dossier prêt'), state: 'pending' }
     ]);
     var loadStart = performance.now();
     var officialUrl = '';
@@ -1380,14 +1493,14 @@
         if (ana == null || gen !== measureGen) return;
         var d = ana.body || {};
         if (!ana.ok || d.error || !d.ranking || !d.geo || d.geo.point == null) {
-          showPayError('Le paiement est confirmé mais l\'audit n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.', function () { runDeepMeasure(brand, sessionId, market); });
+          showPayError(T('Payment is confirmed but the audit did not complete. Try again or contact support, your payment is safe.', 'Le paiement est confirmé mais l\'audit n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.'), function () { runDeepMeasure(brand, sessionId, market); });
           return;
         }
         /* Same guard on the paid path: the backend falls back to its demo
            fixture on a live failure. A customer who just paid must never be
            handed another brand's sample as their dossier. */
         if (d.mode !== 'live') {
-          showPayError('Le paiement est confirmé mais la mesure n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.', function () { runDeepMeasure(brand, sessionId, market); });
+          showPayError(T('Payment is confirmed but the measurement did not complete. Try again or contact support, your payment is safe.', 'Le paiement est confirmé mais la mesure n\'a pas abouti. Réessayez ou contactez le support, votre paiement est en sécurité.'), function () { runDeepMeasure(brand, sessionId, market); });
           return;
         }
         /* The paid gate (app.py _resolve_paid_depth) fails CLOSED to a FREE
@@ -1400,7 +1513,7 @@
            retry here: the session is already durably consumed on Stripe, so
            retrying only re-runs the same downgrade. Support can unlock it. */
         if (d.tier !== 'deep') {
-          showPayError('Le paiement est confirmé mais l\'audit approfondi n\'a pas pu être débloqué automatiquement. Contactez le support avec votre reçu Stripe, nous le lançons pour vous, votre paiement est en sécurité.', null);
+          showPayError(T('Payment is confirmed but the Deep Audit could not be unlocked automatically. Contact support with your Stripe receipt, we will run it for you, your payment is safe.', 'Le paiement est confirmé mais l\'audit approfondi n\'a pas pu être débloqué automatiquement. Contactez le support avec votre reçu Stripe, nous le lançons pour vous, votre paiement est en sécurité.'), null);
           return;
         }
         currentResult = buildResult(d);
@@ -1414,7 +1527,7 @@
         revealT = setTimeout(function () { reveal(gen); }, wait);
       })
       .catch(function () {
-        showPayError('Impossible de joindre l\'instrument. Votre paiement est en sécurité, réessayez ou contactez le support.', function () { runDeepMeasure(brand, sessionId, market); });
+        showPayError(T('Cannot reach the instrument. Your payment is safe, try again or contact support.', 'Impossible de joindre l\'instrument. Votre paiement est en sécurité, réessayez ou contactez le support.'), function () { runDeepMeasure(brand, sessionId, market); });
       });
   }
 
@@ -1425,10 +1538,10 @@
     setState({ measuring: false, settled: false, payError: true });
     if (!overlayEl) return;
     overlayEl.innerHTML =
-      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">paiement</div>' +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#D8CDBB;max-width:52ch;">Ce Deep Audit a déjà été utilisé. Chaque paiement débloque un dossier unique. Lancez un nouveau Deep Audit pour en obtenir un autre, ou contactez le support si ceci est une erreur.</div>' +
+      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#9A8D78;">' + T('payment', 'paiement') + '</div>' +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#D8CDBB;max-width:52ch;">' + T('This Deep Audit has already been used. Each payment unlocks one dossier. Run a new Deep Audit to get another one, or contact support if this is a mistake.', 'Ce Deep Audit a déjà été utilisé. Chaque paiement débloque un dossier unique. Lancez un nouveau Deep Audit pour en obtenir un autre, ou contactez le support si ceci est une erreur.') + '</div>' +
       '<div style="display:flex;align-items:center;gap:16px;margin-top:8px;">' +
-        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;">Contacter le support</a>' +
+        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#A99C88;border-bottom:1px solid #4A4234;">' + T('Contact support', 'Contacter le support') + '</a>' +
       '</div>';
   }
 
@@ -1446,13 +1559,13 @@
     try { history.replaceState({}, document.title, window.location.pathname); } catch (e) {}
     if (brandParam) { if (inputEl) inputEl.value = brandParam; }
     setState({ focus: brandParam || state.focus, inputValue: brandParam || state.inputValue });
-    showPayStep([{ text: 'Confirmation du paiement', state: 'active' }]);
+    showPayStep([{ text: T('Confirming payment', 'Confirmation du paiement'), state: 'active' }]);
     fetch('/api/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) })
       .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, body: d }; }); })
       .then(function (r) {
         var d = r.body || {};
         if (!d.ok) {
-          showPayError('Nous n\'avons pas pu confirmer ce paiement. Si vous avez été débité, réessayez ou contactez le support avec votre reçu Stripe.', function () { resumeDeepAudit(sessionId, brandParam); });
+          showPayError(T('We could not confirm this payment. If you were charged, try again or contact support with your Stripe receipt.', 'Nous n\'avons pas pu confirmer ce paiement. Si vous avez été débité, réessayez ou contactez le support avec votre reçu Stripe.'), function () { resumeDeepAudit(sessionId, brandParam); });
           return;
         }
         if (d.consumed) { showConsumedMessage(); return; }
@@ -1463,7 +1576,7 @@
         runDeepMeasure(brand, sessionId, d.market || '');
       })
       .catch(function () {
-        showPayError('Impossible de confirmer le paiement pour le moment. Si vous avez été débité, réessayez ou contactez le support avec votre reçu.', function () { resumeDeepAudit(sessionId, brandParam); });
+        showPayError(T('Cannot confirm the payment right now. If you were charged, try again or contact support with your receipt.', 'Impossible de confirmer le paiement pour le moment. Si vous avez été débité, réessayez ou contactez le support avec votre reçu.'), function () { resumeDeepAudit(sessionId, brandParam); });
       });
   }
 
@@ -1474,15 +1587,15 @@
     if (!subBannerEl) return;
     var html;
     if (failed) {
-      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">suivi</div>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#D8CDBB;margin-top:4px;">Nous n\'avons pas pu confirmer cet abonnement. Si vous venez de payer, patientez un instant et actualisez, ou contactez le support.</div>';
+      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#9A8D78;">' + T('monitoring', 'suivi') + '</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#D8CDBB;margin-top:4px;">' + T('We could not confirm this subscription. If you just paid, wait a moment and refresh, or contact support.', 'Nous n\'avons pas pu confirmer cet abonnement. Si vous venez de payer, patientez un instant et actualisez, ou contactez le support.') + '</div>';
     } else {
-      var b = esc(brand || 'votre marque');
+      var b = esc(brand || T('your brand', 'votre marque'));
       var t = tier ? esc(tier) : '';
-      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#93A06E;">suivi actif</div>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#D8CDBB;margin-top:4px;">Le suivi est actif pour <b style="color:#E8DFD2;">' + b + '</b>' + (t ? ' (plan ' + t + ')' : '') + '. La première mesure bornée tourne cette semaine, vous serez alerté dès que le score devient volatil.</div>';
+      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#93A06E;">' + T('monitoring active', 'suivi actif') + '</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#D8CDBB;margin-top:4px;">' + T('Monitoring is active for ', 'Le suivi est actif pour ') + '<b style="color:#E8DFD2;">' + b + '</b>' + (t ? T(' (' + t + ' plan)', ' (plan ' + t + ')') : '') + T('. The first bounded measurement runs this week, you will be alerted the moment the score turns volatile.', '. La première mesure bornée tourne cette semaine, vous serez alerté dès que le score devient volatil.') + '</div>';
     }
-    html += '<button class="ndl-subbanner-close" aria-label="fermer" style="position:absolute;top:8px;right:8px;cursor:pointer;background:none;border:none;color:#9A8D78;font-family:inherit;font-size:13px;line-height:1;padding:4px;">&times;</button>';
+    html += '<button class="ndl-subbanner-close" aria-label="' + T('close', 'fermer') + '" style="position:absolute;top:8px;right:8px;cursor:pointer;background:none;border:none;color:#9A8D78;font-family:inherit;font-size:13px;line-height:1;padding:4px;">&times;</button>';
     subBannerEl.innerHTML = html;
     subBannerEl.style.display = 'block';
     var closeBtn = subBannerEl.querySelector('.ndl-subbanner-close');
@@ -1538,7 +1651,7 @@
        already delivered (and billed) it. DOM-enforced too, see render(). */
     if (state.measuring) return;
     var name = (rawName || '').trim();
-    if (!name) { setState({ unknownMsg: 'Tapez le nom d\'une marque.' }); return; }
+    if (!name) { setState({ unknownMsg: T('Type a brand name.', 'Tapez le nom d\'une marque.') }); return; }
     /* The visitor committed to a real measurement. Brand passed explicitly:
        currentResult still holds the previous audit at this point. */
     track('input_submitted', { brand: name });
@@ -1579,12 +1692,12 @@
           var errTxt = String((d && d.error) || '');
           var brandProblem = /could not infer competitors/i.test(errTxt);
           failMeasure(gen, inf.status === 429
-            ? 'Trop de requêtes, patientez un instant.'
+            ? T('Too many requests, wait a moment.', 'Trop de requêtes, patientez un instant.')
             : brandProblem
-              ? 'Marque introuvable. Vérifiez l\'orthographe ou collez votre site.'
+              ? T('Brand not found. Check the spelling or paste your website.', 'Marque introuvable. Vérifiez l\'orthographe ou collez votre site.')
               : (inf.status >= 500)
-                ? 'L\'instrument est momentanément indisponible. Rien n\'a été mesuré, réessayez dans un instant.'
-                : 'Marque introuvable. Vérifiez l\'orthographe ou collez votre site.');
+                ? T('The instrument is briefly unavailable. Nothing was measured, try again in a moment.', 'L\'instrument est momentanément indisponible. Rien n\'a été mesuré, réessayez dans un instant.')
+                : T('Brand not found. Check the spelling or paste your website.', 'Marque introuvable. Vérifiez l\'orthographe ou collez votre site.'));
           return null;
         }
         return fetch('/api/analyze', {
@@ -1602,8 +1715,8 @@
         var d = ana.body || {};
         if (!ana.ok || d.error || !d.ranking || !d.geo || d.geo.point == null) {
           failMeasure(gen, (ana.status === 429 || d.error === 'quota_ip' || d.error === 'quota_global')
-            ? 'Limite du jour atteinte (3 audits gratuits par jour). Revenez demain ou passez au suivi Pro.'
-            : 'La mesure n\'a pas pu aboutir. Réessayez dans un instant.');
+            ? T('Daily limit reached (3 free audits per day). Come back tomorrow or move to Pro monitoring.', 'Limite du jour atteinte (3 audits gratuits par jour). Revenez demain ou passez au suivi Pro.')
+            : T('The measurement did not complete. Try again in a moment.', 'La mesure n\'a pas pu aboutir. Réessayez dans un instant.'));
           return;
         }
         /* When the live pipeline fails (a SERP or model hiccup), the backend
@@ -1612,7 +1725,7 @@
            measurement: a tool whose whole promise is honesty cannot show
            someone else's numbers under your brand name. */
         if (d.mode !== 'live') {
-          failMeasure(gen, 'La mesure n\'a pas pu aboutir pour ' + name + '. Réessayez dans un instant.');
+          failMeasure(gen, T('The measurement did not complete for ' + name + '. Try again in a moment.', 'La mesure n\'a pas pu aboutir pour ' + name + '. Réessayez dans un instant.'));
           return;
         }
         currentResult = buildResult(d);
@@ -1627,7 +1740,7 @@
         revealT = setTimeout(function () { reveal(gen); }, wait);
       })
       .catch(function () {
-        failMeasure(gen, 'Impossible de joindre l\'instrument. Rien n\'a été mesuré.');
+        failMeasure(gen, T('Cannot reach the instrument. Nothing was measured.', 'Impossible de joindre l\'instrument. Rien n\'a été mesuré.'));
       });
   }
 
@@ -1684,8 +1797,9 @@
   }
   /* compact FR label for a brand's AI standing (used in the named field) */
   function aiLabel(ai) {
-    if (!ai || !ai.present) return 'absent de l\'IA';
-    return (ai.kind === 'primary' ? 'principal' : 'mentionné') + ' n' + ai.rank + ', cité ' + ai.cited + '/' + ai.runs;
+    if (!ai || !ai.present) return T('absent from AI', 'absent de l\'IA');
+    return T(ai.kind === 'primary' ? 'primary' : 'mentioned', ai.kind === 'primary' ? 'principal' : 'mentionné') +
+      T(' #', ' n') + ai.rank + T(', cited ', ', cité ') + ai.cited + '/' + ai.runs;
   }
 
   /* ---------- the free planche: ONE real blind spot, named ----------
@@ -1826,7 +1940,7 @@
 
     var ctx = {
       focusName: focusName, geo: geo, rival: rival, Q: Q, runs: runs,
-      providerLabel: d.ai_provider_label || 'l\'IA',
+      providerLabel: d.ai_provider_label || T('the AI', 'l\'IA'),
       focusAi: focusAi, focusSerp: focusSerp,
       focusPrimaryN: focusPrimaryN, focusPresentN: focusPresentN,
       focusAbsentN: focusAbsentN, focusPrimaryCited: focusPrimaryCited,
@@ -1841,7 +1955,7 @@
       rows: rows, fieldRows: fieldRows, matrix: matrix, owners: owners, serpByQ: serpByQ,
       nQueries: Q, n: n,
       passTotal: n * Q,                        /* n runs x Q queries, one assistant */
-      providerLabel: d.ai_provider_label || 'l\'IA',
+      providerLabel: d.ai_provider_label || T('the AI', 'l\'IA'),
       market: d.market || '',
       notice: d.notice || '',
       tier: tier, evidence: evidence, report: report, geoScore: geoScore, planche: planche,
@@ -1867,30 +1981,54 @@
     if (!c.hasFocusEntry || c.Q === 0) return '';
     var Y = c.Q, plural = Y > 1 ? 's' : '';
     if (c.focusPrimaryN >= 1) {
-      var citedTxt = (c.focusPrimaryCited && c.runs) ? (c.focusPrimaryCited + ' fois sur ' + c.runs) : ('sur ' + c.runs + ' mesures');
+      var citedTxt = T(
+        (c.focusPrimaryCited && c.runs) ? (c.focusPrimaryCited + ' out of ' + c.runs + ' reads') : ('across ' + c.runs + ' reads'),
+        (c.focusPrimaryCited && c.runs) ? (c.focusPrimaryCited + ' fois sur ' + c.runs) : ('sur ' + c.runs + ' mesures')
+      );
       /* "primary" (kind==='primary') is a coverage majority across runs, not a
          rank-1 guarantee (a brand named primary in 2 of 3 runs while ranked
          2nd on average still has kind==='primary'). Never assert "n1" here. */
-      var s = 'En IA, ' + c.focusName + ' est la réponse mise en avant sur ' + c.focusPrimaryN + ' de vos ' + Y + ' question' + plural + ', ' + citedTxt + '.';
-      if (c.ownersPhrase) s += ' Sur Google, ce sont les comparateurs (' + c.ownersPhrase + ') qui tiennent la page. Vous gagnez la réponse IA, pas encore le référencement.';
-      else if (c.focusSerp.best != null) s += ' Sur Google, votre meilleure position est le rang ' + c.focusSerp.best + '. L\'avantage IA est réel, tenez-le dans le temps.';
-      else s += ' L\'avantage IA est réel, tenez-le dans le temps.';
+      var s = T(
+        'In AI, ' + c.focusName + ' is the featured answer on ' + c.focusPrimaryN + ' of your ' + Y + ' question' + plural + ', ' + citedTxt + '.',
+        'En IA, ' + c.focusName + ' est la réponse mise en avant sur ' + c.focusPrimaryN + ' de vos ' + Y + ' question' + plural + ', ' + citedTxt + '.'
+      );
+      if (c.ownersPhrase) s += T(
+        ' On Google, the comparison sites (' + c.ownersPhrase + ') hold the page. You are winning the AI answer, not the search ranking yet.',
+        ' Sur Google, ce sont les comparateurs (' + c.ownersPhrase + ') qui tiennent la page. Vous gagnez la réponse IA, pas encore le référencement.'
+      );
+      else if (c.focusSerp.best != null) s += T(
+        ' On Google, your best position is rank ' + c.focusSerp.best + '. The AI lead is real, hold it over time.',
+        ' Sur Google, votre meilleure position est le rang ' + c.focusSerp.best + '. L\'avantage IA est réel, tenez-le dans le temps.'
+      );
+      else s += T(' The AI lead is real, hold it over time.', ' L\'avantage IA est réel, tenez-le dans le temps.');
       return s;
     }
     if (c.focusPresentN >= 1) {
       var lead = (c.aiLeader && !c.aiLeader.isFocus) ? c.aiLeader.name : '';
       var yr = c.focusAi.present ? c.focusAi.rank : null;
-      var s2 = 'En IA, ' + c.focusName + ' est cité mais jamais en tête' + (yr != null ? (' (au mieux n' + yr + ')') : '') + '.';
-      if (lead) s2 += ' C\'est ' + lead + ' qui est la réponse mise en avant.';
-      if (c.ownersPhrase) s2 += ' Et sur Google, la page reste tenue par les comparateurs (' + c.ownersPhrase + ').';
-      s2 += ' La place de premier choix est à prendre.';
+      var s2 = T(
+        'In AI, ' + c.focusName + ' is cited but never in the lead' + (yr != null ? (' (best is #' + yr + ')') : '') + '.',
+        'En IA, ' + c.focusName + ' est cité mais jamais en tête' + (yr != null ? (' (au mieux n' + yr + ')') : '') + '.'
+      );
+      if (lead) s2 += T(' ' + lead + ' is the featured answer.', ' C\'est ' + lead + ' qui est la réponse mise en avant.');
+      if (c.ownersPhrase) s2 += T(
+        ' And on Google, the page is still held by the comparison sites (' + c.ownersPhrase + ').',
+        ' Et sur Google, la page reste tenue par les comparateurs (' + c.ownersPhrase + ').'
+      );
+      s2 += T(' The top spot is there to take.', ' La place de premier choix est à prendre.');
       return s2;
     }
     var lead2 = (c.aiLeader && c.aiLeader.ai.present && !c.aiLeader.isFocus) ? c.aiLeader.name : '';
-    var s3 = 'En IA, ' + c.focusName + ' n\'apparaît pas sur vos ' + Y + ' question' + plural + '.';
-    if (lead2) s3 += ' C\'est ' + lead2 + ' qui prend la réponse.';
-    if (c.ownersPhrase) s3 += ' Sur Google, ce sont les comparateurs (' + c.ownersPhrase + ') qui tiennent la page.';
-    s3 += ' Vous êtes invisible pour qui pose ces questions à une IA.';
+    var s3 = T(
+      'In AI, ' + c.focusName + ' does not appear on your ' + Y + ' question' + plural + '.',
+      'En IA, ' + c.focusName + ' n\'apparaît pas sur vos ' + Y + ' question' + plural + '.'
+    );
+    if (lead2) s3 += T(' ' + lead2 + ' takes the answer.', ' C\'est ' + lead2 + ' qui prend la réponse.');
+    if (c.ownersPhrase) s3 += T(
+      ' On Google, the comparison sites (' + c.ownersPhrase + ') hold the page.',
+      ' Sur Google, ce sont les comparateurs (' + c.ownersPhrase + ') qui tiennent la page.'
+    );
+    s3 += T(' You are invisible to anyone who asks these questions to an AI.', ' Vous êtes invisible pour qui pose ces questions à une IA.');
     return s3;
   }
 
@@ -1900,9 +2038,16 @@
     if (!geo || geo.point == null) return { title: '', color: INK, text: '', kind: 'none' };
     if (!rival) {
       var p = geo.point, t, txt;
-      if (geo.verdict === 'SINGLE_RUN') { t = 'Première mesure.'; txt = focusName + ' obtient ' + p + ' sur 100 sur cette première lecture.'; }
-      else if (geo.verdict === 'STABLE') { t = 'Position tenue.'; txt = focusName + ' obtient ' + p + ' sur 100, un niveau qui tient à chaque mesure.'; }
-      else { t = 'Position mesurée.'; txt = focusName + ' obtient ' + p + ' sur 100, une visibilité réelle dans les réponses IA.'; }
+      if (geo.verdict === 'SINGLE_RUN') {
+        t = T('First measurement.', 'Première mesure.');
+        txt = T(focusName + ' scores ' + p + ' out of 100 on this first read.', focusName + ' obtient ' + p + ' sur 100 sur cette première lecture.');
+      } else if (geo.verdict === 'STABLE') {
+        t = T('Position holds.', 'Position tenue.');
+        txt = T(focusName + ' scores ' + p + ' out of 100, a level that holds across every measurement.', focusName + ' obtient ' + p + ' sur 100, un niveau qui tient à chaque mesure.');
+      } else {
+        t = T('Position measured.', 'Position mesurée.');
+        txt = T(focusName + ' scores ' + p + ' out of 100, real visibility in AI answers.', focusName + ' obtient ' + p + ' sur 100, une visibilité réelle dans les réponses IA.');
+      }
       return { title: t, color: SAGE, text: txt, kind: 'solo' };
     }
     /* Refuse the head-to-head entirely when either side is unbounded
@@ -1913,31 +2058,48 @@
        the over-claim this product exists to refuse. */
     if (geo.half_width == null || rival.half_width == null) {
       return {
-        title: 'Trop tôt pour comparer.', color: INK, kind: 'unbounded',
-        text: focusName + ' et ' + rival.brand + ' ne sont mesurés qu\'une fois chacun sur cette lecture. On ne départage jamais deux marques sur une seule mesure.'
+        title: T('Too early to compare.', 'Trop tôt pour comparer.'), color: INK, kind: 'unbounded',
+        text: T(
+          focusName + ' and ' + rival.brand + ' are each measured only once on this read. Two brands are never separated on a single measurement.',
+          focusName + ' et ' + rival.brand + ' ne sont mesurés qu\'une fois chacun sur cette lecture. On ne départage jamais deux marques sur une seule mesure.'
+        )
       };
     }
     var gLow = geo.low, gHigh = geo.high, rLow = rival.low, rHigh = rival.high;
     var diff = geo.point - rival.point;
     if (gLow > rHigh) {
       var d1 = Math.max(1, Math.round(diff));
+      var d1s = d1 > 1 ? 's' : '';
       return {
-        title: 'Avance réelle.', color: SAGE, kind: 'ahead',
-        text: focusName + ' devance ' + rival.brand + ' de ' + d1 + ' point' + (d1 > 1 ? 's' : '') + ', une avance nette qui tient à chaque mesure.'
+        title: T('Real lead.', 'Avance réelle.'), color: SAGE, kind: 'ahead',
+        text: T(
+          focusName + ' is ahead of ' + rival.brand + ' by ' + d1 + ' point' + d1s + ', a clear lead that holds across every measurement.',
+          focusName + ' devance ' + rival.brand + ' de ' + d1 + ' point' + d1s + ', une avance nette qui tient à chaque mesure.'
+        )
       };
     }
     if (gHigh < rLow) {
       var d2 = Math.max(1, Math.round(-diff));
+      var d2s = d2 > 1 ? 's' : '';
       return {
-        title: rival.brand + ' devant, écart réel.', color: SIENNA, kind: 'behind',
-        text: rival.brand + ' domine ' + focusName + ' de ' + d2 + ' point' + (d2 > 1 ? 's' : '') + ', un écart large et régulier. Le retard est réel, il faudra le combler.'
+        title: T(rival.brand + ' ahead, real gap.', rival.brand + ' devant, écart réel.'), color: SIENNA, kind: 'behind',
+        text: T(
+          rival.brand + ' leads ' + focusName + ' by ' + d2 + ' point' + d2s + ', a wide and consistent gap. The gap is real, it will need closing.',
+          rival.brand + ' domine ' + focusName + ' de ' + d2 + ' point' + d2s + ', un écart large et régulier. Le retard est réel, il faudra le combler.'
+        )
       };
     }
     var d3 = Math.abs(Math.round(diff));
-    var gap = d3 === 0 ? 'sont à égalité' : ('se tiennent à ' + d3 + ' point' + (d3 > 1 ? 's' : ''));
+    var gap = T(
+      d3 === 0 ? 'are tied' : ('are within ' + d3 + ' point' + (d3 > 1 ? 's' : '')),
+      d3 === 0 ? 'sont à égalité' : ('se tiennent à ' + d3 + ' point' + (d3 > 1 ? 's' : ''))
+    );
     return {
-      title: 'Trop proche pour trancher.', color: INK, kind: 'overlap',
-      text: focusName + ' et ' + rival.brand + ' ' + gap + ', trop proche pour les départager. On préfère le dire que d\'inventer un gagnant.'
+      title: T('Too close to call.', 'Trop proche pour trancher.'), color: INK, kind: 'overlap',
+      text: T(
+        focusName + ' and ' + rival.brand + ' ' + gap + ', too close to call. We would rather say so than invent a winner.',
+        focusName + ' et ' + rival.brand + ' ' + gap + ', trop proche pour les départager. On préfère le dire que d\'inventer un gagnant.'
+      )
     };
   }
 
@@ -1951,38 +2113,50 @@
     var iaBig, iaColor, iaLine;
     if (c.focusPrimaryN >= 1) {
       iaBig = c.focusPrimaryN + ' / ' + Y; iaColor = SAGE;
-      var citedTxt = (c.focusPrimaryCited && c.runs) ? (', ' + c.focusPrimaryCited + ' fois sur ' + c.runs) : '';
-      iaLine = 'Réponse mise en avant sur ' + c.focusPrimaryN + ' de vos ' + Y + ' question' + (Y > 1 ? 's' : '') + citedTxt + '.';
+      var citedTxt = T(
+        (c.focusPrimaryCited && c.runs) ? (', ' + c.focusPrimaryCited + ' out of ' + c.runs) : '',
+        (c.focusPrimaryCited && c.runs) ? (', ' + c.focusPrimaryCited + ' fois sur ' + c.runs) : ''
+      );
+      iaLine = T(
+        'Featured answer on ' + c.focusPrimaryN + ' of your ' + Y + ' question' + (Y > 1 ? 's' : '') + citedTxt + '.',
+        'Réponse mise en avant sur ' + c.focusPrimaryN + ' de vos ' + Y + ' question' + (Y > 1 ? 's' : '') + citedTxt + '.'
+      );
     } else if (c.focusAi.present) {
       iaBig = 'n' + c.focusAi.rank; iaColor = '#B07452';
-      iaLine = 'Cité au mieux au rang ' + c.focusAi.rank + ', jamais en tête, sur ' + c.runs + ' passages.';
+      iaLine = T(
+        'Best cited at rank ' + c.focusAi.rank + ', never in the lead, across ' + c.runs + ' passes.',
+        'Cité au mieux au rang ' + c.focusAi.rank + ', jamais en tête, sur ' + c.runs + ' passages.'
+      );
     } else {
-      iaBig = 'absent'; iaColor = '#B07452';
-      iaLine = 'Aucune citation dans les réponses ' + provider + ' sur vos ' + Y + ' questions.';
+      iaBig = T('absent', 'absent'); iaColor = '#B07452';
+      iaLine = T(
+        'No citation in ' + provider + ' answers across your ' + Y + ' questions.',
+        'Aucune citation dans les réponses ' + provider + ' sur vos ' + Y + ' questions.'
+      );
     }
     var iaRival = '';
     var rl = null;
     for (var i = 0; i < c.fieldRows.length; i++) { if (!c.fieldRows[i].isFocus && c.fieldRows[i].ai.present) { rl = c.fieldRows[i]; break; } }
-    if (rl) iaRival = 'Principal rival IA : ' + rl.name + ' (' + aiLabel(rl.ai) + ').';
+    if (rl) iaRival = T('Main AI rival: ', 'Principal rival IA : ') + rl.name + ' (' + aiLabel(rl.ai) + ').';
 
     /* card 1 - "sur Google" : your best/worst rank + who owns the page */
     var gBig, gColor, gLine;
     if (c.focusSerp.best != null) {
       gBig = 'n' + c.focusSerp.best; gColor = '#C6A15B';
       gLine = (c.focusSerp.worst != null && c.focusSerp.worst !== c.focusSerp.best)
-        ? ('Vous figurez entre le rang ' + c.focusSerp.best + ' et le rang ' + c.focusSerp.worst + '.')
-        : ('Vous figurez au rang ' + c.focusSerp.best + '.');
+        ? T('You show up between rank ' + c.focusSerp.best + ' and rank ' + c.focusSerp.worst + '.', 'Vous figurez entre le rang ' + c.focusSerp.best + ' et le rang ' + c.focusSerp.worst + '.')
+        : T('You show up at rank ' + c.focusSerp.best + '.', 'Vous figurez au rang ' + c.focusSerp.best + '.');
     } else {
-      gBig = 'absent'; gColor = '#B07452';
-      gLine = 'Vous n\'apparaissez pas dans la page Google sur ces questions.';
+      gBig = T('absent', 'absent'); gColor = '#B07452';
+      gLine = T('You do not appear on the Google page for these questions.', 'Vous n\'apparaissez pas dans la page Google sur ces questions.');
     }
     var gOwners;
     if (c.owners.length) {
-      gOwners = 'La page est tenue par ' + c.owners.slice(0, 3).map(function (o) {
-        return shortHost(o.host) + ' (rang ' + o.best_rank + ')';
+      gOwners = T('The page is held by ', 'La page est tenue par ') + c.owners.slice(0, 3).map(function (o) {
+        return shortHost(o.host) + T(' (rank ', ' (rang ') + o.best_rank + ')';
       }).join(', ') + '.';
     } else {
-      gOwners = 'Aucun domaine dominant identifié sur la page.';
+      gOwners = T('No dominant domain identified on the page.', 'Aucun domaine dominant identifié sur la page.');
     }
 
     /* card 2 - "aller plus loin" : transparent paid push, tier aware. A deep
@@ -1996,10 +2170,13 @@
     if (c.tier === 'deep') {
       deepBlock = {
         delivered: true, free: '',
-        adds: 'Dossier sourcé livré ci-dessous : preuve, angles morts nommés et plan d\'action.'
+        adds: T('Sourced dossier delivered below: evidence, named blind spots and the action plan.', 'Dossier sourcé livré ci-dessous : preuve, angles morts nommés et plan d\'action.')
       };
     } else {
-      var free = 'Gratuit : ' + Y + ' question' + (Y > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + c.runs + ' passage' + (c.runs > 1 ? 's' : '') + ' par question.';
+      var free = T(
+        'Free: ' + Y + ' question' + (Y > 1 ? 's' : '') + ', 1 AI (' + provider + '), ' + c.runs + ' pass' + (c.runs > 1 ? 'es' : '') + ' per question.',
+        'Gratuit : ' + Y + ' question' + (Y > 1 ? 's' : '') + ', 1 IA (' + provider + '), ' + c.runs + ' passage' + (c.runs > 1 ? 's' : '') + ' par question.'
+      );
       /* Ground truth (app.py): a Deep Audit measures 5 questions (vs 2 free)
          and 8 passages per question on the SAME assistant (vs c.runs, 3 by
          default) - a tighter confidence interval, never a second assistant.
@@ -2009,10 +2186,19 @@
          reads this as a cross-model check. */
       var adds;
       if (c.planche && c.planche.query) {
-        var holderTxt = c.planche.holder ? (', où ' + c.planche.holder + ' tient la réponse aujourd\'hui') : '';
-        adds = 'Le Deep Audit élargit à 5 questions et 8 passages par question sur ' + provider + ' (contre ' + c.runs + ' aujourd\'hui), un intervalle plus étroit, et nomme vos angles morts, par exemple « ' + c.planche.query + ' »' + holderTxt + '.';
+        var holderTxt = T(
+          c.planche.holder ? (', where ' + c.planche.holder + ' holds the answer today') : '',
+          c.planche.holder ? (', où ' + c.planche.holder + ' tient la réponse aujourd\'hui') : ''
+        );
+        adds = T(
+          'The Deep Audit widens to 5 questions and 8 passes per question on ' + provider + ' (versus ' + c.runs + ' today), a tighter interval, and names your blind spots, for example "' + c.planche.query + '"' + holderTxt + '.',
+          'Le Deep Audit élargit à 5 questions et 8 passages par question sur ' + provider + ' (contre ' + c.runs + ' aujourd\'hui), un intervalle plus étroit, et nomme vos angles morts, par exemple « ' + c.planche.query + ' »' + holderTxt + '.'
+        );
       } else {
-        adds = 'Le Deep Audit élargit à 5 questions et 8 passages par question sur ' + provider + ' (contre ' + c.runs + ' aujourd\'hui), un intervalle plus étroit, et remet un plan d\'action sourcé.';
+        adds = T(
+          'The Deep Audit widens to 5 questions and 8 passes per question on ' + provider + ' (versus ' + c.runs + ' today), a tighter interval, and delivers a sourced action plan.',
+          'Le Deep Audit élargit à 5 questions et 8 passages par question sur ' + provider + ' (contre ' + c.runs + ' aujourd\'hui), un intervalle plus étroit, et remet un plan d\'action sourcé.'
+        );
       }
       deepBlock = { delivered: false, free: free, adds: adds };
     }
@@ -2072,7 +2258,7 @@
              see axisBrandHTML) on a SINGLE_RUN read the backend explicitly
              refused to bound - that would sell a confidence claim that was
              never computed. */
-          rangeText: bounded ? ('entre ' + Math.max(0, r.s - r.m) + ' et ' + Math.min(100, r.s + r.m)) : 'mesure unique, non bornée',
+          rangeText: bounded ? T('between ' + Math.max(0, r.s - r.m) + ' and ' + Math.min(100, r.s + r.m), 'entre ' + Math.max(0, r.s - r.m) + ' et ' + Math.min(100, r.s + r.m)) : T('single measurement, not bounded', 'mesure unique, non bornée'),
           showRange: isFocus && bounded,
           showSingle: isFocus && !bounded,
           leaderTop: isFocus ? 'calc(50% - 22px)' : 'calc(50% + 6px)',
@@ -2108,7 +2294,7 @@
     if (haveResult) {
       focusName = R.focusName;
       fieldRows = R.fieldRows.map(function (f) {
-        var g = f.serpRank != null ? ('Google rang ' + f.serpRank) : 'absent de Google';
+        var g = googleRankLabel(f.serpRank);
         return {
           name: f.name, isFocus: f.isFocus,
           nameColor: f.isFocus ? BRASS : '#C9BEAC',
@@ -2131,7 +2317,7 @@
     var card = haveResult ? R.cards : BLANK_CARD;
     var insight = haveResult ? R.insight : '';
     /* dynamic scale label: shows the zoom window once a result is present */
-    var scaleLabel = haveResult ? ('zoom ' + ZLO + ' à ' + ZHI + ' sur 100') : 'échelle 0 à 100';
+    var scaleLabel = haveResult ? T('zoom ' + ZLO + ' to ' + ZHI + ' of 100', 'zoom ' + ZLO + ' à ' + ZHI + ' sur 100') : T('scale 0 to 100', 'échelle 0 à 100');
 
     /* ---- pass counter: real total once settled, indeterminate while measuring ----
        R.n is the number of AI responses actually read (one API call per run,
@@ -2142,14 +2328,17 @@
        measurement (see buildResult / app.py _cache). */
     var passCounter;
     if (st.settled && haveResult) {
-      passCounter = R.n + ' réponse' + (R.n > 1 ? 's' : '') + ' IA lues sur ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + (R.cached ? ', mesure en cache' : '');
+      passCounter = T(
+        R.n + ' AI response' + (R.n > 1 ? 's' : '') + ' read across ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + (R.cached ? ', cached measurement' : ''),
+        R.n + ' réponse' + (R.n > 1 ? 's' : '') + ' IA lues sur ' + R.nQueries + ' question' + (R.nQueries > 1 ? 's' : '') + (R.cached ? ', mesure en cache' : '')
+      );
     }
-    else if (st.payError) passCounter = 'paiement';
+    else if (st.payError) passCounter = T('payment', 'paiement');
     /* real elapsed seconds (see startMeasureTick), not a fabricated percentage -
        the only progress feedback prefers-reduced-motion users get while the
        breathing 3D cloud is intentionally off for them (see `reduced`). */
-    else if (st.measuring) passCounter = 'mesure en cours' + (st.elapsedS ? (', ' + st.elapsedS + 's') : '');
-    else passCounter = 'en attente';
+    else if (st.measuring) passCounter = T('measuring', 'mesure en cours') + (st.elapsedS ? (', ' + st.elapsedS + 's') : '');
+    else passCounter = T('waiting', 'en attente');
 
     var revealed = st.settled && haveResult;
     var contentSig = revealed ? ('R|' + R.sig) : ((st.measuring ? 'M|' : 'I|') + st.focus);
@@ -2185,7 +2374,7 @@
       passCounter: passCounter, focusName: focusName,
       matrix: haveResult ? R.matrix : [], owners: haveResult ? R.owners : [], serpByQ: haveResult ? R.serpByQ : [],
       market: haveResult ? R.market : '',
-      providerLabel: haveResult ? R.providerLabel : 'l\'IA',
+      providerLabel: haveResult ? R.providerLabel : T('the AI', 'l\'IA'),
       runN: haveResult ? R.n : 0, nQueries: haveResult ? R.nQueries : 0
     };
   }
@@ -2306,7 +2495,7 @@
     var rowCols = 'minmax(74px,1fr) minmax(126px,1.4fr) minmax(84px,0.9fr) 92px';
     var head =
       '<div style="display:grid;grid-template-columns:' + rowCols + ';gap:10px;align-items:baseline;font-size:8.5px;letter-spacing:0.14em;text-transform:uppercase;color:#8A7D68;">' +
-        '<span>marque</span><span>en IA</span><span>sur Google</span><span style="text-align:right;">part de voix</span>' +
+        '<span>' + T('brand', 'marque') + '</span><span>' + T('in AI', 'en IA') + '</span><span>' + T('on Google', 'sur Google') + '</span><span style="text-align:right;">' + T('share of voice', 'part de voix') + '</span>' +
       '</div>';
     var rows = '';
     for (var i = 0; i < v.fieldRows.length; i++) {
@@ -2341,7 +2530,7 @@
     /* card 0 - "en IA": primary on X/Y, consistency, the main AI rival */
     var ia = card.ia;
     cardEls[0].innerHTML =
-      labelRow('en IA') +
+      labelRow(T('in AI', 'en IA')) +
       '<div style="display:flex;align-items:baseline;gap:10px;">' +
         '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(19px,1.9vw,28px);line-height:1;color:' + ia.bigColor + ';font-variant-numeric:tabular-nums;">' + esc(ia.big) + '</span>' +
         '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#A99C88;">' + esc(ia.line) + '</span>' +
@@ -2351,7 +2540,7 @@
     /* card 1 - "sur Google": your best/worst rank + who owns the page */
     var g = card.google;
     cardEls[1].innerHTML =
-      labelRow('sur Google') +
+      labelRow(T('on Google', 'sur Google')) +
       '<div style="display:flex;align-items:baseline;gap:10px;">' +
         '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(19px,1.9vw,28px);line-height:1;color:' + g.bigColor + ';font-variant-numeric:tabular-nums;">' + esc(g.big) + '</span>' +
         '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#A99C88;">' + esc(g.line) + '</span>' +
@@ -2368,12 +2557,12 @@
     var linksHtml = hasContent
       ? '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:2px;">' +
           (dp.delivered ? '' : '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Deep Audit, 79 &euro;</button>') +
-          '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">suivre dans le temps</a>' +
-          '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">règlement de performance</a>' +
+          '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">' + T('track over time', 'suivre dans le temps') + '</a>' +
+          '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">' + T('performance settlement', 'règlement de performance') + '</a>' +
         '</div>'
       : '';
     cardEls[2].innerHTML =
-      labelRow('aller plus loin') +
+      labelRow(T('go further', 'aller plus loin')) +
       (dp.free ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#8A7D68;">' + esc(dp.free) + '</div>' : '') +
       (hasContent ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#C9BEAC;">' + esc(dp.adds) + '</div>' : '') +
       linksHtml +
@@ -2404,19 +2593,19 @@
   function renderIdleCards() {
     cardEls[0].innerHTML =
       labelRow('deep audit') +
-      idleFigureRow('79&euro;', '#E8DFD2', 'une fois, 5 questions et 8 passages sur une IA (contre 2 questions, 3 passages en gratuit).') +
+      idleFigureRow('79&euro;', '#E8DFD2', T('one time, 5 questions and 8 passes on one AI (versus 2 questions, 3 passes free).', 'une fois, 5 questions et 8 passages sur une IA (contre 2 questions, 3 passages en gratuit).')) +
       '<div style="display:flex;align-items:center;gap:10px;margin-top:2px;">' +
-        '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Lancer un Deep Audit</button>' +
+        '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#C6A15B;color:#14100C;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">' + T('Run a Deep Audit', 'Lancer un Deep Audit') + '</button>' +
       '</div>' +
       '<div class="ndl-deep-msg" style="display:none;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#8A7D68;"></div>';
     cardEls[1].innerHTML =
-      labelRow('suivi dans le temps') +
-      idleFigureRow('99&euro;', '#E8DFD2', 'par mois, dès. Le même score borné, mesuré chaque semaine, une alerte seulement quand ça sort du bruit.') +
-      '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">voir les trois offres</a>';
+      labelRow(T('monitoring over time', 'suivi dans le temps')) +
+      idleFigureRow('99&euro;', '#E8DFD2', T('per month, from. The same bounded score, measured every week, one alert only when it clears the noise.', 'par mois, dès. Le même score borné, mesuré chaque semaine, une alerte seulement quand ça sort du bruit.')) +
+      '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">' + T('see the three plans', 'voir les trois offres') + '</a>';
     cardEls[2].innerHTML =
-      labelRow('règlement de performance') +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#C9BEAC;">Jamais un pourcentage. Nadelio arbitre les contrats entre marques et agences, un gain ne compte que hors de la bande à 95 pour cent.</div>' +
-      '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">comment ça marche</a>';
+      labelRow(T('performance settlement', 'règlement de performance')) +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#C9BEAC;">' + T('Never a percentage. Nadelio referees contracts between brands and agencies, a gain counts only when it clears the 95 percent band.', 'Jamais un pourcentage. Nadelio arbitre les contrats entre marques et agences, un gain ne compte que hors de la bande à 95 pour cent.') + '</div>' +
+      '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding-bottom:1px;">' + T('how it works', 'comment ça marche') + '</a>';
     var cta = cardEls[0].querySelector('.ndl-deep-cta');
     if (cta) cta.addEventListener('click', startCheckout);
   }
@@ -2428,17 +2617,17 @@
   function renderErrorCards(v) {
     cardEls[0].innerHTML =
       labelRow('zero simulation') +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#C9BEAC;">Une mesure qui échoue ne devient jamais un chiffre inventé. Rien n\'a été mesuré cette fois.</div>';
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#C9BEAC;">' + T('A measurement that fails never becomes a made up number. Nothing was measured this time.', 'Une mesure qui échoue ne devient jamais un chiffre inventé. Rien n\'a été mesuré cette fois.') + '</div>';
     var retryTxt = state.payError
-      ? 'Votre paiement est en sécurité. Le détail et le bouton Réessayer sont juste au-dessus.'
-      : (v.unknownMsg || 'Vérifiez le nom, ou collez le site officiel de la marque, puis relancez.');
+      ? T('Your payment is safe. The detail and the Try again button are right above.', 'Votre paiement est en sécurité. Le détail et le bouton Réessayer sont juste au-dessus.')
+      : (v.unknownMsg || T('Check the name, or paste the brand official website, then run it again.', 'Vérifiez le nom, ou collez le site officiel de la marque, puis relancez.'));
     cardEls[1].innerHTML =
-      labelRow('pour continuer') +
+      labelRow(T('to continue', 'pour continuer')) +
       '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#C9BEAC;">' + esc(retryTxt) + '</div>';
     cardEls[2].innerHTML =
-      labelRow('comment on mesure') +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#C9BEAC;">Sources, passages et méthode, sans filtre.</div>' +
-      '<button class="ndl-transp" id="ndl-dock-transp-btn" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding:0 0 2px;align-self:flex-start;margin-top:2px;">transparence &rsaquo;</button>';
+      labelRow(T('how we measure', 'comment on mesure')) +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#C9BEAC;">' + T('Sources, passes and method, unfiltered.', 'Sources, passages et méthode, sans filtre.') + '</div>' +
+      '<button class="ndl-transp" id="ndl-dock-transp-btn" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#A99C88;border-bottom:1px solid #4A4234;padding:0 0 2px;align-self:flex-start;margin-top:2px;">' + T('transparency ›', 'transparence ›') + '</button>';
     var btn = cardEls[2].querySelector('#ndl-dock-transp-btn');
     if (btn) btn.addEventListener('click', openDrawer);
   }
@@ -2628,6 +2817,11 @@
 
   /* ============================ bootstrap ============================ */
   function init() {
+    /* Localize the static chrome (or leave it, if the visitor is French - the
+       markup is FR authored) before anything else runs, so there is no visible
+       flash of the wrong language for an English visitor. Same detection rule
+       as index.html: PAGE_FR from pageLang() at file load time. */
+    applyChromeLang();
     /* computed here (not just in componentDidMount, which runs AFTER the
        first render() below) so the very first dock swap - the load-time
        idle-cards fade-in - already knows whether to respect reduced motion.
