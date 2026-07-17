@@ -3,6 +3,7 @@ import datetime
 import hashlib
 import hmac
 import html as _html
+import http.client
 import json
 import logging
 import math
@@ -12,6 +13,7 @@ import random
 import re
 import secrets
 import socket
+import ssl
 import tempfile
 import threading
 import time
@@ -414,6 +416,19 @@ def set_security_headers(response):
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     # HSTS: only effective over HTTPS (Render enforces HTTPS)
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    # /v2.html and /index.html are reachable verbatim through Flask's raw
+    # static handler (static_folder="web", static_url_path=""), bypassing the
+    # asset-version stamping and no-cache header that ONLY the "/" and "/v2"
+    # routes apply (see _load_v2_html / _ASSET_VERSION above). Left alone, a
+    # visitor landing on either literal URL keeps Flask's default conditional
+    # (ETag) caching, so across a deploy they can pair a FRESH cached html with
+    # a STALE cached nadelio.js, or the reverse, exactly the silent pairing
+    # mismatch the stamping was added to prevent. Force the same no-cache
+    # policy on these two raw paths so a browser always revalidates instead of
+    # risking a mismatched pair. This does not touch caching for any other
+    # static asset (fonts, vendor scripts, /assets/*).
+    if request.path in ("/v2.html", "/index.html"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
 
 
@@ -844,17 +859,21 @@ def _looks_like_domain(brand):
     return bool(_DOMAIN_RE.match(s)) and bool(_TLD_RE.search(s))
 
 
-def _is_public_host(host):
-    """Resolve `host` and return True only if EVERY resolved address is a
-    public, routable IP. Refuses private / loopback / link-local / reserved /
-    multicast addresses — the core SSRF defense."""
+def _resolve_public_ips(host):
+    """Resolve `host` and return the list of resolved addresses if EVERY one is
+    a public, routable IP (never private / loopback / link-local / reserved /
+    multicast, so never a cloud metadata endpoint or an internal service
+    either), else None. Shared by _is_public_host (a plain yes/no check) and
+    _resolve_pinned_ip (the SSRF fetch, which also needs the actual address to
+    pin the connection to, see below)."""
     if not host:
-        return False
+        return None
     try:
         infos = socket.getaddrinfo(host, None)
     except (socket.gaierror, UnicodeError, OSError):
-        return False
+        return None
     import ipaddress
+    ips = []
     for info in infos:
         addr = info[4][0]
         # Strip a scope id if present (e.g. fe80::1%eth0).
@@ -862,11 +881,101 @@ def _is_public_host(host):
         try:
             ip = ipaddress.ip_address(addr)
         except ValueError:
-            return False
+            return None
         if (ip.is_private or ip.is_loopback or ip.is_link_local
                 or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
-            return False
-    return True
+            return None
+        ips.append(addr)
+    return ips or None
+
+
+def _is_public_host(host):
+    """True only if EVERY address `host` resolves to is public/routable. This
+    alone is NOT sufficient to safely fetch a URL: DNS can answer differently a
+    few milliseconds later (DNS rebinding), see _resolve_pinned_ip and
+    _fetch_page_meta, which pin the exact validated address instead of trusting
+    the hostname a second time."""
+    return _resolve_public_ips(host) is not None
+
+
+def _resolve_pinned_ip(host):
+    """One public IP to physically connect to for `host`, resolved and vetted
+    ONCE, immediately before use. This is the actual DNS-rebinding fix: without
+    it, _is_public_host validates the hostname, and then the HTTP client
+    resolves the SAME hostname AGAIN when it opens the socket (urllib/http.client
+    do their own getaddrinfo at connect() time), a 0-TTL DNS record can legally
+    answer PUBLIC on the first lookup and INTERNAL/link-local/metadata on the
+    second, and nothing in a plain urlopen() call would notice. Pinning means
+    the address that was checked is the address that gets contacted (see
+    _PinnedHTTPConnection / _PinnedHTTPSConnection)."""
+    ips = _resolve_public_ips(host)
+    return ips[0] if ips else None
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection that connects to a pre-resolved, pre-vetted IP instead of
+    letting http.client re-resolve self.host at connect() time (see
+    _resolve_pinned_ip for why that second, unchecked resolution is the actual
+    SSRF hole)."""
+
+    def __init__(self, host, pinned_ip, **kwargs):
+        super().__init__(host, **kwargs)
+        self._pinned_ip = pinned_ip
+
+    def connect(self):
+        self.sock = socket.create_connection(
+            (self._pinned_ip, self.port), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self._tunnel()
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """Same DNS-rebinding fix for HTTPS. TLS certificate validation still runs
+    against the ORIGINAL hostname (server_hostname=self.host below), so this
+    only removes the second, unchecked DNS lookup, it never weakens
+    certificate validation."""
+
+    def __init__(self, host, pinned_ip, **kwargs):
+        super().__init__(host, **kwargs)
+        self._pinned_ip = pinned_ip
+
+    def connect(self):
+        sock = socket.create_connection(
+            (self._pinned_ip, self.port), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+            sock = self.sock
+        context = self._context or ssl.create_default_context()
+        server_hostname = self._tunnel_host or self.host
+        self.sock = context.wrap_socket(sock, server_hostname=server_hostname)
+
+
+class _PinnedHTTPHandler(urllib.request.HTTPHandler):
+    """Opener handler that hands every plain-HTTP connection the one IP address
+    already vetted for this hop, instead of letting http.client re-resolve the
+    hostname."""
+
+    def __init__(self, pinned_ip):
+        urllib.request.HTTPHandler.__init__(self)
+        self._pinned_ip = pinned_ip
+
+    def http_open(self, req):
+        return self.do_open(
+            lambda host, **kw: _PinnedHTTPConnection(host, self._pinned_ip, **kw), req)
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    """HTTPS counterpart of _PinnedHTTPHandler."""
+
+    def __init__(self, pinned_ip):
+        urllib.request.HTTPSHandler.__init__(self)
+        self._pinned_ip = pinned_ip
+
+    def https_open(self, req):
+        return self.do_open(
+            lambda host, **kw: _PinnedHTTPSConnection(host, self._pinned_ip, **kw),
+            req, context=self._context)
 
 
 def _safe_url(raw):
@@ -904,7 +1013,8 @@ def _fetch_page_meta(url):
         final_url = current
         for _ in range(4):  # initial + up to 3 redirects
             host = urllib.parse.urlparse(current).hostname
-            if not host or not _is_public_host(host):
+            pinned_ip = _resolve_pinned_ip(host)
+            if not host or not pinned_ip:
                 return {}
             req = urllib.request.Request(
                 current,
@@ -912,8 +1022,13 @@ def _fetch_page_meta(url):
                 method="GET",
             )
             try:
-                # No auto-redirect: we validate each hop ourselves.
-                opener = urllib.request.build_opener(_NoRedirect)
+                # No auto-redirect: we validate AND pin each hop ourselves.
+                # Pinning (rather than just checking _is_public_host and then
+                # letting urllib re-resolve the hostname at open()) is what
+                # actually closes the DNS-rebinding TOCTOU: the IP just vetted
+                # above is the IP this connection physically contacts.
+                opener = urllib.request.build_opener(
+                    _NoRedirect, _PinnedHTTPHandler(pinned_ip), _PinnedHTTPSHandler(pinned_ip))
                 resp = opener.open(req, timeout=_RECON_TIMEOUT)
             except urllib.error.HTTPError as he:
                 if he.code in (301, 302, 303, 307, 308):
@@ -995,11 +1110,16 @@ def _recon(brand, serp_key):
     later real recon). Non-empty results (real evidence) are always cached and
     reused so the same brand is never re-paid."""
     key = (brand or "").strip().lower()
-    if key and key in _recon_cache:
-        cached = _recon_cache[key]
+    if key:
+        # _recon_cache is shared, in-memory, module-level state: guard every
+        # access with _live_lock (the app's single module lock, see its
+        # definition above) so a threaded gunicorn worker can never interleave
+        # a read with a concurrent write/resize of the dict.
+        with _live_lock:
+            cached = _recon_cache.get(key)
         # Serve the cache unless it is an empty result AND we could now do better
         # with a real SERP key (i.e. the empty entry came from a no-SERP preview).
-        if cached.get("evidence") or not serp_key:
+        if cached is not None and (cached.get("evidence") or not serp_key):
             return cached
 
     result = {"evidence": [], "official_url": ""}
@@ -1060,8 +1180,10 @@ def _recon(brand, serp_key):
     # Cache real evidence always; cache an empty result ONLY if a serp_key was
     # available (a genuine "nothing found even with SERP" miss). An empty result
     # from a no-SERP call is NOT cached, so it can't block a later real recon.
-    if key and len(_recon_cache) < _RECON_CACHE_MAX and (result["evidence"] or serp_key):
-        _recon_cache[key] = result
+    if key and (result["evidence"] or serp_key):
+        with _live_lock:
+            if len(_recon_cache) < _RECON_CACHE_MAX:
+                _recon_cache[key] = result
     return result
 
 
@@ -1715,7 +1837,9 @@ def _build_remediation(ranking, queries, identified_as, evidence, brand, llm_key
 # quota, or errors for any reason, the audit response is UNAFFECTED. History is
 # never in the critical path of what the user paid for or waited for.
 #
-# Table (create once in the D1 console):
+# Table: self-created by _log_audit_history on first write (CREATE TABLE IF
+# NOT EXISTS, same pattern as every other D1 table below), no manual D1
+# console step required:
 #   CREATE TABLE IF NOT EXISTS audit_history (
 #     id INTEGER PRIMARY KEY AUTOINCREMENT,
 #     ts TEXT NOT NULL, brand TEXT NOT NULL, sector TEXT, market TEXT,
@@ -1765,6 +1889,20 @@ def _log_audit_history(result):
         you = next((r for r in (result.get("ranking") or [])
                     if r.get("brand", "").lower() == str(result.get("brand", "")).lower()), None)
         geo = result.get("geo") or {}
+        # Self-create on first write, exactly like every OTHER D1 table in this
+        # file (subscribers, shares, funnel_events, pageviews, ui_events,
+        # analyze_failures). audit_history used to be the one table that
+        # required a manual "create once in the D1 console" step (see the
+        # comment above); if that step was ever skipped, or the table dropped,
+        # every write here failed silently and both the longitudinal moat and
+        # every paid-monitoring swing/drop alert were permanently dead with no
+        # visible signal. CREATE TABLE IF NOT EXISTS makes that impossible.
+        _d1_query(
+            "CREATE TABLE IF NOT EXISTS audit_history ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, brand TEXT NOT NULL, "
+            "sector TEXT, market TEXT, query_language TEXT, tier TEXT, geo_point INTEGER, "
+            "geo_half_width INTEGER, geo_verdict TEXT, n_runs INTEGER, share_of_voice REAL, "
+            "ai_avg_rank REAL, n_queries INTEGER, n_brands INTEGER)")
         _d1_query(
             "INSERT INTO audit_history (ts, brand, sector, market, query_language, "
             "tier, geo_point, geo_half_width, geo_verdict, n_runs, share_of_voice, "
@@ -1899,6 +2037,106 @@ def _send_email(to_email, subject, html):
     except Exception:
         logger.warning("alert email failed for %s (non-fatal)", to_email, exc_info=True)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Live-audit failure observability (owner alerting).
+#
+# Every /api/analyze fallback to SAMPLE (missing API key, could-not-infer, or
+# a live exception) means a visitor received a demo dossier of a different
+# brand instead of a real measurement, and the whole product's premise
+# (bounded, honest, third-party measurement) silently broke for that request.
+# Before this, the only trace was a logger.exception line nobody was watching
+# (exactly the 17 July 2026 BrightData/Anthropic outage ran unnoticed for a
+# while). This makes each failure durable (D1, survives a restart, gated on
+# _history_enabled so it is a clean no-op when D1 is unconfigured), countable
+# (surfaced on /analytics), and ALERTS the owner by email, throttled hard so a
+# sustained outage sends one summary email per hour, never one per request.
+#
+# Thread-safety: reuses _live_lock, the app's single module lock for shared
+# in-memory state (see its definition above), instead of adding a second lock,
+# so there is exactly one lock to reason about once the deploy moves to a
+# threaded gunicorn worker (see the render.yaml note near the bottom).
+# ---------------------------------------------------------------------------
+OWNER_ALERT_EMAIL = os.environ.get("OWNER_ALERT_EMAIL", "adam.chabbi94@gmail.com")
+ALERT_THROTTLE_SECONDS = 3600  # at most one failure-summary email per hour
+
+_recent_analyze_failures = []  # [(unix_ts, brand, reason), ...] last hour, guarded by _live_lock
+_last_failure_alert_ts = 0.0   # unix ts the last alert email was actually sent, guarded by _live_lock
+
+
+def _store_analyze_failure(row):
+    """Fire-and-forget D1 write of one live-audit failure. Runs on a daemon
+    thread, exactly like _store_pageview / _store_ui_event below, so an
+    outage that is ALREADY the reason for the fallback never gets slower
+    because of this. Creates its table on first write. Never raises."""
+    try:
+        _d1_query(
+            "CREATE TABLE IF NOT EXISTS analyze_failures ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, brand TEXT, reason TEXT)")
+        _d1_query(
+            "INSERT INTO analyze_failures (ts, brand, reason) VALUES (?,?,?)",
+            list(row))
+    except Exception:
+        logger.warning("analyze failure D1 write failed (non-fatal)", exc_info=True)
+
+
+def _send_failure_alert_email(brand, reason, count_last_hour):
+    """Best-effort, throttled owner alert. Runs on a daemon thread. French
+    copy, correct accents, straight ASCII apostrophes, no dashes."""
+    try:
+        subject = "Nadelio : echecs d'audit en direct (%d en une heure)" % count_last_hour
+        html = (
+            "<p>%d echec(s) d'audit en direct au cours de la derniere heure. "
+            "Chaque visiteur touche a recu l'echantillon de demonstration a la place "
+            "d'une vraie mesure, sans le savoir.</p>"
+            "<p>Dernier echec : marque <b>%s</b>, raison <b>%s</b>.</p>"
+            "<p>Verifie les fournisseurs (BrightData, Anthropic) et les logs Render "
+            "des que possible.</p>"
+        ) % (count_last_hour, _html.escape(str(brand) or "(inconnue)"),
+             _html.escape(str(reason)))
+        _send_email(OWNER_ALERT_EMAIL, subject, html)
+    except Exception:
+        logger.warning("failure alert email failed (non-fatal)", exc_info=True)
+
+
+def _record_analyze_failure(brand, reason):
+    """Called from EVERY /api/analyze path that falls back to SAMPLE (missing
+    key, could-not-infer, or a live exception). Logs at error level with the
+    brand and the underlying reason, durably counts the failure (D1,
+    best-effort), and fires a throttled owner alert email summarizing the
+    recent failures (at most one email per hour, never one per request).
+    Never raises, never slows the response it is called from: the D1 write
+    and the email are both dispatched on daemon threads."""
+    global _last_failure_alert_ts
+    logger.error("ANALYZE FAILURE brand=%r reason=%s", brand, reason)
+    now = time.time()
+    send_alert = False
+    count_last_hour = 0
+    with _live_lock:
+        _recent_analyze_failures.append((now, str(brand)[:200], str(reason)[:200]))
+        cutoff = now - ALERT_THROTTLE_SECONDS
+        while _recent_analyze_failures and _recent_analyze_failures[0][0] < cutoff:
+            _recent_analyze_failures.pop(0)
+        count_last_hour = len(_recent_analyze_failures)
+        if now - _last_failure_alert_ts >= ALERT_THROTTLE_SECONDS:
+            _last_failure_alert_ts = now
+            send_alert = True
+
+    if _history_enabled():
+        threading.Thread(
+            target=_store_analyze_failure,
+            args=((datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                   str(brand)[:200], str(reason)[:200]),),
+            daemon=True,
+        ).start()
+
+    if send_alert:
+        threading.Thread(
+            target=_send_failure_alert_email,
+            args=(brand, reason, count_last_hour),
+            daemon=True,
+        ).start()
 
 
 def _list_active_subscriptions(secret_key):
@@ -2680,7 +2918,8 @@ def api_infer():
     # only, bypassing the guess entirely.
     if official:
         if force_web:
-            _recon_cache.pop((brand or "").strip().lower(), None)
+            with _live_lock:
+                _recon_cache.pop((brand or "").strip().lower(), None)
         recon = {"evidence": [], "official_url": ""}
         meta = _fetch_page_meta(official)
         if meta:
@@ -2699,7 +2938,8 @@ def api_infer():
                 recon["evidence"].append(ev)
     else:
         if force_web:
-            _recon_cache.pop((brand or "").strip().lower(), None)
+            with _live_lock:
+                _recon_cache.pop((brand or "").strip().lower(), None)
         recon = _recon(recon_target, recon_allowed_key)
 
     try:
@@ -2769,6 +3009,7 @@ def api_analyze():
     serp_key = os.environ.get("BRIGHTDATA_API_KEY")
     llm_key = os.environ.get("ANTHROPIC_API_KEY")
     if not serp_key or not llm_key:
+        _record_analyze_failure(brand, "missing_api_key")
         return jsonify(dict(SAMPLE, notice="Server missing an API key - showing sample analysis."))
 
     # PAID GATE — resolved only now, after we know this is a valid live request
@@ -2849,12 +3090,20 @@ def api_analyze():
     # with no notion of depth — serving a cached 2-query result would short-
     # change them. Treated like a custom run (no read, no write).
     cache_key = brand.lower()
-    if not use_custom_strategy and not paid_ok and cache_key in _cache:
+    # Single locked block: the membership check, the read, and the counter
+    # rollback all happen under _live_lock so a threaded worker can never read
+    # a cache entry that a concurrent write is still mutating, nor race the
+    # quota counters against another request's own rollback/claim.
+    cached_hit = None
+    if not use_custom_strategy and not paid_ok:
         with _live_lock:
-            _live_runs -= 1  # cached hit doesn't consume a slot
-            if ip in _ip_runs and _ip_runs[ip][0] == today:
-                _ip_runs[ip][1] = max(0, _ip_runs[ip][1] - 1)
-        return jsonify(_sign_share(dict(_cache[cache_key], cached=True)))
+            if cache_key in _cache:
+                cached_hit = dict(_cache[cache_key], cached=True)
+                _live_runs -= 1  # cached hit doesn't consume a slot
+                if ip in _ip_runs and _ip_runs[ip][0] == today:
+                    _ip_runs[ip][1] = max(0, _ip_runs[ip][1] - 1)
+    if cached_hit is not None:
+        return jsonify(_sign_share(cached_hit))
 
     # BUG-2 FIX: a FREE live run legitimately consumes one daily slot ONLY when it
     # actually produces a real analysis. The +=1 above provisionally claimed the
@@ -2951,6 +3200,7 @@ def api_analyze():
             sector = strat.get("sector", "")
         if not competitors or not queries:
             _rollback_paid_unlock("could not infer competitors/queries")
+            _record_analyze_failure(brand, "could_not_infer_competitors")
             return jsonify(dict(SAMPLE, notice="Could not infer competitors - showing sample analysis."))
         # Geolocate the SERP to the resolved market: a forced "fr" or an inferred
         # French market both map to google.fr in French. Falls back to US/English
@@ -3100,6 +3350,7 @@ def api_analyze():
         return jsonify(_sign_share(result))
     except Exception as e:
         logger.exception("Live analysis failed for brand='%s'", brand)
+        _record_analyze_failure(brand, "exception: %s" % type(e).__name__)
         # A paid deep audit that failed before producing a result should NOT
         # burn the customer's single-use unlock — release the claimed session so
         # they can retry.
@@ -4305,6 +4556,20 @@ def _analytics_top(select_expr, table, since, limit=10):
     return [(str(r.get("k") or ""), int(r.get("n") or 0)) for r in rows]
 
 
+def _analytics_failures(since):
+    """(count in the last 24h, last failure row or None) from analyze_failures.
+    Wrapped through _analytics_q so a missing table (no failure ever recorded
+    yet, since the table self-creates on first write) or any D1 error just
+    reads as zero/none instead of breaking the dashboard."""
+    count_rows = _analytics_q(
+        "SELECT COUNT(*) AS n FROM analyze_failures WHERE ts >= ?", [since])
+    count = int((count_rows[0].get("n") if count_rows else 0) or 0)
+    last_rows = _analytics_q(
+        "SELECT ts, brand, reason FROM analyze_failures ORDER BY ts DESC LIMIT 1")
+    last = last_rows[0] if last_rows else None
+    return count, last
+
+
 def _render_analytics_dashboard():
     """Self-contained dark dashboard HTML. CSS inline, no external asset, no JS
     required. Warm dark instrument world consistent with the site."""
@@ -4390,6 +4655,25 @@ def _render_analytics_dashboard():
             + kpi("30 jours", v_30, u_30)
             + "</div>")
 
+    # Audit-failure observability (missing key, could-not-infer, or a live
+    # exception falling back to the demo SAMPLE, see _record_analyze_failure).
+    # This is the one number on this dashboard that matters more than
+    # traffic: it is how the owner finds out the product is silently failing
+    # instead of reading Render stderr no one watches.
+    fail_count_24h, last_fail = _analytics_failures(since_days(1))
+    if last_fail:
+        last_fail_txt = ("Dernier : marque " + e(str(last_fail.get("brand") or "(inconnue)"))
+                          + ", raison " + e(str(last_fail.get("reason") or ""))
+                          + ", " + e(str(last_fail.get("ts") or ""))[:19].replace("T", " "))
+    else:
+        last_fail_txt = "Aucun echec enregistre."
+    failures_html = ("<div class=\"card\"><h2>Echecs d'audit</h2>"
+                      "<p><span class=\"big num\" style=\"font-size:28px\">"
+                      + str(fail_count_24h) + "</span> "
+                      "<span class=\"sub\">echec(s) sur 24h, retombes sur l'echantillon de "
+                      "demonstration au lieu d'une vraie mesure.</span></p>"
+                      "<p class=\"sub\" style=\"margin-top:8px\">" + last_fail_txt + "</p></div>")
+
     # 14-day timeline (bar height proportional to page views per day).
     tl = {}
     for r in _analytics_q(
@@ -4472,6 +4756,7 @@ def _render_analytics_dashboard():
             + "<p class=\"sub\">Mesure first-party, cookieless, RGPD-clean. "
               "Visiteur anonyme a rotation quotidienne, aucune IP brute stockee.</p>"
             + kpis
+            + failures_html
             + timeline
             + top_html
             + funnel_html

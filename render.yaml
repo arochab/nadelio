@@ -7,7 +7,26 @@ services:
     # A live audit runs several sequential SERP + AI calls and takes ~50s (more
     # for a Deep Audit), well past gunicorn's 30s default which was killing the
     # worker mid-audit and returning 500. Give it real headroom.
-    startCommand: gunicorn app:app --timeout 300
+    #
+    # IMPORTANT, READ BEFORE CHANGING: this startCommand line is NOT the live
+    # source of truth. Render reads the Start Command from the dashboard field
+    # (Settings > Start Command) on this service, and that dashboard value
+    # silently wins over whatever is committed here once it has been set by
+    # hand once. The code below (threaded worker, all shared in-memory state
+    # made thread-safe under _live_lock) is ready for it, but the owner must
+    # ALSO paste this exact command into the Render dashboard's Start Command
+    # field for it to actually take effect:
+    #
+    #   gunicorn app:app --worker-class gthread --threads 8 --timeout 300
+    #
+    # Do NOT raise --workers above 1: every in-memory quota/cache/consumed-
+    # session counter in app.py is per-process, so more worker PROCESSES would
+    # silently multiply the free-tier daily quota, the paid-session anti-
+    # replay set, and the analysis cache instead of sharing one copy. Threads
+    # share a single process and therefore a single copy of that state, which
+    # is exactly why the code was made thread-safe (one lock, _live_lock)
+    # rather than switched to multiple workers.
+    startCommand: gunicorn app:app --worker-class gthread --threads 8 --timeout 300
     envVars:
       - key: BRIGHTDATA_API_KEY
         sync: false
@@ -70,4 +89,13 @@ services:
       - key: STRIPE_PRICE_MONITOR_PRO
         sync: false
       - key: STRIPE_PRICE_MONITOR_AGENCY
+        sync: false
+      # Live-audit failure alerting (see _record_analyze_failure in app.py).
+      # RESEND_API_KEY, ALERT_FROM_EMAIL and CRON_SECRET are already set
+      # directly in the Render dashboard (not synced through this file, same
+      # as the other secrets above) and are reused unchanged for this alert.
+      # OWNER_ALERT_EMAIL is the address the throttled failure-summary email
+      # goes to; it defaults to adam.chabbi94@gmail.com in code, override here
+      # only if that should change.
+      - key: OWNER_ALERT_EMAIL
         sync: false

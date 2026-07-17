@@ -7,6 +7,39 @@ name: Weekly monitoring run
 #
 # Runs Monday 06:00 UTC (07:00 or 08:00 Paris time depending on DST) — early
 # enough that a subscriber's weekly alert, if any, lands before their workday.
+#
+# ===========================================================================
+# READ THIS: GitHub silently DISABLES a `schedule` trigger after 60 days with
+# no commit activity on the repository. This product's own stated goal is
+# "minimal maintenance, passive income" (i.e. Adam is EXPECTED not to touch
+# this repo for long stretches), which is directly at odds with a schedule
+# cron as the only trigger: paid monitoring subscriptions keep billing while
+# no audit runs and no swing/drop alert can ever fire, with zero failure
+# notification (a disabled workflow does not run, so it cannot fail-notify).
+#
+# This CANNOT be fully fixed from inside this repo: there is no workflow
+# setting that exempts a `schedule` trigger from GitHub's 60-day auto-disable,
+# and adding a dummy commit periodically is not a real fix (it would require
+# exactly the maintenance the product is designed to avoid).
+#
+# The workflow_dispatch trigger below lets Adam re-enable/run this by hand
+# from the Actions tab, but that is a manual fallback, not a fix.
+#
+# THE ROBUST FIX (free, no paid infra, must be set up ONCE by the owner
+# outside this repo): point an independent, external cron directly at the
+# endpoint, so paid monitoring never depends on GitHub Actions staying
+# enabled at all. Any free scheduler that supports a scheduled POST with a
+# custom header works (e.g. https://cron-job.org's free tier: POST job type,
+# custom header, no card required). Configure it to call, once a week:
+#
+#   POST https://www.nadelio.com/api/cron/monitor
+#   Header: X-Cron-Secret: <the exact CRON_SECRET value set in the Render
+#           dashboard's environment variables for this service>
+#
+# With that external cron in place, this GitHub Actions schedule becomes a
+# nice-to-have second trigger, not the single point of failure for the only
+# thing paying monitoring subscribers get.
+# ===========================================================================
 on:
   schedule:
     - cron: "0 6 * * 1"
