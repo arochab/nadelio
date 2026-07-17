@@ -682,13 +682,23 @@
       } else {
         aiTxt = T('cited #', 'cité n') + cell.aiRank; aiBg = 'rgba(147,160,110,0.28)'; aiFg = '#D8CDBB';
       }
-      var citeTxt = (cell.aiRank != null && cell.runs) ? (cell.cited + '/' + cell.runs) : '';
+      /* The count under the chip must match the chip's own claim: a
+         "primary" chip is followed by how many of the N runs it was
+         actually PRIMARY (never the presence count, which can be higher and
+         would silently overstate primacy); a "cited" chip is followed by the
+         honest presence count, which is exactly what "cited" means. */
+      var subTxt = '';
+      if (cell.aiRank != null && cell.runs) {
+        subTxt = cell.aiKind === 'primary'
+          ? T('primary ', 'principal ') + (cell.primaryHits != null ? cell.primaryHits : cell.cited) + '/' + cell.runs
+          : T('cited ', 'cité ') + cell.cited + '/' + cell.runs;
+      }
       var gTxt = cell.serpRank != null ? (T('Google #', 'Google n') + cell.serpRank) : T('Google absent', 'Google absent');
       var focusEdge = cell.isFocus ? 'border-top:2px solid ' + BRASS + ';' : 'border-top:2px solid transparent;';
       return '<div style="display:flex;flex-direction:column;gap:3px;padding:5px;background:#231D18;' + focusEdge + 'box-sizing:border-box;">' +
         '<div style="font-size:9.5px;line-height:1.2;text-align:center;padding:3px 4px;background:' + aiBg + ';border:1px solid ' + aiBorder + ';box-sizing:border-box;color:' + aiFg + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(aiTxt) + '</div>' +
         '<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;color:#958772;font-variant-numeric:tabular-nums;">' +
-          '<span>' + (citeTxt ? (T('cited ', 'cité ') + citeTxt) : '&nbsp;') + '</span><span>' + esc(gTxt) + '</span>' +
+          '<span>' + (subTxt ? esc(subTxt) : '&nbsp;') + '</span><span>' + esc(gTxt) + '</span>' +
         '</div>' +
       '</div>';
     }
@@ -740,8 +750,9 @@
     var assistantTxt = provider + modelSuffix;
     var marketTxt = v.market ? esc(v.market) : '';
     var floorSuffix = marketTxt ? (' (' + marketTxt + ')') : '';
-    var footnoteTxt =
-      (measuredDate ? T('Measured on ' + measuredDate + '. ', 'Mesuré le ' + measuredDate + '. ') : '') +
+    var footnoteTxt = !matrix.length
+      ? T('Run a measurement to see the exact method, question by question.', 'Lancez une mesure pour voir la méthode exacte, question par question.')
+      : (measuredDate ? T('Measured on ' + measuredDate + '. ', 'Mesuré le ' + measuredDate + '. ') : '') +
       T(
         matrix.length + ' question' + s1 + ' on Google' + floorSuffix + ' and 1 AI (' + assistantTxt + '), ' + runN + (runN > 1 ? ' passes' : ' pass') + ' per question, ' + matrix.length + ' Google read' + s1 + '. Each cell shows the brand real rank, with no hidden aggregation. The Deep Audit widens this same read to 5 questions and 8 passes per question, still on ' + provider + '.',
         matrix.length + ' question' + s1 + ' sur Google' + floorSuffix + ' et 1 IA (' + assistantTxt + '), ' + runN + ' passage' + rs1 + ' par question, ' + matrix.length + ' lecture' + s1 + ' de Google. Chaque case montre le rang réel de la marque, sans agrégation cachée. Le Deep Audit élargit cette même lecture à 5 questions et 8 passages par question, toujours sur ' + provider + '.'
@@ -1568,7 +1579,7 @@
       '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #362E24;">' +
         '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#A39784;">' + T('keep measuring', 'continuer la mesure') + '</div>' +
         '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#C9BEAC;border-bottom:1px solid #564D3C;align-self:flex-start;">' + T('Track this brand, from 99&euro;/month', 'Suivre cette marque, dès 99&euro;/mois') + '</a>' +
-        '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#B2A694;border-bottom:1px solid #564D3C;align-self:flex-start;">' + T('Performance settlement', 'Réglement de performance') + '</a>' +
+        '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#B2A694;border-bottom:1px solid #564D3C;align-self:flex-start;">' + T('Performance settlement', 'Règlement de performance') + '</a>' +
       '</div>';
 
     var identityHtml = '';
@@ -2278,9 +2289,11 @@
         if (ana == null || gen !== measureGen) return;
         var d = ana.body || {};
         if (!ana.ok || d.error || !d.ranking || !d.geo || d.geo.point == null) {
-          failMeasure(gen, (ana.status === 429 || d.error === 'quota_ip' || d.error === 'quota_global')
-            ? T('Daily limit reached (3 free audits per day). Come back tomorrow or move to Pro monitoring.', 'Limite du jour atteinte (3 audits gratuits par jour). Revenez demain ou passez au suivi Pro.')
-            : T('The measurement did not complete. Try again in a moment.', 'La mesure n\'a pas pu aboutir. Réessayez dans un instant.'));
+          failMeasure(gen, (d.error === 'quota_ip')
+            ? T('Daily limit reached (3 free audits per day, per visitor). Come back tomorrow or move to Pro monitoring.', 'Limite du jour atteinte (3 audits gratuits par jour, par visiteur). Revenez demain ou passez au suivi Pro.')
+            : (d.error === 'quota_global' || ana.status === 429)
+              ? T('Today\'s free measurements are used up for everyone. Come back tomorrow, or move to Pro monitoring.', 'Les mesures gratuites du jour sont épuisées pour tout le monde. Revenez demain, ou passez au suivi Pro.')
+              : T('The measurement did not complete. Try again in a moment.', 'La mesure n\'a pas pu aboutir. Réessayez dans un instant.'));
           return;
         }
         /* When the live pipeline fails (a SERP or model hiccup), the backend
@@ -2345,10 +2358,18 @@
     if (!best) return { present: false, primaryN: 0, presentN: 0, runs: anyRuns };
     var runs = best.runs || 0;
     var cons = best.consistency != null ? best.consistency : 0;
+    var presenceCited = runs ? Math.round(cons / 100 * runs) : 0;
+    /* "cited" = presence count (how many runs the brand showed up in this
+       query at all). "primaryCited" = the true count of runs it was the
+       PRIMARY answer (backend's primary_hits). These are DIFFERENT numbers
+       and must never be swapped: presence overstates primacy. Falls back to
+       the presence count only for an old cached response shaped before
+       primary_hits shipped. */
+    var primaryCited = best.primary_hits != null ? best.primary_hits : presenceCited;
     return {
       present: true, rank: Math.round(best.rank),
       kind: best.kind === 'primary' ? 'primary' : 'mentioned',
-      consistency: cons, runs: runs, cited: runs ? Math.round(cons / 100 * runs) : 0,
+      consistency: cons, runs: runs, cited: presenceCited, primaryCited: primaryCited,
       primaryN: primaryN, presentN: presentN
     };
   }
@@ -2367,8 +2388,16 @@
   /* compact FR label for a brand's AI standing (used in the named field) */
   function aiLabel(ai) {
     if (!ai || !ai.present) return T('absent from AI', 'absent de l\'IA');
-    return T(ai.kind === 'primary' ? 'primary' : 'mentioned', ai.kind === 'primary' ? 'principal' : 'mentionné') +
-      T(' #', ' n') + ai.rank + T(', cited ', ', cité ') + ai.cited + '/' + ai.runs;
+    /* The count after the rank must match the claim before it: "primary"
+       gets the PRIMARY-run count (ai.primaryCited), never the presence
+       count, so a brand shown as "principal" never carries a bigger number
+       than the runs it was actually the primary answer in. "mentioned" gets
+       the honest presence count (ai.cited), which is what it always meant. */
+    if (ai.kind === 'primary') {
+      return T('primary', 'principal') + T(' #', ' n') + ai.rank +
+        T(', primary ', ', principal ') + ai.primaryCited + '/' + ai.runs;
+    }
+    return T('mentioned', 'mentionné') + T(' #', ' n') + ai.rank + T(', cited ', ', cité ') + ai.cited + '/' + ai.runs;
   }
 
   /* ---------- the free planche: ONE real blind spot, named ----------
@@ -2471,7 +2500,11 @@
             name: nm, isFocus: String(nm).toLowerCase() === lc,
             aiRank: ai && ai.rank != null ? Math.round(ai.rank) : null,
             aiKind: ai ? (ai.kind === 'primary' ? 'primary' : 'mentioned') : null,
+            /* cited = presence count for this query (how many of the runs it
+               showed up at all); primaryHits = how many of the runs it was
+               specifically the PRIMARY answer. Never use one for the other. */
             cited: (cons != null && runs) ? Math.round(cons / 100 * runs) : null,
+            primaryHits: ai && ai.primary_hits != null ? ai.primary_hits : null,
             runs: runs || 0,
             serpRank: serp && serp.rank != null ? serp.rank : null
           };
@@ -2497,9 +2530,17 @@
       focusPresentN += 1;
       if (c.kind === 'primary') {
         focusPrimaryN += 1;
+        /* focusPrimaryCited must be the count of runs the brand was
+           specifically the PRIMARY answer (backend's primary_hits), never
+           the presence count derived from consistency - presence can be
+           higher than primacy (present in 3/3 runs but primary in only 2),
+           and this number feeds every "featured answer" / "réponse mise en
+           avant" claim, so it must never overstate how often the brand
+           actually held the primary spot. Falls back to the presence count
+           only for an old cached response shaped before primary_hits shipped. */
         var rr = c.runs || 0, cc = c.consistency != null ? c.consistency : 0;
-        var cited = rr ? Math.round(cc / 100 * rr) : 0;
-        if (focusPrimaryCited === null || cited < focusPrimaryCited) focusPrimaryCited = cited;
+        var ph = c.primary_hits != null ? c.primary_hits : (rr ? Math.round(cc / 100 * rr) : 0);
+        if (focusPrimaryCited === null || ph < focusPrimaryCited) focusPrimaryCited = ph;
       }
     });
     var focusAi = aiSummary(focusEntry, queries);
@@ -2557,9 +2598,13 @@
     if (!c.hasFocusEntry || c.Q === 0) return '';
     var Y = c.Q, plural = Y > 1 ? 's' : '';
     if (c.focusPrimaryN >= 1) {
+      /* citedTxt states the PRIMACY count (how many reads it was actually the
+         primary answer), never the presence count, since it is attached to
+         a "featured answer" claim - the word "primary"/"principal" makes the
+         number's meaning explicit so it can never be misread as presence. */
       var citedTxt = T(
-        (c.focusPrimaryCited && c.runs) ? (c.focusPrimaryCited + ' out of ' + c.runs + ' reads') : ('across ' + c.runs + ' reads'),
-        (c.focusPrimaryCited && c.runs) ? (c.focusPrimaryCited + ' fois sur ' + c.runs) : ('sur ' + c.runs + ' mesures')
+        (c.focusPrimaryCited && c.runs) ? ('primary in ' + c.focusPrimaryCited + ' of ' + c.runs + ' reads') : ('across ' + c.runs + ' reads'),
+        (c.focusPrimaryCited && c.runs) ? ('principal sur ' + c.focusPrimaryCited + ' des ' + c.runs + ' mesures') : ('sur ' + c.runs + ' mesures')
       );
       /* "primary" (kind==='primary') is a coverage majority across runs, not a
          rank-1 guarantee (a brand named primary in 2 of 3 runs while ranked
@@ -2689,9 +2734,13 @@
     var iaBig, iaColor, iaLine;
     if (c.focusPrimaryN >= 1) {
       iaBig = c.focusPrimaryN + ' / ' + Y; iaColor = SAGE;
+      /* Same rule as buildInsight: this trailing count is the PRIMACY count,
+         not presence, so it is worded "primary in .../principal sur ..." and
+         can never be read as "cited/present X of Y" while the headline says
+         "featured answer". */
       var citedTxt = T(
-        (c.focusPrimaryCited && c.runs) ? (', ' + c.focusPrimaryCited + ' out of ' + c.runs) : '',
-        (c.focusPrimaryCited && c.runs) ? (', ' + c.focusPrimaryCited + ' fois sur ' + c.runs) : ''
+        (c.focusPrimaryCited && c.runs) ? (', primary in ' + c.focusPrimaryCited + ' of ' + c.runs) : '',
+        (c.focusPrimaryCited && c.runs) ? (', principal sur ' + c.focusPrimaryCited + ' des ' + c.runs) : ''
       );
       iaLine = T(
         'Featured answer on ' + c.focusPrimaryN + ' of your ' + Y + ' question' + (Y > 1 ? 's' : '') + citedTxt + '.',
@@ -2816,8 +2865,8 @@
       stale = typedNorm !== measuredNorm;
       if (stale) {
         staleMsg = typedTrim
-          ? T('Result for ' + R.focusName + '. Run the measurement for ' + typedTrim + '.', 'Resultat pour ' + R.focusName + '. Lancez la mesure pour ' + typedTrim + '.')
-          : T('Result for ' + R.focusName + '. Type a brand to measure it.', 'Resultat pour ' + R.focusName + '. Tapez une marque pour la mesurer.');
+          ? T('Result for ' + R.focusName + '. Run the measurement for ' + typedTrim + '.', 'Résultat pour ' + R.focusName + '. Lancez la mesure pour ' + typedTrim + '.')
+          : T('Result for ' + R.focusName + '. Type a brand to measure it.', 'Résultat pour ' + R.focusName + '. Tapez une marque pour la mesurer.');
       }
     }
 
@@ -3208,7 +3257,7 @@
       '<div class="ndl-deep-msg" style="display:none;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#958772;"></div>';
     cardEls[1].innerHTML =
       labelRow(T('monitoring over time', 'suivi dans le temps')) +
-      idleFigureRow('99&euro;', '#E8DFD2', T('per month, from. The same bounded score, measured every week, one alert only when it clears the noise.', 'par mois, dès. Le même score borné, mesuré chaque semaine, une alerte seulement quand ça sort du bruit.')) +
+      idleFigureRow(T('From 99', 'Dès 99') + '&euro;', '#E8DFD2', T('per month. The same bounded score, measured every week, one alert only when it clears the noise.', 'par mois. Le même score borné, mesuré chaque semaine, une alerte seulement quand ça sort du bruit.')) +
       '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#B2A694;border-bottom:1px solid #564D3C;padding-bottom:1px;">' + T('see the three plans', 'voir les trois offres') + '</a>';
     cardEls[2].innerHTML =
       labelRow(T('performance settlement', 'règlement de performance')) +

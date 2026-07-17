@@ -1546,16 +1546,28 @@ def _run_ai_visibility_once(brands, queries, api_key, provider_id=DEFAULT_AI_PRO
     if parsed is None:
         return {}
 
+    def _norm_q(s):
+        return re.sub(r"\s+", " ", str(s).strip().lower()).rstrip("?.!")
+
+    norm_to_real = {_norm_q(real_q): real_q for real_q in queries}
+
     ai_map = {}
-    for entry in parsed.get("results", []):
+    for i, entry in enumerate(parsed.get("results", [])):
         q = entry.get("query", "")
-        matched_q = None
-        for real_q in queries:
-            if real_q.lower() in q.lower() or q.lower() in real_q.lower():
-                matched_q = real_q
-                break
-        if not matched_q and queries:
-            matched_q = queries[0]  # fallback
+        # Exact match on normalized text first: two queries where one is a
+        # substring of the other (e.g. "notion" / "notion alternative") must
+        # never collide, so this is equality on the FULL normalized string,
+        # never containment. If the model paraphrased the question instead of
+        # echoing it, fall back to positional order (the prompt numbers the
+        # questions 1..n and the model answers in that order), which is still
+        # unambiguous and never mismatches on shared substrings.
+        matched_q = norm_to_real.get(_norm_q(q))
+        if matched_q is None and i < len(queries):
+            matched_q = queries[i]
+        if matched_q is None and queries:
+            matched_q = queries[0]  # last-resort fallback
+        if matched_q is None or matched_q in ai_map:
+            continue  # never overwrite an already-filled query
         mentioned = entry.get("mentioned", [])
         ai_map[matched_q] = {}
         for pos, item in enumerate(mentioned, 1):
@@ -1613,8 +1625,19 @@ def check_ai_visibility(brands, queries, api_key, n_runs=None, return_runs=False
                 continue
             ai_map[q][b] = {
                 "rank": round(sum(s["ranks"]) / len(s["ranks"]), 1),
+                # "consistency" is a PRESENCE rate (how many of n_ok runs the
+                # brand appeared in at all, primary or merely mentioned) -
+                # never rename/repurpose this as a primacy count.
                 "consistency": round(100 * s["hits"] / n_ok),
+                # "kind" is the aggregate majority across runs (primary iff
+                # primary in at least half the runs it appeared in).
                 "kind": "primary" if s["primary_hits"] * 2 >= s["hits"] else "mentioned",
+                # "primary_hits" is the true PRIMACY count: how many of the
+                # n_ok runs the brand was specifically the PRIMARY answer (not
+                # merely present/mentioned). The frontend must attach THIS
+                # count, never "consistency", to any "featured answer" /
+                # "primary" / "réponse mise en avant" claim.
+                "primary_hits": s["primary_hits"],
                 "runs": n_ok,
             }
     return (ai_map, runs) if return_runs else ai_map
@@ -2160,7 +2183,10 @@ def _list_active_subscriptions(secret_key):
     return out
 
 
-def _verdict_word(v):
+def _verdict_word(v, fr=False):
+    if fr:
+        return {"STABLE": "stable", "MODERE": "modéré", "VOLATIL": "volatil",
+                "SINGLE_RUN": "non borné"}.get(v, v or "")
     return {"STABLE": "stable", "MODERE": "moderate", "VOLATIL": "volatile",
             "SINGLE_RUN": "unbounded"}.get(v, v or "")
 
@@ -2215,15 +2241,30 @@ def api_cron_monitor():
                 except RuntimeError:
                     pass
                 if customer_email:
-                    reason = "turned volatile" if swing else "dropped %s points" % round(before["point"] - point)
-                    _send_email(
-                        customer_email,
-                        "Nadelio alert: %s %s" % (brand, reason),
-                        "<p><b>%s</b> just %s.</p><p>New score: <b>%s</b>%s, verdict <b>%s</b>.</p>"
-                        "<p><a href=\"%s/brand/%s\">See the full read</a></p>" % (
-                            _html.escape(brand), _html.escape(reason), point,
-                            ("&plusmn;" + str(geo.get("half_width"))) if geo.get("half_width") is not None else "",
-                            _verdict_word(verdict), SITE_URL, _brand_key(brand)))
+                    # The weekly alert is the only thing a paying subscriber
+                    # receives between audits, so it must arrive in the
+                    # language the audit itself was measured in (the same
+                    # signal the /r/<token> share page already uses), not
+                    # hardcoded English.
+                    fr = _share_is_fr(result)
+                    half_width_txt = ("&plusmn;" + str(geo.get("half_width"))) if geo.get("half_width") is not None else ""
+                    if fr:
+                        reason = "vient de devenir volatil" if swing else ("a perdu %s points" % round(before["point"] - point))
+                        subject = "Alerte Nadelio : %s %s" % (brand, reason)
+                        body = (
+                            "<p><b>%s</b> %s.</p><p>Nouveau score : <b>%s</b>%s, verdict <b>%s</b>.</p>"
+                            "<p><a href=\"%s/brand/%s\">Voir la lecture complète</a></p>" % (
+                                _html.escape(brand), _html.escape(reason), point, half_width_txt,
+                                _verdict_word(verdict, fr=True), SITE_URL, _brand_key(brand)))
+                    else:
+                        reason = "turned volatile" if swing else "dropped %s points" % round(before["point"] - point)
+                        subject = "Nadelio alert: %s %s" % (brand, reason)
+                        body = (
+                            "<p><b>%s</b> just %s.</p><p>New score: <b>%s</b>%s, verdict <b>%s</b>.</p>"
+                            "<p><a href=\"%s/brand/%s\">See the full read</a></p>" % (
+                                _html.escape(brand), _html.escape(reason), point, half_width_txt,
+                                _verdict_word(verdict), SITE_URL, _brand_key(brand)))
+                    _send_email(customer_email, subject, body)
                     alerted += 1
         except Exception:
             errors += 1
@@ -3687,7 +3728,13 @@ def _share_is_fr(result):
 
 def _share_ai_summary(entry, queries):
     """Best (lowest) AI rank for one brand across the measured questions, with
-    its cited/runs count. Same reduction as nadelio.js's aiSummary()."""
+    its cited/runs count. Same reduction as nadelio.js's aiSummary().
+
+    "cited" is a PRESENCE count (how many runs the brand showed up in this
+    query at all); "primary_cited" is the true count of runs it was
+    specifically the PRIMARY answer (best.primary_hits). These are different
+    numbers and must never be swapped: presence can be higher than primacy,
+    so a "primary" label must never be followed by the presence count."""
     best = None
     for q in queries:
         c = (entry.get("ai_cells") or {}).get(q) if entry else None
@@ -3700,9 +3747,11 @@ def _share_ai_summary(entry, queries):
     runs = best.get("runs") or 0
     cons = best.get("consistency") or 0
     cited = round(cons / 100.0 * runs) if runs else 0
+    primary_hits = best.get("primary_hits")
+    primary_cited = primary_hits if primary_hits is not None else cited
     return {"present": True, "rank": round(best["rank"]),
             "kind": "primary" if best.get("kind") == "primary" else "mentioned",
-            "runs": runs, "cited": cited}
+            "runs": runs, "cited": cited, "primary_cited": primary_cited}
 
 
 def _share_serp_best(entry, queries):
@@ -3719,8 +3768,13 @@ def _share_serp_best(entry, queries):
 def _share_ai_label(ai, fr):
     if not ai.get("present"):
         return "absent de l'IA" if fr else "absent from AI"
-    kind = ("principal" if fr else "primary") if ai.get("kind") == "primary" else ("mentionné" if fr else "mentioned")
-    return kind + (" n" if fr else " #") + str(ai["rank"]) + (", cité " if fr else ", cited ") + str(ai.get("cited", 0)) + "/" + str(ai.get("runs", 0))
+    is_primary = ai.get("kind") == "primary"
+    kind = ("principal" if fr else "primary") if is_primary else ("mentionné" if fr else "mentioned")
+    # The count after the rank must match the claim before it: "primary" gets
+    # the PRIMARY-run count, never the presence count (see _share_ai_summary).
+    count = ai.get("primary_cited", ai.get("cited", 0)) if is_primary else ai.get("cited", 0)
+    count_word = (", principal " if fr else ", primary ") if is_primary else (", cité " if fr else ", cited ")
+    return kind + (" n" if fr else " #") + str(ai["rank"]) + count_word + str(count) + "/" + str(ai.get("runs", 0))
 
 
 def _share_google_label(serp_rank, fr):
