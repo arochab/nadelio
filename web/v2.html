@@ -12,7 +12,7 @@
 <!-- Canonical points at the homepage this page is about to become. While it is
      still served at /v2.html it also keeps the staging URL out of the index. -->
 <link rel="canonical" href="https://www.nadelio.com/">
-<meta name="theme-color" content="#111827">
+<meta name="theme-color" content="#ffffff">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.nadelio.com/">
 <meta property="og:title" content="Nadelio, count how many times AI cites your brand">
@@ -24,184 +24,57 @@
 <meta name="twitter:image" content="https://www.nadelio.com/demo-nadelio.gif">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230E1512'/><circle cx='16' cy='16' r='9' fill='none' stroke='%234FD1A5' stroke-width='2.4'/><circle cx='16' cy='16' r='3.2' fill='%238B6FE8'/></svg>">
 <link rel="stylesheet" href="/assets/v2/nadelio.css">
+<link rel="stylesheet" href="/assets/editorial.css">
 </head>
-<body>
-<div data-screen-label="Nadelio v5" data-nadelio-root class="ndl-screen" style="position:relative;height:100dvh;overflow-y:auto;overflow-x:hidden;background:#111827;color:#eef3fa;font-family:'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace;">
-  <div data-nadelio-main class="ndl-shell" style="position:relative;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:clamp(12px,1.8vw,26px);box-sizing:border-box;gap:clamp(12px,1.8vh,20px);">
-    <!-- opacity raised from 0.62 (v5, ground #14100C) to 0.74: additive
-         blending adds particle colour on top of whatever sits behind the
-         canvas, so lifting the page ground one notch lighter (see the v6
-         palette note atop nadelio.js) otherwise washes the cloud out -
-         verified against a screenshot at the new ground. -->
-    <div id="ndl-mount" style="position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0.74;"></div>
-    <header style="position:relative;z-index:2;display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-bottom:1px solid #2c3b52;padding-bottom:11px;">
-      <a class="ndl-wordmark" href="/" aria-label="Nadelio">nadelio<span aria-hidden="true">.</span></a>
-      <div style="display:flex;align-items:baseline;gap:14px;white-space:nowrap;flex:none;">
-        <span class="ndl-hbadge" data-i18n="badge" style="font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#adbad0;">Google + IA, mesure bornée</span>
-        <button id="ndl-transp-btn" class="ndl-transp" data-i18n="transp" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#becadb;border-bottom:1px solid #53647e;padding:0 0 2px;">transparence &rsaquo;</button>
+<body class="ndl-page">
+<a class="skip-link" href="#ndl-input" data-i18n="skipAudit">Aller au formulaire</a>
+<div data-nadelio-root class="ndl-screen">
+<div data-nadelio-main class="ndl-shell">
+  <header class="site-header">
+    <a class="brand-mark" href="/" aria-label="Nadelio">nadelio<span>.</span></a>
+    <nav><a id="ndl-nav-example" href="/demo.html?lang=fr" data-i18n="navExample">Voir un exemple</a><a href="/methodology" data-i18n="footHow">Notre méthode</a><a id="ndl-lang" href="/?lang=en" lang="en">English</a></nav>
+  </header>
+  <section class="home-hero" data-nadelio-body>
+    <div data-nadelio-console class="ndl-left">
+      <h1 data-i18n="h1">Découvrez où les IA citent votre marque.</h1>
+      <p class="home-lead" data-i18n="intro">Découvrez votre place dans les réponses IA et sur Google. Comparez les marques, relisez les réponses et repérez ce qu’il faut approfondir.</p>
+      <div class="audit-entry">
+        <div class="ndl-brand-field"><label for="ndl-input" data-i18n="measureCue">Marque à auditer</label><input id="ndl-input" class="ndl-input" value="Qonto" autocomplete="off" spellcheck="false" aria-label="Marque à auditer" data-i18n-aria="inputAria"></div>
+        <div class="ndl-audit-actions"><button class="ndl-run" data-i18n="runBtn">Lancer un audit</button><span class="quick-label" data-i18n="or">ou auditer</span></div>
       </div>
-    </header>
-    <div data-nadelio-body class="ndl-grid" style="position:relative;z-index:1;display:grid;grid-template-columns:minmax(288px,0.82fr) minmax(0,1.55fr);gap:clamp(18px,2.6vw,40px);min-height:0;">
-      <div data-nadelio-console class="ndl-left" style="display:flex;flex-direction:column;justify-content:center;gap:clamp(16px,3vh,34px);min-width:0;min-height:0;border-right:1px solid #2c3b52;padding-right:clamp(16px,2vw,34px);">
-        <div style="display:flex;flex-direction:column;gap:clamp(8px,1.4vh,13px);">
-          <div data-i18n="eyebrow" style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#adbad0;">audit de visibilité IA</div>
-          <h1 data-i18n="h1" style="margin:0;font-family:'Archivo Black','Arial Black',sans-serif;font-weight:400;font-size:min(3.6vh,clamp(19px,1.9vw,28px));line-height:1.12;letter-spacing:-0.01em;color:#eef3fa;text-wrap:balance;">Découvrez où vos clients trouvent votre marque.</h1>
-          <p class="ndl-intro" data-i18n="intro">Comparez votre présence sur Google et dans les réponses IA, à partir de questions posées par vos clients.</p>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:12px;">
-          <div class="ndl-brand-field">
-            <label for="ndl-input" data-i18n="measureCue">Marque à auditer</label>
-            <!-- No autofocus attribute: nadelio.js focuses this itself (inputRef/
-                 componentDidMount), and only after its own listeners are wired
-                 does that first focus fire, so the "select on first focus" fix
-                 (init(), select-on-pristine-focus) always gets to run before
-                 any keystroke - typing over the "Qonto" prefill replaces it
-                 instead of appending ("QontoNotion"). -->
-            <input class="ndl-input" id="ndl-input" value="Qonto" spellcheck="false" autocomplete="off" aria-label="nom de la marque à mesurer" data-i18n-aria="inputAria" style="flex:1;min-width:80px;background:transparent;border:none;border-bottom:2px solid #3d4d68;font-family:'IBM Plex Mono',Menlo,monospace;font-weight:500;font-size:min(4.6vh,clamp(24px,2.6vw,38px));color:#eef3fa;caret-color:#91baff;padding:0 0 6px 0;transition:border-color 0.25s cubic-bezier(0.2,0.8,0.2,1);">
-          </div>
-          <div class="ndl-audit-actions">
-            <button class="ndl-run" data-i18n="runBtn" style="cursor:pointer;border:none;background:#eef3fa;color:#111827;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.11em;text-transform:uppercase;padding:10px 16px;">Lancer un audit</button>
-            <span data-i18n="or" style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#9baac1;">ou auditer</span>
-          </div>
-          <a id="ndl-demo-link" class="ndl-demo-link" href="/demo.html?lang=fr"><span data-i18n="demoLink">Explorer un exemple interactif</span><span class="ndl-demo-note" data-i18n="demoNote">Marques fictives · Aucun audit lancé</span></a>
-          <div id="ndl-unknown" role="alert" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;color:#9baac1;display:none;"></div>
-          <!-- Identity + market control (homonym moat: Payflows->Stripe,
-               Toucan->Duolingo; a French SMB measured on a US market is
-               meaningless). Collapsed by default so the single-input console
-               stays uncluttered; reachable at any time, and force-opened by
-               JS (renderIdentity) the moment a settled result comes back
-               low-confidence - see nadelio.js. Forwards to /api/infer, whose
-               resolved market/official_url then flow into /api/analyze
-               exactly like the rest of the free flow (see runReal). -->
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <button id="ndl-idtoggle" type="button" class="ndl-transp" data-i18n="idToggle" aria-expanded="false" aria-controls="ndl-idpanel" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#9baac1;border-bottom:1px solid #3d4d68;padding:0 0 2px;width:fit-content;">identité &amp; marché &rsaquo;</button>
-            <div id="ndl-idpanel" style="display:none;flex-direction:column;gap:8px;">
-              <input id="ndl-officialurl" class="ndl-idfield" type="text" spellcheck="false" autocomplete="off" placeholder="Site officiel (verrouille la bonne entreprise)" data-i18n-ph="idUrlPh" aria-label="site officiel de la marque" data-i18n-aria="idUrlAria">
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <label for="ndl-market" data-i18n="idMarketLabel" style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#adbad0;">marché</label>
-                <select id="ndl-market" class="ndl-idfield" aria-label="marché mesuré" data-i18n-aria="idMarketAria">
-                  <option value="" data-i18n="idMarketAuto">Auto</option>
-                  <option value="fr">France</option>
-                  <option value="us">US / Global</option>
-                  <option value="dach">DACH</option>
-                  <option value="uk">UK</option>
-                </select>
-                <button id="ndl-idupdate" type="button" data-i18n="idUpdateBtn" style="cursor:pointer;border:1px solid #53647e;background:none;color:#becadb;font-family:inherit;font-size:10.5px;padding:7px 11px;">Mettre à jour</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:9px;border-top:1px solid #2c3b52;padding-top:clamp(12px,1.8vh,18px);">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
-            <span data-i18n="howWeMeasure" style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">comment on mesure</span>
-            <span id="ndl-passcounter" style="font-family:'IBM Plex Mono',Menlo,monospace;font-size:10px;letter-spacing:0.06em;color:#91baff;font-variant-numeric:tabular-nums;">en attente</span>
-          </div>
-          <div data-i18n="howWeMeasureBody" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#becadb;max-width:44ch;">On pose vos questions à Google et à une IA, plusieurs fois chacune. Les réponses varient un peu, alors on donne une fourchette plutôt qu'un chiffre exact.</div>
-        </div>
-      </div>
-      <div class="ndl-right" style="position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;gap:clamp(8px,1.4vh,16px);">
-        <section id="ndl-preview" class="ndl-preview" aria-labelledby="ndl-preview-title">
-          <p class="ndl-preview-label" data-i18n="previewLabel">Du résultat à la décision</p>
-          <h2 id="ndl-preview-title" data-i18n="previewTitle">Une réponse. Ses preuves. La suite.</h2>
-          <ol>
-            <li><strong data-i18n="previewQuestions">Les questions de vos clients</strong><span data-i18n="previewQuestionsBody">Identifiez les besoins pour lesquels votre marque apparaît, ou reste absente.</span></li>
-            <li><strong data-i18n="previewEvidence">Les réponses derrière le score</strong><span data-i18n="previewEvidenceBody">Relisez les observations et leurs variations avant de conclure.</span></li>
-            <li><strong data-i18n="previewAction">Un point précis à approfondir</strong><span data-i18n="previewActionBody">Choisissez ce qu’il faut vérifier, sans confondre une absence avec sa cause.</span></li>
-          </ol>
-        </section>
-        <div style="position:relative;flex:none;min-height:clamp(72px,13vh,120px);display:flex;flex-direction:column;justify-content:center;">
-          <div id="ndl-overlay" style="opacity:1;transition:opacity 0.3s;position:absolute;left:0;right:0;display:flex;flex-direction:column;gap:6px;pointer-events:none;">
-            <div data-i18n="cloudConverges" style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#adbad0;">le nuage converge</div>
-            <div style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:15px;color:#becadb;"><span data-i18n="readingInProgress">lecture en cours</span><span style="animation:dotpulse 1s infinite;">.</span><span style="animation:dotpulse 1s 0.25s infinite;">.</span><span style="animation:dotpulse 1s 0.5s infinite;">.</span></div>
-          </div>
-          <!-- Verdict is the CLIMAX: it is retimed (0.28s delay, 0.56s duration
-               -> finishes ~840ms after reveal) to unmistakably land AFTER the
-               dock cards, the field and the insight (see nadelio.js render()),
-               never before or alongside them. role=status/aria-live scoped to
-               JUST this block (was the whole two-column body, re-announcing on
-               every unrelated render) and aria-hidden toggled by JS while the
-               h2 is empty (idle/measuring), so AT never reads a blank heading. -->
-          <div id="ndl-verdict" role="status" aria-live="polite" aria-hidden="true" style="opacity:0;transform:translateY(14px);transition:opacity 0.56s cubic-bezier(0.2,0.8,0.2,1) 0.28s,transform 0.56s cubic-bezier(0.2,0.8,0.2,1) 0.28s;display:flex;flex-direction:column;gap:clamp(5px,1vh,10px);">
-            <!-- The measured brand rides right next to "verdict", always: a
-                 screenshot of this block alone must never be ambiguous about
-                 whose numbers these are (see the Yoyaku defect fix). -->
-            <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;">
-              <span data-i18n="verdictLabel" style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#adbad0;">verdict</span>
-              <span id="ndl-verdict-brand" style="font-family:'IBM Plex Mono',Menlo,monospace;font-weight:600;font-size:10px;letter-spacing:0.03em;color:#111827;background:#91baff;padding:2px 8px;line-height:1.5;font-variant-numeric:tabular-nums;"></span>
-            </div>
-            <!-- Who and which market was actually measured, plain, next to the
-                 verdict (see renderIdentity in nadelio.js). Never dimmed while
-                 empty (display:none) - hard requirement: a visitor must always
-                 be able to tell WHO and WHICH MARKET the numbers are for, and
-                 correct it via the identité & marché panel above. -->
-            <div id="ndl-identity" style="display:none;flex-direction:column;gap:6px;"></div>
-            <!-- Live staleness hint: shown only when the typed brand no longer
-                 matches the measured one (see renderVals() `stale` + render()
-                 in nadelio.js). Deliberately NOT inside a dimmed wrapper, so it
-                 stays fully legible while the verdict/insight/field/axis dim
-                 around it. -->
-            <div id="ndl-verdict-stale" role="note" style="display:none;font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#adbad0;max-width:52ch;"></div>
-            <h2 id="ndl-verdict-title" style="margin:0;font-family:'Archivo Black','Arial Black',sans-serif;font-weight:400;font-size:min(6.4vh,clamp(28px,4.6vw,62px));line-height:0.98;letter-spacing:-0.02em;color:#8bd8bf;text-wrap:balance;"></h2>
-            <div id="ndl-verdict-text" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:min(2.3vh,clamp(12.5px,1.1vw,15px));line-height:1.5;color:#cbd5e3;font-variant-numeric:tabular-nums;max-width:52ch;"></div>
-            <!-- Share / free-export affordances: populated by nadelio.js only
-                 once a real result has settled (renderShareAffordance), empty
-                 and invisible otherwise. Dims with the rest of the verdict
-                 block while stale (see the staleDim wiring in render()), and
-                 deliberately sits here rather than in the dock so it never
-                 competes with the Deep Audit CTA in the "aller plus loin"
-                 card. -->
-            <div id="ndl-share" style="margin-top:2px;"></div>
-          </div>
-        </div>
-        <!-- display:none -> flex and opacity 0 -> 1 are deliberately never set
-             in the same tick (see render() in nadelio.js): the first paint of
-             a display:none element cannot transition, so the JS forces a
-             display:flex + opacity:0 frame to commit (reflow) before raising
-             opacity next frame - otherwise this used to pop in with no fade. -->
-        <div id="ndl-insight" aria-live="polite" style="flex:none;display:none;flex-direction:column;gap:4px;opacity:0;transition:opacity 0.5s ease 0.1s;border-left:2px solid #91baff;padding:2px 0 2px 12px;">
-          <div data-i18n="gapThatMatters" style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#adbad0;">l'écart qui compte</div>
-          <div id="ndl-insight-text" style="font-family:'Archivo',Helvetica,Arial,sans-serif;font-size:min(2.05vh,clamp(12px,1.05vw,14.5px));line-height:1.5;color:#dde5ef;font-variant-numeric:tabular-nums;max-width:58ch;"></div>
-        </div>
-        <div data-nadelio-proof class="ndl-proof" style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column;gap:clamp(8px,1.4vh,14px);">
-          <div id="ndl-field" style="flex:none;display:flex;flex-direction:column;gap:6px;opacity:0;transition:opacity 0.5s ease 0.05s;"></div>
-          <div id="ndl-axiswrap" style="position:relative;flex:1;min-height:clamp(118px,16vh,152px);">
-            <div id="ndl-axisarea" style="position:absolute;inset:0;">
-              <div id="ndl-axis" style="position:absolute;left:0;right:0;top:50%;height:1px;background:#3d4d68;"></div>
-              <div id="ndl-ticks" style="position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;"></div>
-              <div id="ndl-region" style="position:absolute;left:50.00%;width:0.00%;top:calc(50% - 14px);height:28px;background:transparent;border-left:1px solid transparent;border-right:1px solid transparent;box-sizing:border-box;transition:left 0.7s cubic-bezier(0.2,0.8,0.2,1),width 0.7s cubic-bezier(0.2,0.8,0.2,1);"></div>
-            </div>
-          </div>
-          <div style="flex:none;position:relative;height:20px;">
-            <button data-tip="scale" class="ndl-tip-text" aria-label="échelle de mesure, en savoir plus" data-i18n-aria="scaleAria" style="position:absolute;right:0;top:0;display:inline-flex;align-items:center;gap:5px;cursor:help;background:none;border:none;padding:0;font-family:'IBM Plex Mono',Menlo,monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#adbad0;"><span id="ndl-scale-label">échelle 0 à 100</span><span style="display:inline-flex;width:12px;height:12px;border:1px solid #3d4d68;border-radius:50%;align-items:center;justify-content:center;font-size:8px;line-height:1;">i</span></button>
-          </div>
-        </div>
+      <div class="audit-secondary"><a id="ndl-demo-link" href="/demo.html?lang=fr" data-i18n="demoLink">Explorer l’exemple</a><button id="ndl-idtoggle" class="ndl-transp" type="button" aria-expanded="false" aria-controls="ndl-idpanel" data-i18n="idToggle">Préciser le site et le marché</button></div>
+      <div id="ndl-unknown" role="alert" style="display:none"></div>
+      <div id="ndl-idpanel" style="display:none">
+        <input id="ndl-officialurl" class="ndl-idfield" type="text" placeholder="Site officiel" aria-label="Site officiel" data-i18n-ph="idUrlPh" data-i18n-aria="idUrlAria">
+        <div class="identity-controls"><label for="ndl-market" data-i18n="idMarketLabel">Marché</label><select id="ndl-market" class="ndl-idfield" data-i18n-aria="idMarketAria"><option value="" data-i18n="idMarketAuto">Auto</option><option value="fr">France</option><option value="us">US / Global</option><option value="dach">DACH</option><option value="uk">UK</option></select><button id="ndl-idupdate" type="button" data-i18n="idUpdateBtn">Mettre à jour</button></div>
       </div>
     </div>
-    <!-- The 3 dock cards are now driven ENTIRELY by nadelio.js (swapDockContent
-         / populateDockCards): opacity/transform/transition are all set from
-         JS from the very first render(), so the dock is NEVER a blank #2c3b52
-         slab in any state - idle carries the 3 products (Deep Audit / suivi /
-         règlement, ex-below-the-fold offers strip, now folded in here since
-         that strip lived below an internally-scrolling fold nobody reached),
-         measuring keeps that same pitch up, error swaps to a non-monetary
-         recovery panel, and a settled result swaps to the real per-audit cards
-         (en IA / sur Google / aller plus loin) - see dockMode in renderVals(). -->
-    <div data-nadelio-dock class="ndl-cards" style="position:relative;z-index:1;min-height:clamp(96px,16vh,138px);display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#2c3b52;border:1px solid #2c3b52;">
-      <div class="ndl-card" style="background:#162033;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;"></div>
-      <div class="ndl-card" style="background:#162033;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;"></div>
-      <div class="ndl-card" style="background:#162033;padding:clamp(10px,1.5vh,16px) 18px;display:flex;flex-direction:column;gap:7px;"></div>
+  </section>
+  <section id="ndl-preview" class="product-preview" aria-labelledby="preview-heading">
+    <div class="preview-toolbar"><span id="preview-heading" data-i18n="sampleHeading">Un aperçu de ce que vous pouvez vérifier</span><span class="sample-tag" data-i18n="fictional">Exemple fictif</span></div>
+    <div class="preview-grid">
+      <div class="preview-comparison"><div class="preview-context"><span data-i18n="coverageTitle">Présence dans les réponses IA</span><span data-i18n="sampleSize">8 questions, 5 passages</span></div>
+        <div class="preview-brand"><span><i class="brand-dot orbe"></i>Orbe Studio</span><strong>80<small>%</small></strong></div><div class="preview-track"><span style="width:80%"></span></div>
+        <div class="preview-brand"><span><i class="brand-dot rivage"></i>Rivage Cloud</span><strong>45<small>%</small></strong></div><div class="preview-track rival"><span style="width:45%"></span></div>
+        <p class="preview-caption" data-i18n="coverageNote">Part des réponses qui mentionnent la marque. Des exemples, pas un résultat réel.</p>
+        <a id="ndl-preview-link" href="/demo.html?lang=fr" class="text-link" data-i18n="inspectSample">Explorer les questions et les réponses</a>
+      </div>
+      <div class="preview-answer"><div class="answer-meta"><span data-i18n="oneQuestion">Une question de vos clients</span><span class="answer-icon" aria-hidden="true">↗</span></div><h2 data-i18n="sampleQuestion">Comment recueillir les validations clients ?</h2><blockquote data-i18n="sampleAnswer">« Pour ce besoin, vous pouvez envisager Rivage Cloud. »</blockquote><p data-i18n="sampleGap">Orbe est absente de cette réponse. Un point à vérifier, pas encore une explication.</p></div>
     </div>
-  </div>
-  <div id="ndl-subbanner" role="status" aria-live="polite" style="display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:65;max-width:min(560px,92vw);background:#162033;border:1px solid #2c3b52;border-left:2px solid #8bd8bf;padding:14px 34px 14px 18px;box-shadow:0 10px 34px rgba(0,0,0,0.55);"></div>
-  <div id="ndl-below" style="position:relative;z-index:1;display:none;">
-    <div id="ndl-deepdoc"></div>
-  </div>
-  <!-- Persistent footer: legal/contact/methodology, on a page selling a 79€
-       product and 99€/mo subscriptions (was entirely missing - see the panel
-       product regression report). Always in flow (never toggled by JS, unlike
-       #ndl-below above), reached by the same internal scroll of
-       [data-nadelio-root] the deep dossier already uses, so it never breaks
-       the single-screen hero feel: nothing above the fold moves. -->
+  </section>
+  <section class="ndl-results" aria-label="Résultats de l’audit">
+    <div id="ndl-overlay"><span data-i18n="readingInProgress">Lecture en cours</span><p data-i18n="readingDetail">Nous recueillons les réponses. Les résultats s’afficheront ici.</p></div>
+    <div class="ndl-right">
+      <div id="ndl-verdict" role="status" aria-live="polite" aria-hidden="true"><span id="ndl-verdict-brand"></span><div id="ndl-identity" style="display:none"></div><div id="ndl-verdict-stale" role="note" style="display:none"></div><h2 id="ndl-verdict-title"></h2><div id="ndl-verdict-text"></div><div id="ndl-share"></div></div>
+      <div id="ndl-insight" aria-live="polite" style="display:none"><span data-i18n="gapThatMatters">Le point à approfondir</span><div id="ndl-insight-text"></div></div>
+      <div data-nadelio-proof class="ndl-proof"><div id="ndl-field"></div><div class="measurement-chart"><div id="ndl-mount" aria-hidden="true"></div><div id="ndl-axiswrap"><div id="ndl-axisarea"><div id="ndl-axis"></div><div id="ndl-ticks"></div><div id="ndl-region"></div></div></div><button data-tip="scale" class="ndl-tip-text" data-i18n-aria="scaleAria" aria-label="Échelle de mesure"><span id="ndl-scale-label">échelle 0 à 100</span><span aria-hidden="true"> ⓘ</span></button></div></div>
+      <button id="ndl-transp-btn" class="secondary-button" data-i18n="transp">Examiner les preuves</button>
+    </div>
+  </section>
+  <section class="explain-section"><div><h2 data-i18n="explainTitle">Le score ouvre la discussion.<br>Les réponses l’éclairent.</h2><p data-i18n="howWeMeasureBody">Nous répétons les questions, comparons les marques et montrons la variabilité. Vous savez ce qui a été observé et ce qui reste incertain.</p></div><div class="explain-note"><p data-i18n="explainNote">Une mention ne vaut pas une recommandation. Un seul modèle ne représente pas toutes les IA. Chaque résultat doit se lire avec ses sources et ses limites.</p><span id="ndl-passcounter">En attente</span></div></section>
+  <section class="plans-section"><h2 data-i18n="plansTitle">Pour aller plus loin.</h2><div data-nadelio-dock class="ndl-cards"><div class="ndl-card"></div><div class="ndl-card"></div><div class="ndl-card"></div></div></section>
+</div>
+<div id="ndl-subbanner" role="status" aria-live="polite" style="display:none"></div><div id="ndl-below" style="display:none"><div id="ndl-deepdoc"></div></div>
   <footer id="ndl-footer" class="ndl-footer">
     <div class="ndl-footer-inner">
       <div class="ndl-footer-brand">NADELIO</div>
@@ -221,16 +94,7 @@
     </div>
   </footer>
 </div>
-<!-- nadelio.js first and deferred: it is the whole interaction (brand input,
-     run button) and must never wait behind the 670KB three.js vendor bundle.
-     It already polls for window.THREE (see pollIv in init()) and degrades to
-     a fully working flat page if THREE never turns up, so three.min.js is
-     also deferred (downloads in parallel, blocks nothing) rather than a
-     blocking classic <script>. Deferred scripts still execute in this same
-     document order, so nadelio.js's polling loop is armed before three.min.js
-     can ever set window.THREE. -->
 <script defer src="/assets/v2/nadelio.js"></script>
 <script defer src="/assets/v2/vendor/three.min.js"></script>
 <script defer src="/assets/v2/track.js"></script>
-</body>
-</html>
+</body></html>

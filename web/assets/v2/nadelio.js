@@ -14,7 +14,7 @@
    brackets serve it as proof. The bottom dock went from 4 cards to 3
    (questions, presence, action) via repeat(3,1fr). The live log is gone;
    the "comment on mesure" block is static copy.
-   Slate/navy presentation: blue comparison accent, mint presence, amber absence.
+   Editorial presentation: white canvas, serif headings, muted data colours.
    Historical variable names remain stable to preserve the rendering pipeline.
    density and breath were editor sliders; in production they are constants = 1.
    three.js is provided by window.THREE (self-hosted vendor script).
@@ -24,7 +24,7 @@
 
   /* ---------- constants (copied verbatim from the source) ---------- */
   var ZLO = 0, ZHI = 100;
-  var BRASS = '#91baff', SAGE = '#8bd8bf', SIENNA = '#e1af84', INK = '#dde5ef';
+  var BRASS = '#17191c', SAGE = '#2d6d5b', SIENNA = '#92593b', INK = '#272c32';
   var SUPPORT_EMAIL = 'adam.chabbi94@gmail.com';
 
   /* Example quick-picks: REAL brands. The chips no longer replay demo data,
@@ -74,11 +74,27 @@
      to v2.html. */
   var SITE_EN = {
     badge: 'Google + AI, bounded measurement',
-    transp: 'transparency ›',
+    skipAudit: 'Skip to audit',
+    navExample: 'See an example',
+    fictional: 'Fictional example',
+    sampleHeading: 'A preview of what you can inspect',
+    coverageTitle: 'AI mention coverage',
+    sampleSize: '8 questions, 5 passes',
+    coverageNote: 'The share of responses mentioning each brand. Illustrative data, not a real result.',
+    inspectSample: 'Explore the questions and answers',
+    oneQuestion: 'One question your customers ask',
+    sampleQuestion: 'How can an agency collect client approvals?',
+    sampleAnswer: '“For this need, consider Rivage Cloud.”',
+    sampleGap: 'Orbe is missing from this answer. A point to investigate, not yet an explanation.',
+    readingDetail: 'We are collecting the answers. The results will appear here.',
+    explainTitle: 'The score starts the conversation. The answers make it useful.',
+    explainNote: 'A mention is not a recommendation. One model does not represent every AI. Read each result alongside its sources and limits.',
+    plansTitle: 'Take the next step.',
+    transp: 'Inspect the evidence',
     eyebrow: 'AI visibility audit',
-    h1: 'See where buyers find your brand.',
-    intro: 'Compare your presence on Google and in AI answers, using the questions your customers ask.',
-    demoLink: 'Explore an interactive example',
+    h1: 'See where AI mentions your brand.',
+    intro: 'Understand your place in AI answers and on Google. Compare brands, read the responses and find what to investigate next.',
+    demoLink: 'Explore the example',
     demoNote: 'Fictional brands · No audit runs',
     previewLabel: 'From a result to a decision',
     previewTitle: 'An answer. Its evidence. Your next step.',
@@ -93,13 +109,13 @@
     runBtn: 'Run an audit',
     or: 'or audit',
     howWeMeasure: 'how we measure',
-    howWeMeasureBody: 'We ask your questions to Google and to one AI, several times each. The answers vary a little, so we give an interval rather than one exact number.',
+    howWeMeasureBody: 'We repeat the questions, compare brands and show the variation. You can see what was observed, and what remains uncertain.',
     cloudConverges: 'the cloud converges',
     readingInProgress: 'reading in progress',
     verdictLabel: 'verdict',
     gapThatMatters: 'the gap that matters',
     scaleAria: 'measurement scale, learn more',
-    idToggle: 'identity & market ›',
+    idToggle: 'Set website and market',
     idUrlPh: 'Official website (locks the exact company)',
     idUrlAria: 'brand official website',
     idMarketLabel: 'market',
@@ -120,6 +136,9 @@
     document.documentElement.setAttribute('lang', PAGE_FR ? 'fr' : 'en');
     var demoLink = document.getElementById('ndl-demo-link');
     if (demoLink) demoLink.href = '/demo.html?lang=' + (PAGE_FR ? 'fr' : 'en');
+    ['ndl-nav-example', 'ndl-preview-link'].forEach(function(id) { var a = document.getElementById(id); if(a) a.href='/demo.html?lang='+(PAGE_FR?'fr':'en'); });
+    var languageLink = document.getElementById('ndl-lang');
+    if(languageLink) { var languageUrl = new URL(window.location.href); languageUrl.searchParams.set('lang',PAGE_FR?'en':'fr'); languageLink.href=languageUrl.href; languageLink.textContent=PAGE_FR?'English':'Français'; languageLink.lang=PAGE_FR?'en':'fr'; }
     if (PAGE_FR) return; // French is the authored default markup, nothing to swap
     var nodes = document.querySelectorAll('[data-i18n],[data-i18n-html],[data-i18n-aria],[data-i18n-ph]');
     for (var i = 0; i < nodes.length; i++) {
@@ -157,9 +176,9 @@
   /* Empty card content used at idle / during measuring (the dock cards are held
      at opacity 0 then, so this is never actually read by a human). */
   var BLANK_CARD = {
-    verdictTitle: '', verdictColor: '#8bd8bf', verdictText: '',
-    ia: { big: '', bigColor: '#adbad0', line: '', rival: '' },
-    google: { big: '', bigColor: '#adbad0', line: '', owners: '' },
+    verdictTitle: '', verdictColor: '#2d6d5b', verdictText: '',
+    ia: { big: '', bigColor: '#60636a', line: '', rival: '' },
+    google: { big: '', bigColor: '#60636a', line: '', owners: '' },
     deep: { free: '', adds: '', delivered: false }
   };
 
@@ -557,10 +576,10 @@
       if (!tipEl) {
         tipEl = document.createElement('div');
         tipEl.setAttribute('role', 'tooltip');
-        tipEl.innerHTML = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#dde5ef;"></div>';
+        tipEl.innerHTML = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#272c32;"></div>';
         screenEl.appendChild(tipEl);
       }
-      tipEl.setAttribute('style', 'position:fixed;z-index:60;left:' + (tip.x || 0) + 'px;top:' + (tip.top || 0) + 'px;transform:' + (tip.transform || 'none') + ';width:264px;background:#292216;border:1px solid #3d4d68;padding:13px 15px;box-shadow:0 10px 34px rgba(0,0,0,0.55);animation:tipIn 0.14s ease;pointer-events:none;');
+      tipEl.setAttribute('style', 'position:fixed;z-index:60;left:' + (tip.x || 0) + 'px;top:' + (tip.top || 0) + 'px;transform:' + (tip.transform || 'none') + ';width:264px;background:#292216;border:1px solid #d2d3d7;padding:13px 15px;box-shadow:0 10px 34px rgba(0,0,0,0.55);animation:tipIn 0.14s ease;pointer-events:none;');
       tipEl.firstChild.textContent = text;
     } else if (tipEl && tipEl.parentNode) {
       tipEl.parentNode.removeChild(tipEl);
@@ -635,7 +654,7 @@
     drawerDialog.setAttribute('role', 'dialog');
     drawerDialog.setAttribute('aria-modal', 'true');
     drawerDialog.setAttribute('aria-label', T('The measurement in detail', 'Le détail de la mesure'));
-    drawerDialog.setAttribute('style', 'position:fixed;top:0;right:0;bottom:0;z-index:71;width:min(620px,95vw);background:#111827;border-left:1px solid #2c3b52;display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);animation:drawerIn 0.28s cubic-bezier(0.2,0.8,0.2,1);');
+    drawerDialog.setAttribute('style', 'position:fixed;top:0;right:0;bottom:0;z-index:71;width:min(620px,95vw);background:#ffffff;border-left:1px solid #e5e5e7;display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);animation:drawerIn 0.28s cubic-bezier(0.2,0.8,0.2,1);');
 
     var fn = esc(v.focusName || T('the brand', 'la marque'));
     var provider = esc(v.providerLabel || T('the AI', 'l\'IA'));
@@ -651,7 +670,7 @@
     var srcNames = ['Google (SERP)', v.providerLabel || 'IA'];
     var srcChips = '';
     for (var i = 0; i < srcNames.length; i++) {
-      srcChips += '<span style="font-size:11px;color:#cbd5e3;border:1px solid #2c3b52;padding:5px 9px;">' + esc(srcNames[i]) + '</span>';
+      srcChips += '<span style="font-size:11px;color:#4c5058;border:1px solid #e5e5e7;padding:5px 9px;">' + esc(srcNames[i]) + '</span>';
     }
 
     /* column header = the brands, focus first and in brass */
@@ -662,7 +681,7 @@
     var hCols = '';
     for (var j = 0; j < headerCells.length; j++) {
       var hn = headerCells[j];
-      hCols += '<div title="' + esc(hn.name) + '" style="font-size:10px;font-weight:' + (hn.isFocus ? '600' : '400') + ';color:' + (hn.isFocus ? BRASS : '#adbad0') + ';text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(hn.name) + '</div>';
+      hCols += '<div title="' + esc(hn.name) + '" style="font-size:10px;font-weight:' + (hn.isFocus ? '600' : '400') + ';color:' + (hn.isFocus ? BRASS : '#60636a') + ';text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(hn.name) + '</div>';
     }
 
     /* one cell = a brand's standing on a question: AI chip (primary=strong,
@@ -670,11 +689,11 @@
     function matrixCell(cell) {
       var aiTxt, aiBg, aiFg, aiBorder = 'transparent';
       if (cell.aiRank == null) {
-        aiTxt = T('absent', 'absent'); aiBg = 'transparent'; aiFg = '#e1af84'; aiBorder = 'rgba(181,124,93,0.55)';
+        aiTxt = T('absent', 'absent'); aiBg = 'transparent'; aiFg = '#92593b'; aiBorder = 'rgba(181,124,93,0.55)';
       } else if (cell.aiKind === 'primary') {
         aiTxt = T('primary #', 'principal n') + cell.aiRank; aiBg = 'rgba(147,160,110,0.7)'; aiFg = '#141009';
       } else {
-        aiTxt = T('cited #', 'cité n') + cell.aiRank; aiBg = 'rgba(147,160,110,0.28)'; aiFg = '#dde5ef';
+        aiTxt = T('cited #', 'cité n') + cell.aiRank; aiBg = 'rgba(147,160,110,0.28)'; aiFg = '#272c32';
       }
       /* The count under the chip must match the chip's own claim: a
          "primary" chip is followed by how many of the N runs it was
@@ -689,9 +708,9 @@
       }
       var gTxt = cell.serpRank != null ? (T('Google #', 'Google n') + cell.serpRank) : T('Google absent', 'Google absent');
       var focusEdge = cell.isFocus ? 'border-top:2px solid ' + BRASS + ';' : 'border-top:2px solid transparent;';
-      return '<div style="display:flex;flex-direction:column;gap:3px;padding:5px;background:#162033;' + focusEdge + 'box-sizing:border-box;">' +
+      return '<div style="display:flex;flex-direction:column;gap:3px;padding:5px;background:#f6f6f7;' + focusEdge + 'box-sizing:border-box;">' +
         '<div style="font-size:9.5px;line-height:1.2;text-align:center;padding:3px 4px;background:' + aiBg + ';border:1px solid ' + aiBorder + ';box-sizing:border-box;color:' + aiFg + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(aiTxt) + '</div>' +
-        '<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;color:#9baac1;font-variant-numeric:tabular-nums;">' +
+        '<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;color:#60636a;font-variant-numeric:tabular-nums;">' +
           '<span>' + (subTxt ? esc(subTxt) : '&nbsp;') + '</span><span>' + esc(gTxt) + '</span>' +
         '</div>' +
       '</div>';
@@ -703,11 +722,11 @@
       var cellsHtml = '';
       for (var ci = 0; ci < row.cells.length; ci++) cellsHtml += matrixCell(row.cells[ci]);
       rowsHtml += '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:3px;align-items:stretch;">' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#dde5ef;display:flex;align-items:center;padding-right:8px;line-height:1.3;">« ' + esc(row.q) + ' »</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#272c32;display:flex;align-items:center;padding-right:8px;line-height:1.3;">« ' + esc(row.q) + ' »</div>' +
         cellsHtml + '</div>';
     }
     if (!matrix.length) {
-      rowsHtml = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#9baac1;">' + T('Run a measurement first to see the detail, question by question.', 'Lancez d\'abord une mesure pour voir le détail, question par question.') + '</div>';
+      rowsHtml = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#60636a;">' + T('Run a measurement first to see the detail, question by question.', 'Lancez d\'abord une mesure pour voir le détail, question par question.') + '</div>';
     }
 
     /* "Qui tient Google" : the hosts that own the page, per question, making the
@@ -718,17 +737,17 @@
       var hostsHtml = '';
       if (sq.hosts.length) {
         for (var hi = 0; hi < sq.hosts.length; hi++) {
-          hostsHtml += '<span style="font-size:10.5px;color:#cbd5e3;border:1px solid #2c3b52;padding:3px 7px;font-variant-numeric:tabular-nums;">' + esc(shortHost(sq.hosts[hi].host)) + ' <span style="color:#9baac1;">n' + sq.hosts[hi].rank + '</span></span>';
+          hostsHtml += '<span style="font-size:10.5px;color:#4c5058;border:1px solid #e5e5e7;padding:3px 7px;font-variant-numeric:tabular-nums;">' + esc(shortHost(sq.hosts[hi].host)) + ' <span style="color:#60636a;">n' + sq.hosts[hi].rank + '</span></span>';
         }
       } else {
-        hostsHtml = '<span style="font-size:10.5px;color:#9baac1;">' + T('page not captured', 'page non relevée') + '</span>';
+        hostsHtml = '<span style="font-size:10.5px;color:#60636a;">' + T('page not captured', 'page non relevée') + '</span>';
       }
       ownerHtml += '<div style="display:flex;flex-direction:column;gap:5px;">' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#becadb;">« ' + esc(sq.q) + ' »</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;color:#50535a;">« ' + esc(sq.q) + ' »</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:5px;">' + hostsHtml + '</div>' +
       '</div>';
     }
-    if (!serpByQ.length) ownerHtml = '<div style="font-size:11.5px;color:#9baac1;">' + T('No Google page data.', 'Aucune donnée de page Google.') + '</div>';
+    if (!serpByQ.length) ownerHtml = '<div style="font-size:11.5px;color:#60636a;">' + T('No Google page data.', 'Aucune donnée de page Google.') + '</div>';
 
     var s1 = matrix.length > 1 ? 's' : '', rs1 = runN > 1 ? 's' : '';
     /* Real model transparency (owner: "il manque de la transparence sur les
@@ -752,44 +771,44 @@
         matrix.length + ' question' + s1 + ' sur Google' + floorSuffix + ' et 1 IA (' + assistantTxt + '), ' + runN + ' passage' + rs1 + ' par question, ' + matrix.length + ' lecture' + s1 + ' de Google. Chaque case montre le rang réel de la marque, sans agrégation cachée. Le Deep Audit élargit cette même lecture à 5 questions et 8 passages par question, toujours sur ' + provider + '.'
       );
     drawerDialog.innerHTML =
-      '<div style="flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:clamp(16px,2.4vh,26px) clamp(18px,2.4vw,30px);border-bottom:1px solid #2c3b52;">' +
+      '<div style="flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:clamp(16px,2.4vh,26px) clamp(18px,2.4vw,30px);border-bottom:1px solid #e5e5e7;">' +
         '<div style="display:flex;flex-direction:column;gap:5px;">' +
           '<div style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(17px,1.7vw,23px);letter-spacing:-0.01em;">' + T('The detail, unfiltered', 'Le détail, sans filtre') + '</div>' +
-          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#becadb;max-width:46ch;">' + T('Your questions asked to Google and to ' + provider + ', and where each brand shows up. Nothing is aggregated before you see it.', 'Vos questions posées à Google et à ' + provider + ', et où chaque marque ressort. Rien n\'est agrégé avant que vous le voyiez.') + '</div>' +
+          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#50535a;max-width:46ch;">' + T('Your questions asked to Google and to ' + provider + ', and where each brand shows up. Nothing is aggregated before you see it.', 'Vos questions posées à Google et à ' + provider + ', et où chaque marque ressort. Rien n\'est agrégé avant que vous le voyiez.') + '</div>' +
         '</div>' +
-        '<button class="ndl-drawer-close" aria-label="' + T('close the detail', 'fermer le détail') + '" style="flex:none;cursor:pointer;background:none;border:1px solid #3d4d68;color:#becadb;font-family:inherit;font-size:15px;line-height:1;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">✕</button>' +
+        '<button class="ndl-drawer-close" aria-label="' + T('close the detail', 'fermer le détail') + '" style="flex:none;cursor:pointer;background:none;border:1px solid #d2d3d7;color:#50535a;font-family:inherit;font-size:15px;line-height:1;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">✕</button>' +
       '</div>' +
       '<div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:clamp(16px,2.4vh,26px) clamp(18px,2.4vw,30px);display:flex;flex-direction:column;gap:22px;">' +
         '<div style="display:flex;flex-direction:column;gap:9px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + T('the sources queried', 'les sources interrogées') + '</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + T('the sources queried', 'les sources interrogées') + '</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + srcChips + '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:10px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + T('each brand, question by question', 'chaque marque, question par question') + '</div>' +
-            '<div style="font-size:10px;color:#9baac1;font-variant-numeric:tabular-nums;">' + runN + T(' AI reads per question', ' mesures IA par question') + '</div>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + T('each brand, question by question', 'chaque marque, question par question') + '</div>' +
+            '<div style="font-size:10px;color:#60636a;font-variant-numeric:tabular-nums;">' + runN + T(' AI reads per question', ' mesures IA par question') + '</div>' +
           '</div>' +
           '<div style="overflow-x:auto;overflow-y:hidden;">' +
             '<div style="min-width:' + minW + 'px;display:flex;flex-direction:column;gap:4px;">' +
               '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:3px;align-items:end;">' +
-                '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#9baac1;">' + T('question', 'question') + '</div>' +
+                '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#60636a;">' + T('question', 'question') + '</div>' +
                 hCols +
               '</div>' +
               rowsHtml +
             '</div>' +
           '</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:16px;padding-top:2px;">' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#becadb;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.7);"></span>' + T('primary answer', 'réponse principale') + '</div>' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#becadb;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.28);"></span>' + T('cited lower', 'cité plus bas') + '</div>' +
-            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#becadb;"><span style="width:14px;height:10px;background:transparent;border:1px solid rgba(181,124,93,0.6);box-sizing:border-box;"></span>' + T('absent', 'absent') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#50535a;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.7);"></span>' + T('primary answer', 'réponse principale') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#50535a;"><span style="width:14px;height:10px;background:rgba(147,160,110,0.28);"></span>' + T('cited lower', 'cité plus bas') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#50535a;"><span style="width:14px;height:10px;background:transparent;border:1px solid rgba(181,124,93,0.6);box-sizing:border-box;"></span>' + T('absent', 'absent') + '</div>' +
           '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:12px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + T('who holds the Google page', 'qui tient la page Google') + '</div>' +
-          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#9baac1;">' + T('Often the Google page is held not by the brands but by comparison sites and aggregators. Here are the leading domains, question by question.', 'Souvent, la page Google n\'est pas tenue par les marques mais par des comparateurs et des agrégateurs. Voici les domaines en tête, question par question.') + '</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + T('who holds the Google page', 'qui tient la page Google') + '</div>' +
+          '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#60636a;">' + T('Often the Google page is held not by the brands but by comparison sites and aggregators. Here are the leading domains, question by question.', 'Souvent, la page Google n\'est pas tenue par les marques mais par des comparateurs et des agrégateurs. Voici les domaines en tête, question par question.') + '</div>' +
           ownerHtml +
         '</div>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#9baac1;border-top:1px solid #2c3b52;padding-top:14px;">' + footnoteTxt + '</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#60636a;border-top:1px solid #e5e5e7;padding-top:14px;">' + footnoteTxt + '</div>' +
       '</div>';
 
     screenEl.appendChild(drawerScrim);
@@ -867,7 +886,7 @@
   function showSlowNote() {
     if (!overlayEl || slowNoteEl) return;
     slowNoteEl = document.createElement('div');
-    slowNoteEl.setAttribute('style', 'font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#adbad0;margin-top:2px;');
+    slowNoteEl.setAttribute('style', 'font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#60636a;margin-top:2px;');
     slowNoteEl.textContent = T(
       'The instrument is waking up. The first measurement after a quiet period can take up to a minute.',
       'L\'instrument se réveille. La première mesure après une période calme peut prendre jusqu\'à une minute.'
@@ -1351,7 +1370,7 @@
     for (var i = 0; i < els.length; i++) {
       els[i].textContent = text || '';
       els[i].style.display = text ? 'block' : 'none';
-      els[i].style.color = isError ? '#e1af84' : '#9baac1';
+      els[i].style.color = isError ? '#92593b' : '#60636a';
     }
   }
   function deepCtaLock(locked) {
@@ -1398,17 +1417,17 @@
     if (!R) { identityEl.innerHTML = ''; return; }
     var name = esc(R.identifiedAs || R.focusName || '');
     var url = safeHttpUrl(R.officialUrl);
-    var urlHtml = url ? (' (<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="color:#becadb;border-bottom:1px solid #53647e;">' + esc(shortHost(url)) + '</a>)') : '';
+    var urlHtml = url ? (' (<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="color:#50535a;border-bottom:1px solid #bcbfc5;">' + esc(shortHost(url)) + '</a>)') : '';
     var marketTxt = R.market ? esc(R.market) : T('not set', 'non défini');
     var low = R.confidence === 'low';
-    var html = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.5;color:#9baac1;">' +
-      T('Measured for ', 'Mesure pour ') + '<b style="color:#becadb;">' + name + '</b>' + urlHtml +
-      T(', market ', ', marché ') + '<b style="color:#becadb;">' + marketTxt + '</b> ' +
-      '<button type="button" class="ndl-id-change" style="cursor:pointer;background:none;border:none;padding:0;font-family:inherit;font-size:11px;color:#9baac1;border-bottom:1px solid #53647e;">' + T('change', 'changer') + '</button>' +
+    var html = '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.5;color:#60636a;">' +
+      T('Measured for ', 'Mesure pour ') + '<b style="color:#50535a;">' + name + '</b>' + urlHtml +
+      T(', market ', ', marché ') + '<b style="color:#50535a;">' + marketTxt + '</b> ' +
+      '<button type="button" class="ndl-id-change" style="cursor:pointer;background:none;border:none;padding:0;font-family:inherit;font-size:11px;color:#60636a;border-bottom:1px solid #bcbfc5;">' + T('change', 'changer') + '</button>' +
       '</div>';
     if (low) {
-      html += '<div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid #3d4d68;border-left:2px solid #e1af84;background:#162033;">' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#dde5ef;">' +
+      html += '<div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid #d2d3d7;border-left:2px solid #92593b;background:#f6f6f7;">' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#272c32;">' +
         T('Low confidence: this may be the wrong company or market. Check the official website and the market above, then update.', 'Confiance faible : il peut s\'agir de la mauvaise entreprise ou du mauvais marché. Vérifiez le site officiel et le marché ci-dessus, puis mettez à jour.') +
         '</div></div>';
     }
@@ -1429,12 +1448,12 @@
   function identityConfirmHTML(R) {
     var name = esc((R && (R.identifiedAs || R.focusName)) || '');
     var url = safeHttpUrl(R && R.officialUrl);
-    var urlHtml = url ? (' (<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="color:#becadb;border-bottom:1px solid #53647e;">' + esc(shortHost(url)) + '</a>)') : '';
-    return '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:11px 13px;border:1px solid #3d4d68;background:#162033;">' +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#dde5ef;">' + T('Before you pay, confirm: we identified ', 'Avant de payer, confirmez : nous avons identifié ') + '<b style="color:#eef3fa;">' + name + '</b>' + urlHtml + '.</div>' +
+    var urlHtml = url ? (' (<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="color:#50535a;border-bottom:1px solid #bcbfc5;">' + esc(shortHost(url)) + '</a>)') : '';
+    return '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:11px 13px;border:1px solid #d2d3d7;background:#f6f6f7;">' +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#272c32;">' + T('Before you pay, confirm: we identified ', 'Avant de payer, confirmez : nous avons identifié ') + '<b style="color:#17191c;">' + name + '</b>' + urlHtml + '.</div>' +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
-        '<button class="ndl-identity-yes" style="cursor:pointer;border:none;background:#91baff;color:#111827;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:8px 12px;">' + T('Yes, start the payment', 'Oui, lancer le paiement') + '</button>' +
-        '<button class="ndl-identity-no" style="cursor:pointer;border:1px solid #53647e;background:none;color:#becadb;font-family:inherit;font-size:10.5px;padding:8px 12px;">' + T('This is not my brand', 'Ce n\'est pas ma marque') + '</button>' +
+        '<button class="ndl-identity-yes" style="cursor:pointer;border:none;background:#17191c;color:#ffffff;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:8px 12px;">' + T('Yes, start the payment', 'Oui, lancer le paiement') + '</button>' +
+        '<button class="ndl-identity-no" style="cursor:pointer;border:1px solid #bcbfc5;background:none;color:#50535a;font-family:inherit;font-size:10.5px;padding:8px 12px;">' + T('This is not my brand', 'Ce n\'est pas ma marque') + '</button>' +
       '</div>' +
     '</div>';
   }
@@ -1540,19 +1559,19 @@
   function renderDeepDocHTML(R) {
     var geo = R.geo || {};
     var score = R.geoScore != null ? R.geoScore : (geo.point != null ? Math.round(geo.point) : null);
-    var scoreColor = score != null ? scoreColorFor(score) : '#adbad0';
+    var scoreColor = score != null ? scoreColorFor(score) : '#60636a';
     var hw = geo.half_width;
     var verdictTag = verdictWord(geo.verdict);
 
     var scoreBlock = score != null
       ? '<div style="display:flex;flex-direction:column;gap:8px;">' +
-          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + T('AI visibility score', 'score de visibilité IA') + '</div>' +
+          '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + T('AI visibility score', 'score de visibilité IA') + '</div>' +
           '<div style="display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;">' +
             '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(38px,4.6vw,58px);line-height:1;color:' + scoreColor + ';font-variant-numeric:tabular-nums;">' + score + '</span>' +
-            (hw != null ? '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:14px;color:#adbad0;font-variant-numeric:tabular-nums;">&plusmn;' + hw + '</span>' : '') +
-            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:12px;color:#9baac1;">/ 100</span>' +
+            (hw != null ? '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:14px;color:#60636a;font-variant-numeric:tabular-nums;">&plusmn;' + hw + '</span>' : '') +
+            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:12px;color:#60636a;">/ 100</span>' +
           '</div>' +
-          (verdictTag ? '<div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#9baac1;">' + esc(verdictTag) + '</div>' : '') +
+          (verdictTag ? '<div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#60636a;">' + esc(verdictTag) + '</div>' : '') +
         '</div>'
       : '';
 
@@ -1563,35 +1582,35 @@
        what they paid for, so it is offered here, before the recurring
        upsells, not buried after them. */
     var downloadBlock =
-      '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #2c3b52;">' +
-        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + T('keep this dossier', 'garder ce dossier') + '</div>' +
-        '<button class="ndl-dl-btn" id="ndl-download-btn" style="cursor:pointer;border:1px solid #3d4d68;background:#162033;color:#eef3fa;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:9px 14px;align-self:flex-start;">' + T('Download the dossier (HTML)', 'T&eacute;l&eacute;charger le dossier (HTML)') + '</button>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;line-height:1.4;color:#adbad0;max-width:32ch;">' + T('This payment is one time: without this file, reloading the page cannot show it again.', 'Ce paiement est unique&nbsp;: sans ce fichier, un rechargement de la page ne pourra plus le r&eacute;afficher.') + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #e5e5e7;">' +
+        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + T('keep this dossier', 'garder ce dossier') + '</div>' +
+        '<button class="ndl-dl-btn" id="ndl-download-btn" style="cursor:pointer;border:1px solid #d2d3d7;background:#f6f6f7;color:#17191c;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:9px 14px;align-self:flex-start;">' + T('Download the dossier (HTML)', 'T&eacute;l&eacute;charger le dossier (HTML)') + '</button>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;line-height:1.4;color:#60636a;max-width:32ch;">' + T('This payment is one time: without this file, reloading the page cannot show it again.', 'Ce paiement est unique&nbsp;: sans ce fichier, un rechargement de la page ne pourra plus le r&eacute;afficher.') + '</div>' +
       '</div>';
 
     var priceBlock =
-      '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #2c3b52;">' +
-        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + T('keep measuring', 'continuer la mesure') + '</div>' +
-        '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#cbd5e3;border-bottom:1px solid #53647e;align-self:flex-start;">' + T('Track this brand, from 99&euro;/month', 'Suivre cette marque, dès 99&euro;/mois') + '</a>' +
-        '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#becadb;border-bottom:1px solid #53647e;align-self:flex-start;">' + T('Performance settlement', 'Règlement de performance') + '</a>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;padding-top:16px;border-top:1px solid #e5e5e7;">' +
+        '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + T('keep measuring', 'continuer la mesure') + '</div>' +
+        '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#4c5058;border-bottom:1px solid #bcbfc5;align-self:flex-start;">' + T('Track this brand, from 99&euro;/month', 'Suivre cette marque, dès 99&euro;/mois') + '</a>' +
+        '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click_deep" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#50535a;border-bottom:1px solid #bcbfc5;align-self:flex-start;">' + T('Performance settlement', 'Règlement de performance') + '</a>' +
       '</div>';
 
     var identityHtml = '';
     if (R.evidence && R.evidence.length) {
       var items = R.evidence.slice(0, 6).map(function (e) {
         var bits = [];
-        if (e.site_name) bits.push('<b style="color:#eef3fa;font-weight:600;">' + esc(e.site_name) + '</b>');
+        if (e.site_name) bits.push('<b style="color:#17191c;font-weight:600;">' + esc(e.site_name) + '</b>');
         if (e.title) bits.push(esc(e.title));
-        if (e.description) bits.push('<span style="color:#9baac1;">' + esc(e.description) + '</span>');
+        if (e.description) bits.push('<span style="color:#60636a;">' + esc(e.description) + '</span>');
         var src = safeHttpUrl(e.source || e.link || '');
-        var srcHtml = src ? ' <a href="' + esc(src) + '" target="_blank" rel="noopener noreferrer" style="color:#becadb;border-bottom:1px solid #53647e;">' + T('source', 'source') + '</a>' : '';
+        var srcHtml = src ? ' <a href="' + esc(src) + '" target="_blank" rel="noopener noreferrer" style="color:#50535a;border-bottom:1px solid #bcbfc5;">' + T('source', 'source') + '</a>' : '';
         return bits.length ? '<li style="margin-bottom:8px;line-height:1.55;">' + bits.join(', ') + srcHtml + '</li>' : '';
       }).join('');
       if (items) {
         identityHtml =
           '<div style="display:flex;flex-direction:column;gap:10px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + T('sourced evidence', 'preuve sourcée') + '</div>' +
-            '<ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#cbd5e3;">' + items + '</ul>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + T('sourced evidence', 'preuve sourcée') + '</div>' +
+            '<ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#4c5058;">' + items + '</ul>' +
           '</div>';
       }
     }
@@ -1601,7 +1620,7 @@
       var rep = R.report;
       var bsItems = (rep.blind_spots || []).map(function (b) {
         var by = (b.dominated_by || []).map(function (x) { return esc(x); }).join(', ');
-        return '<li style="margin-bottom:8px;line-height:1.5;"><b style="color:#eef3fa;font-weight:600;">' + esc(b.query) + '</b>' + (by ? T(', dominated by ', ', dominé par ') + by : '') + '</li>';
+        return '<li style="margin-bottom:8px;line-height:1.5;"><b style="color:#17191c;font-weight:600;">' + esc(b.query) + '</b>' + (by ? T(', dominated by ', ', dominé par ') + by : '') + '</li>';
       }).join('');
       var actItems = (rep.actions || []).map(function (a) {
         return '<li style="margin-bottom:9px;line-height:1.55;">' + esc(a) + '</li>';
@@ -1609,12 +1628,12 @@
       reportHtml =
         '<div style="display:flex;flex-direction:column;gap:18px;">' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + T('remediation report', 'rapport de remédiation') + '</div>' +
-            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:8.5px;letter-spacing:0.08em;text-transform:uppercase;color:#9baac1;border:1px solid #2c3b52;padding:2px 6px;">' + T('AI generated', 'généré par IA') + '</span>' +
+            '<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + T('remediation report', 'rapport de remédiation') + '</div>' +
+            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:8.5px;letter-spacing:0.08em;text-transform:uppercase;color:#60636a;border:1px solid #e5e5e7;padding:2px 6px;">' + T('AI generated', 'généré par IA') + '</span>' +
           '</div>' +
-          (rep.verdict ? '<div style="border-left:2px solid #91baff;padding:2px 0 2px 14px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#dde5ef;">' + esc(rep.verdict) + '</div>' : '') +
-          (bsItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#adbad0;margin-bottom:8px;">' + T('named blind spots', 'angles morts nommés') + '</div><ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#cbd5e3;">' + bsItems + '</ul></div>' : '') +
-          (actItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#adbad0;margin-bottom:8px;">' + T('action plan', 'plan d\'action') + '</div><ol style="margin:0;padding-left:20px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#cbd5e3;">' + actItems + '</ol></div>' : '') +
+          (rep.verdict ? '<div style="border-left:2px solid #17191c;padding:2px 0 2px 14px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#272c32;">' + esc(rep.verdict) + '</div>' : '') +
+          (bsItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#60636a;margin-bottom:8px;">' + T('named blind spots', 'angles morts nommés') + '</div><ul style="margin:0;padding-left:18px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#4c5058;">' + bsItems + '</ul></div>' : '') +
+          (actItems ? '<div><div style="font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:#60636a;margin-bottom:8px;">' + T('action plan', 'plan d\'action') + '</div><ol style="margin:0;padding-left:20px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;color:#4c5058;">' + actItems + '</ol></div>' : '') +
         '</div>';
     }
 
@@ -1628,16 +1647,16 @@
     );
 
     return (
-      '<div style="max-width:960px;margin:0 auto;padding:clamp(32px,6vh,64px) clamp(16px,3vw,40px) clamp(48px,8vh,88px);display:flex;flex-direction:column;gap:28px;border-top:1px solid #2c3b52;">' +
+      '<div style="max-width:960px;margin:0 auto;padding:clamp(32px,6vh,64px) clamp(16px,3vw,40px) clamp(48px,8vh,88px);display:flex;flex-direction:column;gap:28px;border-top:1px solid #e5e5e7;">' +
         '<div style="display:flex;flex-direction:column;gap:6px;">' +
-          '<div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#91baff;">' + T('deep audit, the dossier', 'deep audit, le dossier') + '</div>' +
-          '<h2 style="margin:0;font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-weight:400;font-size:clamp(22px,2.6vw,34px);line-height:1.05;letter-spacing:-0.01em;color:#eef3fa;">' + esc(R.focusName) + '</h2>' +
+          '<div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#17191c;">' + T('deep audit, the dossier', 'deep audit, le dossier') + '</div>' +
+          '<h2 style="margin:0;font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-weight:400;font-size:clamp(22px,2.6vw,34px);line-height:1.05;letter-spacing:-0.01em;color:#17191c;">' + esc(R.focusName) + '</h2>' +
         '</div>' +
         '<div class="ndl-deepgrid">' +
-          '<div style="display:flex;flex-direction:column;gap:28px;min-width:0;">' + identityHtml + (identityHtml && reportHtml ? '<div style="border-top:1px solid #2c3b52;"></div>' : '') + reportHtml + '</div>' +
+          '<div style="display:flex;flex-direction:column;gap:28px;min-width:0;">' + identityHtml + (identityHtml && reportHtml ? '<div style="border-top:1px solid #e5e5e7;"></div>' : '') + reportHtml + '</div>' +
           '<div style="display:flex;flex-direction:column;gap:0;">' + scoreBlock + downloadBlock + priceBlock + '</div>' +
         '</div>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#adbad0;border-top:1px solid #2c3b52;padding-top:14px;">' + esc(footNote) + '</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#60636a;border-top:1px solid #e5e5e7;padding-top:14px;">' + esc(footNote) + '</div>' +
       '</div>'
     );
   }
@@ -1856,13 +1875,13 @@
      by Nadelio" page (see app.py's _sign_share / /api/share). */
   function shareAffordanceHTML(tier) {
     var shareBtn =
-      '<button id="ndl-share-btn" class="ndl-share-btn" data-ev="share_click" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#becadb;border-bottom:1px solid #53647e;padding:0 0 2px;">'
+      '<button id="ndl-share-btn" class="ndl-share-btn" data-ev="share_click" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#50535a;border-bottom:1px solid #bcbfc5;padding:0 0 2px;">'
       + T('Share this result', 'Partager ce résultat') + ' &rsaquo;</button>';
     /* The deep dossier already carries its own richer download button below
        the hero (see renderDeepDocHTML's downloadBlock) - never a second,
        competing export affordance for the same tier. */
     var exportBtn = (tier === 'deep') ? '' :
-      '<button id="ndl-export-btn" class="ndl-share-btn" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#becadb;border-bottom:1px solid #53647e;padding:0 0 2px;">'
+      '<button id="ndl-export-btn" class="ndl-share-btn" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#50535a;border-bottom:1px solid #bcbfc5;padding:0 0 2px;">'
       + T('Export (HTML)', 'Exporter (HTML)') + '</button>';
     return '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">'
       + '<span id="ndl-share-slot">' + shareBtn + '</span>' + exportBtn + '</div>';
@@ -1873,7 +1892,7 @@
   function showShareMessage(msg) {
     var slot = document.getElementById('ndl-share-slot');
     if (!slot) return;
-    slot.innerHTML = '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#9baac1;">' + esc(msg) + '</span>';
+    slot.innerHTML = '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#60636a;">' + esc(msg) + '</span>';
   }
 
   function showShareLink(url) {
@@ -1881,8 +1900,8 @@
     if (!slot) return;
     slot.innerHTML =
       '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
-        '<a id="ndl-share-url" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:11px;color:#cbd5e3;border-bottom:1px solid #53647e;">' + esc(url) + '</a>' +
-        '<button id="ndl-share-copy" style="cursor:pointer;border:1px solid #3d4d68;background:none;color:#becadb;font-family:inherit;font-size:10.5px;padding:4px 8px;">' + T('Copy link', 'Copier le lien') + '</button>' +
+        '<a id="ndl-share-url" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:11px;color:#4c5058;border-bottom:1px solid #bcbfc5;">' + esc(url) + '</a>' +
+        '<button id="ndl-share-copy" style="cursor:pointer;border:1px solid #d2d3d7;background:none;color:#50535a;font-family:inherit;font-size:10.5px;padding:4px 8px;">' + T('Copy link', 'Copier le lien') + '</button>' +
       '</span>';
     var copyBtn = document.getElementById('ndl-share-copy');
     var linkEl = document.getElementById('ndl-share-url');
@@ -1963,10 +1982,10 @@
      opacity via renderVals()), so a paying customer always lands on the exact
      same instrument, mid read, never a blank or a dead page. */
   function payStepsHTML(lines) {
-    var html = '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#adbad0;">' + T('payment', 'paiement') + '</div>';
+    var html = '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#60636a;">' + T('payment', 'paiement') + '</div>';
     html += '<div style="display:flex;flex-direction:column;gap:5px;margin-top:2px;">';
     lines.forEach(function (l) {
-      var color = l.state === 'done' ? SAGE : (l.state === 'active' ? '#eef3fa' : '#adbad0');
+      var color = l.state === 'done' ? SAGE : (l.state === 'active' ? '#17191c' : '#60636a');
       var mark = l.state === 'done' ? '&#10003; ' : '';
       var dots = l.state === 'active'
         ? '<span style="animation:dotpulse 1s infinite;">.</span><span style="animation:dotpulse 1s 0.25s infinite;">.</span><span style="animation:dotpulse 1s 0.5s infinite;">.</span>'
@@ -1985,11 +2004,11 @@
     setState({ measuring: false, settled: false, payError: true });
     if (!overlayEl) return;
     overlayEl.innerHTML =
-      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#adbad0;">' + T('payment', 'paiement') + '</div>' +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#dde5ef;max-width:52ch;">' + esc(msg) + '</div>' +
+      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#60636a;">' + T('payment', 'paiement') + '</div>' +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#272c32;max-width:52ch;">' + esc(msg) + '</div>' +
       '<div style="display:flex;align-items:center;gap:16px;margin-top:8px;flex-wrap:wrap;">' +
-        (retryFn ? '<button class="ndl-pay-retry" style="cursor:pointer;border:none;background:#eef3fa;color:#111827;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">' + T('Try again', 'Réessayer') + '</button>' : '') +
-        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#becadb;border-bottom:1px solid #53647e;">' + T('Contact support', 'Contacter le support') + '</a>' +
+        (retryFn ? '<button class="ndl-pay-retry" style="cursor:pointer;border:none;background:#17191c;color:#ffffff;font-family:inherit;font-weight:600;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">' + T('Try again', 'Réessayer') + '</button>' : '') +
+        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#50535a;border-bottom:1px solid #bcbfc5;">' + T('Contact support', 'Contacter le support') + '</a>' +
       '</div>';
     if (retryFn) {
       var btn = overlayEl.querySelector('.ndl-pay-retry');
@@ -2101,10 +2120,10 @@
     setState({ measuring: false, settled: false, payError: true });
     if (!overlayEl) return;
     overlayEl.innerHTML =
-      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#adbad0;">' + T('payment', 'paiement') + '</div>' +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#dde5ef;max-width:52ch;">' + T('This Deep Audit has already been used. Each payment unlocks one dossier. Run a new Deep Audit to get another one, or contact support if this is a mistake.', 'Ce Deep Audit a déjà été utilisé. Chaque paiement débloque un dossier unique. Lancez un nouveau Deep Audit pour en obtenir un autre, ou contactez le support si ceci est une erreur.') + '</div>' +
+      '<div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#60636a;">' + T('payment', 'paiement') + '</div>' +
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#272c32;max-width:52ch;">' + T('This Deep Audit has already been used. Each payment unlocks one dossier. Run a new Deep Audit to get another one, or contact support if this is a mistake.', 'Ce Deep Audit a déjà été utilisé. Chaque paiement débloque un dossier unique. Lancez un nouveau Deep Audit pour en obtenir un autre, ou contactez le support si ceci est une erreur.') + '</div>' +
       '<div style="display:flex;align-items:center;gap:16px;margin-top:8px;">' +
-        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#becadb;border-bottom:1px solid #53647e;">' + T('Contact support', 'Contacter le support') + '</a>' +
+        '<a href="mailto:' + SUPPORT_EMAIL + '" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;color:#50535a;border-bottom:1px solid #bcbfc5;">' + T('Contact support', 'Contacter le support') + '</a>' +
       '</div>';
   }
 
@@ -2150,15 +2169,15 @@
     if (!subBannerEl) return;
     var html;
     if (failed) {
-      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + T('monitoring', 'suivi') + '</div>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#dde5ef;margin-top:4px;">' + T('We could not confirm this subscription. If you just paid, wait a moment and refresh, or contact support.', 'Nous n\'avons pas pu confirmer cet abonnement. Si vous venez de payer, patientez un instant et actualisez, ou contactez le support.') + '</div>';
+      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + T('monitoring', 'suivi') + '</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#272c32;margin-top:4px;">' + T('We could not confirm this subscription. If you just paid, wait a moment and refresh, or contact support.', 'Nous n\'avons pas pu confirmer cet abonnement. Si vous venez de payer, patientez un instant et actualisez, ou contactez le support.') + '</div>';
     } else {
       var b = esc(brand || T('your brand', 'votre marque'));
       var t = tier ? esc(tier) : '';
-      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#8bd8bf;">' + T('monitoring active', 'suivi actif') + '</div>' +
-        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#dde5ef;margin-top:4px;">' + T('Monitoring is active for ', 'Le suivi est actif pour ') + '<b style="color:#eef3fa;">' + b + '</b>' + (t ? T(' (' + t + ' plan)', ' (plan ' + t + ')') : '') + T('. The first bounded measurement runs this week, you will be alerted the moment the score turns volatile.', '. La première mesure bornée tourne cette semaine, vous serez alerté dès que le score devient volatil.') + '</div>';
+      html = '<div style="font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#2d6d5b;">' + T('monitoring active', 'suivi actif') + '</div>' +
+        '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#272c32;margin-top:4px;">' + T('Monitoring is active for ', 'Le suivi est actif pour ') + '<b style="color:#17191c;">' + b + '</b>' + (t ? T(' (' + t + ' plan)', ' (plan ' + t + ')') : '') + T('. The first bounded measurement runs this week, you will be alerted the moment the score turns volatile.', '. La première mesure bornée tourne cette semaine, vous serez alerté dès que le score devient volatil.') + '</div>';
     }
-    html += '<button class="ndl-subbanner-close" aria-label="' + T('close', 'fermer') + '" style="position:absolute;top:8px;right:8px;cursor:pointer;background:none;border:none;color:#adbad0;font-family:inherit;font-size:13px;line-height:1;padding:4px;">&times;</button>';
+    html += '<button class="ndl-subbanner-close" aria-label="' + T('close', 'fermer') + '" style="position:absolute;top:8px;right:8px;cursor:pointer;background:none;border:none;color:#60636a;font-family:inherit;font-size:13px;line-height:1;padding:4px;">&times;</button>';
     subBannerEl.innerHTML = html;
     subBannerEl.style.display = 'block';
     var closeBtn = subBannerEl.querySelector('.ndl-subbanner-close');
@@ -2612,10 +2631,10 @@
         ' Sur Google, ce sont les comparateurs (' + c.ownersPhrase + ') qui tiennent la page. Vous gagnez la réponse IA, pas encore le référencement.'
       );
       else if (c.focusSerp.best != null) s += T(
-        ' On Google, your best position is rank ' + c.focusSerp.best + '. The AI lead is real, hold it over time.',
-        ' Sur Google, votre meilleure position est le rang ' + c.focusSerp.best + '. L\'avantage IA est réel, tenez-le dans le temps.'
+        ' On Google, your best position is rank ' + c.focusSerp.best + '. Read the underlying answers before drawing a competitive conclusion.',
+        ' Sur Google, votre meilleure position est le rang ' + c.focusSerp.best + '. Relisez les réponses avant de conclure à un avantage concurrentiel.'
       );
-      else s += T(' The AI lead is real, hold it over time.', ' L\'avantage IA est réel, tenez-le dans le temps.');
+      else s += T(' Read the underlying answers before drawing a competitive conclusion.', ' Relisez les réponses avant de conclure à un avantage concurrentiel.');
       return s;
     }
     if (c.focusPresentN >= 1) {
@@ -2741,13 +2760,13 @@
         'Réponse mise en avant sur ' + c.focusPrimaryN + ' de vos ' + Y + ' question' + (Y > 1 ? 's' : '') + citedTxt + '.'
       );
     } else if (c.focusAi.present) {
-      iaBig = 'n' + c.focusAi.rank; iaColor = '#e1af84';
+      iaBig = 'n' + c.focusAi.rank; iaColor = '#92593b';
       iaLine = T(
         'Best cited at rank ' + c.focusAi.rank + ', never in the lead, across ' + c.runs + ' passes.',
         'Cité au mieux au rang ' + c.focusAi.rank + ', jamais en tête, sur ' + c.runs + ' passages.'
       );
     } else {
-      iaBig = T('absent', 'absent'); iaColor = '#e1af84';
+      iaBig = T('absent', 'absent'); iaColor = '#92593b';
       iaLine = T(
         'No citation in ' + provider + ' answers across your ' + Y + ' questions.',
         'Aucune citation dans les réponses ' + provider + ' sur vos ' + Y + ' questions.'
@@ -2761,12 +2780,12 @@
     /* card 1 - "sur Google" : your best/worst rank + who owns the page */
     var gBig, gColor, gLine;
     if (c.focusSerp.best != null) {
-      gBig = 'n' + c.focusSerp.best; gColor = '#91baff';
+      gBig = 'n' + c.focusSerp.best; gColor = '#17191c';
       gLine = (c.focusSerp.worst != null && c.focusSerp.worst !== c.focusSerp.best)
         ? T('You show up between rank ' + c.focusSerp.best + ' and rank ' + c.focusSerp.worst + '.', 'Vous figurez entre le rang ' + c.focusSerp.best + ' et le rang ' + c.focusSerp.worst + '.')
         : T('You show up at rank ' + c.focusSerp.best + '.', 'Vous figurez au rang ' + c.focusSerp.best + '.');
     } else {
-      gBig = T('absent', 'absent'); gColor = '#e1af84';
+      gBig = T('absent', 'absent'); gColor = '#92593b';
       gLine = T('You do not appear on the Google page for these questions.', 'Vous n\'apparaissez pas dans la page Google sur ces questions.');
     }
     var gOwners;
@@ -2875,7 +2894,7 @@
         var cState = clusterState(sorted, i);
         var level = 0;
         if (!isFocus) { belowIdx += 1; level = belowIdx; }
-        var bracketColor = isFocus ? BRASS : cState === 'behind' ? '#e1af84' : '#9baac1';
+        var bracketColor = isFocus ? BRASS : cState === 'behind' ? '#92593b' : '#60636a';
         var bounded = r.bounded !== false;
         /* clamp to the visible 0..100 so an out-of-window real score never
            renders a negative-width or off-axis bracket; the axis spans 0..100.
@@ -2890,9 +2909,9 @@
           wPct: Math.max(0, hi - lo).toFixed(2),
           midPct: Math.max(0, Math.min(100, (r.s - ZLO) / zspan * 100)).toFixed(2),
           bracketColor: bracketColor,
-          nameColor: isFocus ? '#eef3fa' : cState === 'behind' ? '#adbad0' : '#adbad0',
-          scoreColor: isFocus ? BRASS : cState === 'behind' ? '#adbad0' : '#becadb',
-          subColor: cState === 'behind' ? '#9baac1' : '#9baac1',
+          nameColor: isFocus ? '#17191c' : cState === 'behind' ? '#60636a' : '#60636a',
+          scoreColor: isFocus ? BRASS : cState === 'behind' ? '#60636a' : '#50535a',
+          subColor: cState === 'behind' ? '#60636a' : '#60636a',
           scoreDisplay: r.s,
           /* A real 95% interval only when the backend actually bounded it.
              Never fabricate "entre X et Y" (nor its "why a range" tooltip,
@@ -2925,8 +2944,8 @@
       return {
         key: name, name: name,
         run: function () { runMeasure(name); },
-        border: name === st.focus ? '#9baac1' : '#3d4d68',
-        color: name === st.focus ? '#eef3fa' : '#9baac1'
+        border: name === st.focus ? '#60636a' : '#d2d3d7',
+        color: name === st.focus ? '#17191c' : '#60636a'
       };
     });
 
@@ -2938,11 +2957,11 @@
         var g = googleRankLabel(f.serpRank);
         return {
           name: f.name, isFocus: f.isFocus,
-          nameColor: f.isFocus ? BRASS : '#cbd5e3',
+          nameColor: f.isFocus ? BRASS : '#4c5058',
           ai: aiLabel(f.ai),
-          aiColor: !f.ai.present ? '#e1af84' : f.ai.kind === 'primary' ? '#8bd8bf' : '#becadb',
+          aiColor: !f.ai.present ? '#92593b' : f.ai.kind === 'primary' ? '#2d6d5b' : '#50535a',
           google: g,
-          googleColor: f.serpRank != null ? '#9baac1' : '#e1af84',
+          googleColor: f.serpRank != null ? '#60636a' : '#92593b',
           sharePct: f.share,
           /* The bar width IS the share (0-100), never normalized to the
              leader's share - normalizing to the leader always drew the top
@@ -3014,7 +3033,7 @@
       verdictOp: revealed ? 1 : 0,
       verdictTy: st.settled ? 0 : 14,
       proofOp: revealed ? 1 : 0,
-      passColor: st.measuring ? '#91baff' : '#9baac1',
+      passColor: st.measuring ? '#17191c' : '#60636a',
       inputValue: st.inputValue,
       hasUnknown: !!st.unknownMsg, unknownMsg: st.unknownMsg,
       brands: brands, axisBrands: axisBrands, region: region, card: card,
@@ -3036,7 +3055,7 @@
     s += '<div style="position:absolute;left:' + ab.loPct + '%;width:' + ab.wPct + '%;top:calc(50% - 6px);height:12px;border-left:2px solid ' + ab.bracketColor + ';border-right:2px solid ' + ab.bracketColor + ';box-sizing:border-box;transition:left 0.6s cubic-bezier(0.2,0.8,0.2,1),width 0.6s cubic-bezier(0.2,0.8,0.2,1);">';
     s += '<div style="position:absolute;left:0;right:0;top:5px;height:1px;background:' + ab.bracketColor + ';opacity:0.5;"></div>';
     s += '</div>';
-    s += '<div style="position:absolute;left:' + ab.midPct + '%;top:' + ab.leaderTop + ';width:1px;height:' + ab.leaderH + 'px;background:#3d4d68;transition:left 0.6s cubic-bezier(0.2,0.8,0.2,1);"></div>';
+    s += '<div style="position:absolute;left:' + ab.midPct + '%;top:' + ab.leaderTop + ';width:1px;height:' + ab.leaderH + 'px;background:#d2d3d7;transition:left 0.6s cubic-bezier(0.2,0.8,0.2,1);"></div>';
     s += '<div style="position:absolute;left:' + ab.midPct + '%;' + ab.labelPos + ';transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;white-space:nowrap;transition:left 0.6s cubic-bezier(0.2,0.8,0.2,1);">';
     s += '<span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;letter-spacing:0.06em;color:' + ab.nameColor + ';">' + esc(ab.name) + '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-weight:500;color:' + ab.scoreColor + ';font-variant-numeric:tabular-nums;">' + esc(ab.scoreDisplay) + '</span></span>';
     if (ab.showRange) {
@@ -3044,7 +3063,7 @@
          is honest to show. */
       s += '<span style="display:inline-flex;align-items:center;gap:5px;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:10.5px;color:' + ab.subColor + ';">' + esc(ab.rangeText);
       if (ab.focus) {
-        s += '<button data-tip="range" class="ndl-tip-dot" aria-label="pourquoi une fourchette" style="cursor:help;background:none;border:1px solid #9baac1;border-radius:50%;width:13px;height:13px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:8px;line-height:1;color:#9baac1;">i</button>';
+        s += '<button data-tip="range" class="ndl-tip-dot" aria-label="pourquoi une fourchette" style="cursor:help;background:none;border:1px solid #60636a;border-radius:50%;width:13px;height:13px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:8px;line-height:1;color:#60636a;">i</button>';
       }
       s += '</span>';
     } else if (ab.showSingle) {
@@ -3126,13 +3145,13 @@
     for (val = Math.ceil(zlo / 5) * 5; val <= zhi + 0.001; val += 5) {
       if (val % step === 0) continue;
       pos = ((val - zlo) / span * 100).toFixed(2);
-      html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% - 2px);width:1px;height:5px;background:#2c3b52;"></div>';
+      html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% - 2px);width:1px;height:5px;background:#e5e5e7;"></div>';
     }
     /* major ticks + round labels */
     for (val = Math.ceil(zlo / step) * step; val <= zhi + 0.001; val += step) {
       pos = ((val - zlo) / span * 100).toFixed(2);
       html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% - 4px);width:1px;height:9px;background:#3A3228;"></div>';
-      html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#9baac1;font-variant-numeric:tabular-nums;">' + val + '</div>';
+      html += '<div style="position:absolute;left:' + pos + '%;top:calc(50% + 11px);transform:translateX(-50%);font-size:9px;color:#60636a;font-variant-numeric:tabular-nums;">' + val + '</div>';
     }
     ticksEl.innerHTML = html;
   }
@@ -3145,7 +3164,7 @@
     if (!v.fieldRows.length) { fieldEl.innerHTML = ''; return; }
     var rowCols = 'minmax(74px,1fr) minmax(126px,1.4fr) minmax(84px,0.9fr) 92px';
     var head =
-      '<div style="display:grid;grid-template-columns:' + rowCols + ';gap:10px;align-items:baseline;font-size:8.5px;letter-spacing:0.14em;text-transform:uppercase;color:#9baac1;">' +
+      '<div style="display:grid;grid-template-columns:' + rowCols + ';gap:10px;align-items:baseline;font-size:8.5px;letter-spacing:0.14em;text-transform:uppercase;color:#60636a;">' +
         '<span>' + T('brand', 'marque') + '</span><span>' + T('in AI', 'en IA') + '</span><span>' + T('on Google', 'sur Google') + '</span><span style="text-align:right;">' + T('share of voice', 'part de voix') + '</span>' +
       '</div>';
     var rows = '';
@@ -3158,7 +3177,7 @@
           '<span style="font-size:10px;color:' + f.googleColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(f.google) + '</span>' +
           '<span style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">' +
             '<span style="position:relative;width:52px;height:5px;background:#2F261D;"><span style="position:absolute;left:0;top:0;bottom:0;width:' + f.shareW + '%;background:' + f.shareColor + ';"></span></span>' +
-            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:10px;color:' + (f.isFocus ? BRASS : '#9baac1') + ';font-variant-numeric:tabular-nums;min-width:26px;text-align:right;">' + esc(f.shareLabel) + '</span>' +
+            '<span style="font-family:\'IBM Plex Mono\',Menlo,monospace;font-size:10px;color:' + (f.isFocus ? BRASS : '#60636a') + ';font-variant-numeric:tabular-nums;min-width:26px;text-align:right;">' + esc(f.shareLabel) + '</span>' +
           '</span>' +
         '</div>';
     }
@@ -3174,7 +3193,7 @@
   }
 
   function labelRow(txt) {
-    return '<div style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#adbad0;">' + esc(txt) + '</div>';
+    return '<div style="font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:#60636a;">' + esc(txt) + '</div>';
   }
 
   function renderCards(card) {
@@ -3184,9 +3203,9 @@
       labelRow(T('in AI', 'en IA')) +
       '<div style="display:flex;align-items:baseline;gap:10px;">' +
         '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(19px,1.9vw,28px);line-height:1;color:' + ia.bigColor + ';font-variant-numeric:tabular-nums;">' + esc(ia.big) + '</span>' +
-        '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#becadb;">' + esc(ia.line) + '</span>' +
+        '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#50535a;">' + esc(ia.line) + '</span>' +
       '</div>' +
-      (ia.rival ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#9baac1;">' + esc(ia.rival) + '</div>' : '');
+      (ia.rival ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#60636a;">' + esc(ia.rival) + '</div>' : '');
 
     /* card 1 - "sur Google": your best/worst rank + who owns the page */
     var g = card.google;
@@ -3194,9 +3213,9 @@
       labelRow(T('on Google', 'sur Google')) +
       '<div style="display:flex;align-items:baseline;gap:10px;">' +
         '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(19px,1.9vw,28px);line-height:1;color:' + g.bigColor + ';font-variant-numeric:tabular-nums;">' + esc(g.big) + '</span>' +
-        '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#becadb;">' + esc(g.line) + '</span>' +
+        '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#50535a;">' + esc(g.line) + '</span>' +
       '</div>' +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#9baac1;">' + esc(g.owners) + '</div>';
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#60636a;">' + esc(g.owners) + '</div>';
 
     /* card 2 - "aller plus loin": the ONE Deep Audit button on the whole
        screen (free tier only, see buildCards) plus the recurring offers
@@ -3207,24 +3226,24 @@
     var hasContent = !!dp.free || dp.delivered;
     var linksHtml = hasContent
       ? '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:2px;">' +
-          (dp.delivered ? '' : '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#91baff;color:#111827;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Deep Audit, 79 &euro;</button>') +
-          '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#becadb;border-bottom:1px solid #53647e;padding-bottom:1px;">' + T('track over time', 'suivre dans le temps') + '</a>' +
-          '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#becadb;border-bottom:1px solid #53647e;padding-bottom:1px;">' + T('performance settlement', 'règlement de performance') + '</a>' +
+          (dp.delivered ? '' : '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#17191c;color:#ffffff;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">Deep Audit, 79 &euro;</button>') +
+          '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#50535a;border-bottom:1px solid #bcbfc5;padding-bottom:1px;">' + T('track over time', 'suivre dans le temps') + '</a>' +
+          '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#50535a;border-bottom:1px solid #bcbfc5;padding-bottom:1px;">' + T('performance settlement', 'règlement de performance') + '</a>' +
         '</div>'
       : '';
     cardEls[2].innerHTML =
       labelRow(T('go further', 'aller plus loin')) +
-      (dp.free ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#9baac1;">' + esc(dp.free) + '</div>' : '') +
-      (hasContent ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#cbd5e3;">' + esc(dp.adds) + '</div>' : '') +
+      (dp.free ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.45;color:#60636a;">' + esc(dp.free) + '</div>' : '') +
+      (hasContent ? '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#4c5058;">' + esc(dp.adds) + '</div>' : '') +
       linksHtml +
-      (dp.delivered ? '' : '<div class="ndl-deep-msg" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#9baac1;display:none;"></div>');
+      (dp.delivered ? '' : '<div class="ndl-deep-msg" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#60636a;display:none;"></div>');
     var cta = cardEls[2].querySelector('.ndl-deep-cta');
     if (cta) cta.addEventListener('click', startCheckout);
   }
 
   /* ============================ dock modes: idle / measuring / error ============================
      Before a real result exists (or after one fails), the dock used to be
-     either an empty #2c3b52 slab (opacity:0 the whole time) or, briefly, a
+     either an empty #e5e5e7 slab (opacity:0 the whole time) or, briefly, a
      below-the-fold strip nobody scrolled to reach. Now it always carries
      real content: the three products at idle/while measuring, an honest,
      non-monetary recovery panel on error. Exactly ONE Deep Audit CTA can
@@ -3233,7 +3252,7 @@
   function idleFigureRow(big, bigColor, line) {
     return '<div style="display:flex;align-items:baseline;gap:10px;">' +
       '<span style="font-family:\'Archivo Black\',\'Arial Black\',sans-serif;font-size:clamp(19px,1.9vw,28px);line-height:1;color:' + bigColor + ';font-variant-numeric:tabular-nums;">' + big + '</span>' +
-      '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#becadb;">' + esc(line) + '</span>' +
+      '<span style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#50535a;">' + esc(line) + '</span>' +
     '</div>';
   }
   /* the idle/measuring dock: same three products the below-the-fold strip
@@ -3244,19 +3263,19 @@
   function renderIdleCards() {
     cardEls[0].innerHTML =
       labelRow('deep audit') +
-      idleFigureRow('79&euro;', '#eef3fa', T('one time, 5 questions and 8 passes on one AI (versus 2 questions, 3 passes free).', 'une fois, 5 questions et 8 passages sur une IA (contre 2 questions, 3 passages en gratuit).')) +
+      idleFigureRow('79&euro;', '#17191c', T('one time, 5 questions and 8 passes on one AI (versus 2 questions, 3 passes free).', 'une fois, 5 questions et 8 passages sur une IA (contre 2 questions, 3 passages en gratuit).')) +
       '<div style="display:flex;align-items:center;gap:10px;margin-top:2px;">' +
-        '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#91baff;color:#111827;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">' + T('Run a Deep Audit', 'Lancer un Deep Audit') + '</button>' +
+        '<button class="ndl-deep-cta" data-ev="deep_click" style="cursor:pointer;border:none;background:#17191c;color:#ffffff;font-family:inherit;font-weight:600;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;">' + T('Run a Deep Audit', 'Lancer un Deep Audit') + '</button>' +
       '</div>' +
-      '<div class="ndl-deep-msg" style="display:none;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#9baac1;"></div>';
+      '<div class="ndl-deep-msg" style="display:none;font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;color:#60636a;"></div>';
     cardEls[1].innerHTML =
       labelRow(T('monitoring over time', 'suivi dans le temps')) +
-      idleFigureRow(T('From 99', 'Dès 99') + '&euro;', '#eef3fa', T('per month. The same bounded score, measured every week, one alert only when it clears the noise.', 'par mois. Le même score borné, mesuré chaque semaine, une alerte seulement quand ça sort du bruit.')) +
-      '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#becadb;border-bottom:1px solid #53647e;padding-bottom:1px;">' + T('see the three plans', 'voir les trois offres') + '</a>';
+      idleFigureRow(T('From 99', 'Dès 99') + '&euro;', '#17191c', T('per month. The same bounded score, measured every week, one alert only when it clears the noise.', 'par mois. Le même score borné, mesuré chaque semaine, une alerte seulement quand ça sort du bruit.')) +
+      '<a class="ndl-mon-link" href="/settlement#pricing" data-ev="monitor_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#50535a;border-bottom:1px solid #bcbfc5;padding-bottom:1px;">' + T('see the three plans', 'voir les trois offres') + '</a>';
     cardEls[2].innerHTML =
       labelRow(T('performance settlement', 'règlement de performance')) +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#cbd5e3;">' + T('Never a percentage. Nadelio referees contracts between brands and agencies, a gain counts only when it clears the 95 percent band.', 'Jamais un pourcentage. Nadelio arbitre les contrats entre marques et agences, un gain ne compte que hors de la bande à 95 pour cent.') + '</div>' +
-      '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#becadb;border-bottom:1px solid #53647e;padding-bottom:1px;">' + T('how it works', 'comment ça marche') + '</a>';
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#4c5058;">' + T('Never a percentage. Nadelio referees contracts between brands and agencies, a gain counts only when it clears the 95 percent band.', 'Jamais un pourcentage. Nadelio arbitre les contrats entre marques et agences, un gain ne compte que hors de la bande à 95 pour cent.') + '</div>' +
+      '<a class="ndl-mon-link" href="/settlement" data-ev="settlement_click" style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:11px;color:#50535a;border-bottom:1px solid #bcbfc5;padding-bottom:1px;">' + T('how it works', 'comment ça marche') + '</a>';
     var cta = cardEls[0].querySelector('.ndl-deep-cta');
     if (cta) cta.addEventListener('click', startCheckout);
   }
@@ -3268,17 +3287,17 @@
   function renderErrorCards(v) {
     cardEls[0].innerHTML =
       labelRow('zero simulation') +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#cbd5e3;">' + T('A measurement that fails never becomes a made up number. Nothing was measured this time.', 'Une mesure qui échoue ne devient jamais un chiffre inventé. Rien n\'a été mesuré cette fois.') + '</div>';
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#4c5058;">' + T('A measurement that fails never becomes a made up number. Nothing was measured this time.', 'Une mesure qui échoue ne devient jamais un chiffre inventé. Rien n\'a été mesuré cette fois.') + '</div>';
     var retryTxt = state.payError
       ? T('Your payment is safe. The detail and the Try again button are right above.', 'Votre paiement est en sécurité. Le détail et le bouton Réessayer sont juste au-dessus.')
       : (v.unknownMsg || T('Check the name, or paste the brand official website, then run it again.', 'Vérifiez le nom, ou collez le site officiel de la marque, puis relancez.'));
     cardEls[1].innerHTML =
       labelRow(T('to continue', 'pour continuer')) +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#cbd5e3;">' + esc(retryTxt) + '</div>';
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#4c5058;">' + esc(retryTxt) + '</div>';
     cardEls[2].innerHTML =
       labelRow(T('how we measure', 'comment on mesure')) +
-      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#cbd5e3;">' + T('Sources, passes and method, unfiltered.', 'Sources, passages et méthode, sans filtre.') + '</div>' +
-      '<button class="ndl-transp" id="ndl-dock-transp-btn" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#becadb;border-bottom:1px solid #53647e;padding:0 0 2px;align-self:flex-start;margin-top:2px;">' + T('transparency ›', 'transparence ›') + '</button>';
+      '<div style="font-family:\'Archivo\',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#4c5058;">' + T('Sources, passes and method, unfiltered.', 'Sources, passages et méthode, sans filtre.') + '</div>' +
+      '<button class="ndl-transp" id="ndl-dock-transp-btn" style="cursor:pointer;background:none;border:none;font-family:inherit;font-size:11px;color:#50535a;border-bottom:1px solid #bcbfc5;padding:0 0 2px;align-self:flex-start;margin-top:2px;">' + T('transparency ›', 'transparence ›') + '</button>';
     var btn = cardEls[2].querySelector('#ndl-dock-transp-btn');
     if (btn) btn.addEventListener('click', openDrawer);
   }
@@ -3330,9 +3349,11 @@
   function render() {
     var v = renderVals();
     var preview = document.getElementById('ndl-preview');
-    var showPreview = !v.haveResult && !state.measuring;
+    var showPreview = !v.haveResult && !state.measuring && !state.payError;
     if (preview) preview.hidden = !showPreview;
     document.querySelector('[data-nadelio-root]').classList.toggle('ndl-idle', showPreview);
+    document.querySelector('[data-nadelio-root]').classList.toggle('ndl-active', !showPreview);
+    document.querySelector('[data-nadelio-root]').classList.toggle('ndl-has-result', v.haveResult);
 
     /* controlled input (only touch it when the value actually differs) */
     if (inputEl && inputEl.value !== v.inputValue) inputEl.value = v.inputValue;
@@ -3357,7 +3378,10 @@
     for (var dci = 0; dci < deepCtaDim.length; dci++) deepCtaDim[dci].style.opacity = v.measuring ? '0.45' : '1';
 
     /* "lecture en cours" overlay (fades out on settle) */
-    if (overlayEl) overlayEl.style.opacity = v.measuringOverlayOp;
+    if (overlayEl) {
+      overlayEl.style.opacity = v.measuringOverlayOp;
+      overlayEl.hidden = !v.measuringOverlayOp;
+    }
 
     /* verdict hero reveal - the CLIMAX. Retimed (0.28s delay/0.56s duration in
        the markup, see v2.html) to finish clearly after the dock cards, the
