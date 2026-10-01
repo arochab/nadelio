@@ -88,7 +88,7 @@
     previewEvidenceBody: 'Read the observations and their variation before drawing a conclusion.',
     previewAction: 'One specific point to investigate',
     previewActionBody: 'Choose what to verify, without treating an absence as an explanation.',
-    measureCue: 'measure >',
+    measureCue: 'Brand to audit',
     inputAria: 'brand name to measure',
     runBtn: 'Run an audit',
     or: 'or audit',

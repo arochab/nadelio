@@ -224,6 +224,21 @@ input{outline:none;}
 .ndl-demo-link:hover{border-color:#91baff;color:#91baff}
 .ndl-demo-link:focus-visible{outline:2px solid #91baff;outline-offset:4px}
 .ndl-demo-note{font-size:11px;color:#adbad0}
+.ndl-screen{font-family:'Archivo',Arial,sans-serif!important}
+.ndl-wordmark{font-family:'Archivo',Arial,sans-serif;font-size:29px;font-weight:600;letter-spacing:-1.6px;color:#eef3fa!important}
+.ndl-wordmark span{color:#91baff}
+.ndl-hbadge{font-family:'Archivo',Arial,sans-serif;font-size:12px!important;letter-spacing:0!important;text-transform:none!important}
+#ndl-transp-btn{font-family:'Archivo',Arial,sans-serif!important;font-size:13px!important}
+.ndl-brand-field{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+.ndl-brand-field label{font-size:13px;font-weight:600;color:#becadb}
+#ndl-input{font-family:'Archivo',Arial,sans-serif!important;font-size:21px!important;font-weight:400!important;border:1px solid #53647e!important;border-radius:5px;background:#162033!important;padding:12px 14px!important;box-sizing:border-box;width:100%}
+#ndl-input:focus{outline:2px solid #91baff;outline-offset:2px}
+.ndl-audit-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ndl-audit-actions .ndl-run{font-family:'Archivo',Arial,sans-serif!important;font-size:14px!important;font-weight:600!important;text-transform:none!important;letter-spacing:0!important;border-radius:5px;min-height:45px;padding:12px 18px!important;background:#91baff!important;color:#111827!important;flex-basis:100%}
+.ndl-audit-actions [data-i18n="or"]{font-family:'Archivo',Arial,sans-serif!important;font-size:12px!important;letter-spacing:0!important;text-transform:none!important;margin-right:2px}
+.ndl-audit-actions .ndl-chip{font-family:'Archivo',Arial,sans-serif!important;font-size:12px!important;letter-spacing:0!important;min-height:34px;padding:7px 10px!important;border-radius:4px}
+[data-nadelio-console] [data-i18n="eyebrow"],[data-nadelio-console] [data-i18n="howWeMeasure"]{font-family:'Archivo',Arial,sans-serif!important;letter-spacing:0!important;text-transform:none!important;font-size:13px!important;font-weight:600}
+#ndl-idtoggle{font-family:'Archivo',Arial,sans-serif!important;font-size:13px!important}
 .ndl-preview{position:absolute;z-index:2;top:9%;left:clamp(8px,3vw,44px);right:clamp(8px,3vw,44px);max-width:590px;font-family:'Archivo',Arial,sans-serif}
 .ndl-preview[hidden]{display:none}
 .ndl-preview-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#91baff;margin:0 0 16px}
